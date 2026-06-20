@@ -5,6 +5,11 @@ import os, json
 import numpy as np, pandas as pd
 import joblib
 
+try:
+    from dixon_coles_model import DixonColesNBRegressor
+except ImportError:
+    from api.dixon_coles_model import DixonColesNBRegressor
+
 ART = "model_artifacts"
 HOME_ADV_ELO = 65.0
 
@@ -15,6 +20,7 @@ class Predictor:
         self.clf_btts = joblib.load(f"{art_dir}/clf_btts.joblib")
         self.clf_over = joblib.load(f"{art_dir}/clf_over25.joblib")
         self.qm = joblib.load(f"{art_dir}/quantile_models.joblib")
+        self.dc = DixonColesNBRegressor.load(f"{art_dir}/dixon_coles_goals.joblib")
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
         # historico de confrontos (h2h)
@@ -130,9 +136,10 @@ class Predictor:
                                 home_vals, away_vals, context_overrides, h2h_overrides)
         bf, ff = self.meta["base_feats"], self.meta["full_feats"]
 
-        # vencedor
-        proba = self.clf.predict_proba(X[bf])[0]
-        pm = dict(zip(self.clf.classes_, proba))
+        # vencedor, gols, ambas_marcam, over_2_5 via Dixon-Coles
+        dc_probs = self.dc.predict_proba_markets(X[bf])
+        prob_res = dc_probs["result"][0]  # shape (3,) -> [A, D, H]
+        pm = {"A": prob_res[0], "D": prob_res[1], "H": prob_res[2]}
         label_map = {"H": home_team, "A": away_team, "D": "Empate"}
         wk = max(pm, key=pm.get)
         winner = {"vencedor": label_map[wk], "confianca": float(round(100 * pm[wk], 1)),
@@ -140,14 +147,48 @@ class Predictor:
                                      "Empate": float(round(100 * pm.get("D", 0), 1)),
                                      away_team: float(round(100 * pm.get("A", 0), 1))}}
 
+        # BTTS
+        p_btts = float(dc_probs["btts"][0])
+        resp_btts = "Sim" if p_btts >= 0.5 else "Não"
+        conf_btts = round(100 * (p_btts if p_btts >= 0.5 else 1 - p_btts), 1)
+        btts_res = {"resposta": resp_btts, "confianca": conf_btts, "prob_sim": round(100 * p_btts, 1)}
+
+        # Over 2.5
+        p_over = float(dc_probs["over_2_5"][0])
+        resp_over = "Mais de 2,5" if p_over >= 0.5 else "Menos de 2,5"
+        conf_over = round(100 * (p_over if p_over >= 0.5 else 1 - p_over), 1)
+        over_res = {"resposta": resp_over, "confianca": conf_over, "prob_sim": round(100 * p_over, 1)}
+
+        # Gols (Total de Gols - Estimativa pontual, intervalo de 80%, confiança)
+        P_joint_single = dc_probs["joint"][0]
+        prob_total_goals = np.zeros(self.dc.max_goals + 1)
+        for x in range(self.dc.max_goals + 1):
+            for y in range(self.dc.max_goals + 1):
+                if x + y <= self.dc.max_goals:
+                    prob_total_goals[x + y] += P_joint_single[x, y]
+        prob_total_goals /= prob_total_goals.sum()
+
+        expected_goals = np.sum(prob_total_goals * np.arange(self.dc.max_goals + 1))
+        cdf = np.cumsum(prob_total_goals)
+        q10 = float(np.searchsorted(cdf, 0.1))
+        q90 = float(np.searchsorted(cdf, 0.9))
+
+        rel = (q90 - q10) / max(expected_goals, 1e-6)
+        conf_label = "Alta" if rel < 0.55 else ("Média" if rel < 1.0 else "Baixa")
+        gols_res = {
+            "estimativa": round(expected_goals, 1),
+            "intervalo": [round(q10, 1), round(q90, 1)],
+            "confianca": conf_label
+        }
+
         return {
             "vencedor": winner,
-            "gols": self._num("total_goals", X, bf),
+            "gols": gols_res,
             "chutes": self._num("total_shots", X, ff),
             "escanteios": {home_team: self._num("home_corners", X, ff),
                            away_team: self._num("away_corners", X, ff)},
-            "ambas_marcam": self._binary(self.clf_btts, X, bf, "1", "Sim", "Não"),
-            "over_2_5": self._binary(self.clf_over, X, bf, "1", "Mais de 2,5", "Menos de 2,5"),
+            "ambas_marcam": btts_res,
+            "over_2_5": over_res,
             "confronto_direto": h2h["_resumo"],
         }
 

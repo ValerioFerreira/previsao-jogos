@@ -10,3 +10,18 @@ node_modules/
 .env.*
 !.env.example
 
+# API-Football cache e dados gerados (nunca commitar chave/cache)
+cache_apifootball/
+apifootball_match_team_stats.csv
+international_features_enriched_apifootball.csv
+data/
+
+# Modelos binários pesados de desenvolvimento (reproduzíveis)
+api/model_artifacts_apifootball/*.joblib
+
+# Backups volumosos de modelos binários
+api/model_artifacts_backup/
+api/model_artifacts_pre_unificacao/
+modelo_statsbomb_backup/
+
+
