@@ -3,18 +3,32 @@
 > Mapa consolidado para retomar o projeto sem reabrir tudo. Resume o que já foi feito,
 > o estado atual dos modelos, e a sequência de próximos passos acordada.
 
-> **PONTO DE RETOMADA:** Passos 1, 1.5, 2/2c (escanteios), 2b (cartões) e a
-> **modernização de chutes (NB + time decay)** concluídos. **TODOS os mercados de
-> contagem agora usam distribuição própria** (Dixon-Coles em gols/resultado; NB em
-> escanteios/cartões/chutes) — não há mais mercado legado (quantílica/Normal aposentadas).
-> **Peso temporal e mando/competição foram TESTADOS** (ver achados abaixo): o time decay
-> só ajuda chutes (aplicado lá, H=2); nos demais alvos foi neutro/negativo, então NÃO
-> promovido globalmente.
-> **Backend finalizado** (itens 2/3/4): escanteios em campo neutro corrigido (interações
-> de mando); infraestrutura de **odds de mercado + value betting** construída (api-football);
-> código morto da quantílica removido. **Próximo: Passo 3 (UX)** — todos os mercados já
-> expõem PMF + linhas O/U + odds prontos para a interface. Ver `RESUMO_SESSAO_2026-06-21.md`
-> para o passo-a-passo completo desta sessão.
+> **PONTO DE RETOMADA (atualizado 2026-06-21, sessão de continuação):**
+> Backend finalizado, **Passo 3 (UX) CONCLUÍDO**, **Passo 4 (value vs mercado) com
+> harness construído e coletando ao vivo**, e a **campanha de melhoria de modelos
+> esgotada (todas as frentes deram negativo in-sample)**.
+>
+> - **Passo 3 (UX) ✅** — front Next agora expõe TODO o backend: mercado de cartões,
+>   grades O/U completas da CDF, explorador prob-alvo↔linha (entrada por odd), value
+>   betting (espelha `value_betting.py`), edição controlada das 10 features por slider
+>   (+ override de h2h), combinada "teto otimista", confiabilidade do confronto e avisos
+>   de risco. Commit `095b170`.
+> - **Passo 4 (value) — EM ANDAMENTO (coleta ao vivo) ⏳** — harness completo:
+>   `collect_odds_forward.py` (coleta odds + snapshota previsão), `resolve_results.py`
+>   (placar/stats reais), `value_report.py` (divergência modelo×mercado), `value_backtest.py`
+>   (P&L realizado). **Tarefa do Windows `PrevisaoJogos\CollectOdds` roda 3/3h** (fora do
+>   repo). 34 jogos da Copa 2026 semeados; veredito cresce conforme resolvem. Commits
+>   `1f26437`, `678ffce`.
+> - **Campanha de melhoria de modelos — ESGOTADA (negativo honesto) ❌** — calibração
+>   post-hoc (×3 mercados), confiabilidade de rating e xG, **todas testadas e nenhuma
+>   rende ganho promovível**: os modelos estão no teto in-sample (ECE já 1.78–3.71%);
+>   o caso Curaçao é inflação de Elo não-flagável; xG é muro de dados (258/9.511 jogos).
+>   Commits `a488189`, `5f59209`, xG-audit. Detalhe em `RESUMO_SESSAO_2026-06-21_parte2.md`.
+> - **PRÓXIMO:** não há alavanca in-sample; **deixar o backtest ao vivo acumular** e usá-lo
+>   como árbitro empírico de edge real. Eventual retorno ao front/UX é refino, não bloqueio.
+>
+> *(Histórico anterior preservado abaixo. Ver `RESUMO_SESSAO_2026-06-21.md` para a sessão
+> do backend; `RESUMO_SESSAO_2026-06-21_parte2.md` para UX + Passo 4 + campanha de modelos.)*
 
 ---
 
@@ -131,26 +145,44 @@ base inteira; exposto no `predictor.py`/`odds.py` (PMF + linhas O/U 1.5–6.5 + 
 PELA PRIMEIRA VEZ. Não-regressão + HTTP validados. Caveat: intervalo 80% coarse (contagem
 baixa, sobre-cobre ~92%); estimativa e linhas O/U confiáveis.
 
-### Passo 3 — Melhorias de UX/UI
-Já desenhadas. Inclui: slider de probabilidade-alvo → linha correspondente (e entrada
-alternativa por odd); combinadas do MESMO jogo exibindo probabilidade combinada real
-como "teto otimista" com ressalva de correlação; remoção de campos de edição livre,
-substituídos por edição controlada das **10 features de alto impacto** já definidas
-pela análise de importância (excluindo alvos e `*_cur_*`); comparação odd-justa vs
-odd-da-casa (value betting); indicador de confiabilidade do confronto (volume de dados);
-avisos de risco visíveis. As 10 features: elo_diff, h2h_home_gd_mean, gf_l5, ga_l5,
-tournament_weight, neutral, days_rest, sb_corners_l5, sb_shots_l5, sb_cards_l5.
+### Passo 3 — Melhorias de UX/UI  ✅ CONCLUÍDO (commit `095b170`)
+Entregue por completo no front Next (`web/src/app/page.tsx`, `web/src/lib/api.ts`):
+tipos TS estendidos (cartões/distribuicao/linhas); **mercado de cartões exposto** +
+grades O/U completas da CDF (antes só 1 linha); **explorador prob-alvo→linha** (entrada
+por odd) derivando qualquer linha da PMF; **value betting** (edge/EV/de-vig espelhando
+`value_betting.py`, paridade validada); **edição controlada das 10 features por slider**
+(+ override de `h2h_home_gd_mean`, novos `h2h_overrides`/`context_overrides` no payload);
+**combinada "teto otimista"** com ressalva de correlação; **confiabilidade do confronto**
+(volume de h2h) e **avisos de risco**. As 10 features: elo_diff, h2h_home_gd_mean, gf_l5,
+ga_l5, tournament_weight, neutral, days_rest, sb_corners_l5, sb_shots_l5, sb_cards_l5.
 
-### Passo 4 — Validação contra odds de mercado
-A fronteira que responde "o sistema tem valor de aposta real?". Exige coletar histórico
-de odds (nova coleta). Compara as probabilidades do modelo contra as implícitas nas odds
-das casas, para detectar divergências exploráveis (value). É provavelmente o trabalho
-mais importante que resta para o objetivo de apostas, e o ainda-não-respondido.
+### Passo 4 — Validação contra odds de mercado  ⏳ EM ANDAMENTO (harness pronto, coletando)
+A fronteira que responde "o sistema tem valor de aposta real?". **Harness construído**
+(commits `1f26437`, `678ffce`): `collect_odds_forward.py` (coleta odds de consenso +
+snapshota a previsão do modelo), `resolve_results.py` (placar/stats reais), `value_report.py`
+(divergência modelo×mercado, EV/de-vig), `value_backtest.py` (P&L realizado + calibração).
+Limitação da api-football (odds só 1–14 dias antes, 7 dias de histórico) → coleta
+**forward-only**, agendada na **tarefa Windows `PrevisaoJogos\CollectOdds` (3/3h)**. 34 jogos
+da Copa 2026 semeados; o veredito de edge **cresce conforme os jogos resolvem**. É o
+**árbitro empírico** e o trabalho de maior valor que resta — agora destravado.
 
-### Passo 5 — Peso temporal (EWMA por dias)
-Refino de retorno incerto. Para seleções, decaimento por DIAS (não por número de jogos),
-já que jogam esparso. Provavelmente move pouco gols/cartões (perto do teto), mas pode
-ajudar a forma recente que alimenta resultado/escanteios. Deixado por último de propósito.
+### Campanha de melhoria de modelos (in-sample) — ESGOTADA, resultado NEGATIVO
+Testadas com rigor e gate de não-regressão; **nenhuma rende ganho promovível** (commits
+`a488189`, `5f59209`, xG-audit):
+- **Calibração post-hoc** (resultado/over2.5/escanteios-vis.): modelos já calibrados OOS
+  (ECE 1.78–3.71%); temperature/isotônica melhoram um lado e regridem o outro. Não passam.
+- **Confiabilidade de rating:** "+EV espúrio" em zebras (Curaçao 22.5% vs 5% mercado) é
+  **inflação de Elo por força de tabela** (Elo 1573 inflado), NÃO flagável por nº de jogos
+  ou Elo (ambos bem calibrados). Sharpening condicional conserta o viés mas o ganho é ruído
+  (alterna entre limiares vizinhos).
+- **xG:** muro de dados — só 258/9.511 jogos (UEFA/CONMEBOL 2024 + Copa 2026); esparso
+  demais para feature de forma-xG.
+**Conclusão:** o ganho não está em re-pesar probabilidades existentes; está no backtest ao
+vivo (acima) ou em sinal/dados novos no futuro.
+
+### Passo 5 — Peso temporal (EWMA por dias)  ➖ já parcialmente testado
+Decaimento por DIAS. Testado antes: só ajudou chutes (decay H=2, já em produção). Retorno
+incerto nos demais; não priorizado.
 
 ---
 
