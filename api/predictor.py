@@ -15,12 +15,19 @@ try:
 except ImportError:
     from api.corners_nb_model import CornersNB
 
+try:
+    from cards_nb_model import CardsNB
+except ImportError:
+    from api.cards_nb_model import CardsNB
+
 ART = "model_artifacts"
 HOME_ADV_ELO = 65.0
 
-# Linhas over/under expostas para escanteios (mandante, visitante e total).
-# Saem todas da CDF da NB; a UI só escolhe qual exibir, sem recalcular nada.
+# Linhas over/under expostas (mandante, visitante e total). Saem todas da CDF da
+# NB; a UI só escolhe qual exibir, sem recalcular nada. Cartões têm contagem mais
+# baixa que escanteios, então usam uma grade própria.
 CORNER_LINES = [5.5, 6.5, 7.5, 8.5, 9.5, 10.5]
+CARDS_LINES = [1.5, 2.5, 3.5, 4.5, 5.5, 6.5]
 
 
 def _clamp_p(p):
@@ -39,6 +46,7 @@ class Predictor:
         self.qm = joblib.load(f"{art_dir}/quantile_models.joblib")
         self.dc = DixonColesNBRegressor.load(f"{art_dir}/dixon_coles_goals.joblib")
         self.corners = CornersNB.load(f"{art_dir}/corners_nb.joblib")
+        self.cards = CardsNB.load(f"{art_dir}/cards_nb.joblib")
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
         # historico de confrontos (h2h)
@@ -138,8 +146,8 @@ class Predictor:
         return {"estimativa": round(p, 1), "intervalo": [round(lo, 1), round(hi, 1)],
                 "confianca": self._conf_label(p, lo, hi)}
 
-    def _corners_market(self, pmf):
-        """Monta a saída de um mercado de escanteios a partir da PMF da NB.
+    def _corners_market(self, pmf, lines=CORNER_LINES):
+        """Monta a saída de um mercado de contagem (escanteios/cartões) da PMF da NB.
 
         Expõe: estimativa pontual + intervalo 80% (compat), a distribuição/CDF
         completa (fonte de verdade), e prob/odd-justa das linhas O/U (conveniência
@@ -152,7 +160,7 @@ class Predictor:
         q10 = float(np.searchsorted(cdf, 0.1))
         q90 = float(np.searchsorted(cdf, 0.9))
         linhas = {}
-        for L in CORNER_LINES:
+        for L in lines:
             over = float(pmf[int(L) + 1:].sum())   # P(contagem >= L+1), L é x.5
             under = 1.0 - over
             linhas[str(L)] = {
@@ -228,8 +236,9 @@ class Predictor:
             "confianca": conf_label
         }
 
-        # Escanteios via NB independente (CDF real; total por convolução)
+        # Escanteios e cartões via NB independente (CDF real; total por convolução)
         cd = self.corners.predict_distributions(X)
+        cc = self.cards.predict_distributions(X)
 
         return {
             "vencedor": winner,
@@ -238,6 +247,9 @@ class Predictor:
             "escanteios": {home_team: self._corners_market(cd["home"][0]),
                            away_team: self._corners_market(cd["away"][0]),
                            "total": self._corners_market(cd["total"][0])},
+            "cartoes": {home_team: self._corners_market(cc["home"][0], CARDS_LINES),
+                        away_team: self._corners_market(cc["away"][0], CARDS_LINES),
+                        "total": self._corners_market(cc["total"][0], CARDS_LINES)},
             "ambas_marcam": btts_res,
             "over_2_5": over_res,
             "confronto_direto": h2h["_resumo"],

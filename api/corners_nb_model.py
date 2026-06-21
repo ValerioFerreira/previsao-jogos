@@ -78,7 +78,7 @@ class CornersNB(BaseEstimator):
         y_h_clean = y_h[valid]
         y_a_clean = y_a[valid]
 
-        print(f"Treinando regressores de expectativa de escanteios (N={len(X_clean)})...")
+        print(f"Treinando regressores de expectativa de contagem (N={len(X_clean)})...")
         self.model_home_ = self._create_base_regressor()
         self.model_away_ = self._create_base_regressor()
         self.model_home_.fit(X_clean, y_h_clean)
@@ -130,7 +130,7 @@ class CornersNB(BaseEstimator):
 
     def save(self, filepath):
         joblib.dump(self, filepath)
-        print(f"Modelo CornersNB salvo em: {filepath}")
+        print(f"Modelo {type(self).__name__} salvo em: {filepath}")
 
     @classmethod
     def load(cls, filepath):

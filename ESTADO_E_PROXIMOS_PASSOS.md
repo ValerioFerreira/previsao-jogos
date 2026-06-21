@@ -3,11 +3,12 @@
 > Mapa consolidado para retomar o projeto sem reabrir tudo. Resume o que já foi feito,
 > o estado atual dos modelos, e a sequência de próximos passos acordada.
 
-> **PONTO DE RETOMADA:** Passos 1, 1.5, 2 (escanteios) e 2c (promover escanteios) concluídos.
-> O Dixon-Coles de gols/resultado e a NB de escanteios estão EM PRODUÇÃO.
-> Próximo: Passo 2b (cartões — comparar independente vs acoplado, correlação provavelmente
-> positiva; criar e expor cartões no predictor pela primeira vez) e depois a promoção
-> de cartões para fechar o ciclo de modelos de contagem.
+> **PONTO DE RETOMADA:** Passos 1, 1.5, 2 (escanteios), 2c (promover escanteios) e
+> **2b (cartões)** concluídos. Dixon-Coles (gols/resultado), NB de escanteios e NB de
+> cartões estão EM PRODUÇÃO — o **ciclo de modelos de contagem está fechado**.
+> **Ordem revisada dos próximos passos** (acordada após a análise de seleção): próximo é
+> **peso temporal (time decay / EWMA por dias)**, que ataca o viés temporal abaixo; depois
+> **enriquecer mando triplo + peso de competição**; e então o Passo 3 (UX).
 
 ---
 
@@ -21,9 +22,12 @@
 - **PRODUÇÃO ATUAL (tudo na API, um único `meta.json` regendo as features):**
   - **Resultado (H/D/A), gols, BTTS, over/under:** servidos pelo **Dixon-Coles NB**,
     todos derivados da mesma matriz conjunta (sistema coerente, uma voz só).
-  - **Escanteios (mandante/visitante) e chutes:** regressão quantílica (modelos da API).
-  - **Cartões:** treinado e validado, mas **ainda NÃO exposto no `predictor.py`** —
-    precisará ser criado/exposto num passo futuro.
+  - **Escanteios (mandante/visitante/total):** Binomial Negativa independente — PMF real,
+    linhas O/U e odds extraídas da CDF (`corners_nb.joblib`).
+  - **Cartões (mandante/visitante/total):** NB independente, exposta desde o Passo 2b —
+    na prática **Poisson** (r colapsou em ~1000; sem sobredispersão real), o ganho vem da
+    distribuição de contagem própria vs a Normal (`cards_nb.joblib`).
+  - **Chutes:** regressão quantílica (ainda legada).
   - Backups duplos preservados: `model_artifacts_backup/` (StatsBomb original) e
     `model_artifacts_pre_unificacao/` (estado pré-migração).
 - **Dixon-Coles (gols) — validado out-of-sample na base da API:** ganho robusto no
@@ -99,12 +103,16 @@ A NB independente de escanteios foi promovida com sucesso.
   linhas de over/under diretamente da CDF da NB (aposentando a aproximação Normal).
 - Validação e testes HTTP de não-regressão concluídos com sucesso.
 
-### Passo 2b — Cartões (próximo alvo de contagem)  [PRÓXIMO]
-Mesma comparação (independente vs acoplado), MAS atenção: a correlação em cartões
-provavelmente é POSITIVA (jogo pegado gera cartão dos dois lados) — então o acoplamento
-pode compensar aqui mesmo tendo falhado em escanteios. E lembrar: cartões ainda NÃO está
-exposto no `predictor.py`, então este passo inclui criar/expor o mercado pela primeira vez.
-Após a definição do modelo, ele será promovido à produção na sequência.
+### Passo 2b — Cartões  ✅ CONCLUÍDO (promovido)
+Comparação independente vs acoplado vs quantílica nos 3 mercados. **Correlação CONFIRMADA
+positiva** (β=+0,072, ao contrário dos escanteios) — mas fraca: o acoplado empatou a
+independente em log-loss e só ajudou marginalmente o ECE do total. **Decisão: NB independente
+nos três mercados** (a NB bate a quantílica em log-loss e ECE em tudo). **Achado honesto:**
+o r colapsou (≈1000) → cartões NÃO têm sobredispersão real (como gols, não como escanteios);
+o ganho vem da distribuição de contagem própria, não da NB. `cards_nb.joblib` treinado na
+base inteira; exposto no `predictor.py`/`odds.py` (PMF + linhas O/U 1.5–6.5 + odds da CDF)
+PELA PRIMEIRA VEZ. Não-regressão + HTTP validados. Caveat: intervalo 80% coarse (contagem
+baixa, sobre-cobre ~92%); estimativa e linhas O/U confiáveis.
 
 ### Passo 3 — Melhorias de UX/UI
 Já desenhadas. Inclui: slider de probabilidade-alvo → linha correspondente (e entrada

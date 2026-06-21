@@ -305,6 +305,37 @@ O modelo foi re-treinado sobre a base completa com estatísticas avançadas vál
 2. **Substituição da Aproximação Normal**: A antiga lógica baseada em média/sigma obtidos via quantis 10/50/90 no `api/app/services/odds.py` foi aposentada para o mercado de escanteios. As probabilidades e odds de linhas (over/under 5.5, 6.5, 7.5, 8.5, 9.5, 10.5) agora são extraídas diretamente da CDF real da Binomial Negativa.
 3. **Validação de Não-Regressão**: Todos os outros mercados (gols via Dixon-Coles, vencedor H/D/A, BTTS, chutes e cartões) permaneceram inalterados e validados por testes de fumaça e testes HTTP reais da API.
 
+---
+
+## 13. Modelo de Contagem para CARTÕES e sua Promoção (Passo 2b)
+
+Cartões fechou o ciclo de modelos de contagem, exposto pela primeira vez no preditor.
+
+### 13.1 Comparação (split temporal, N=3.286 treino / 816 teste)
+Três abordagens (quantílica / NB independente / NB acoplada) nos três mercados:
+* **Correlação entre lados CONFIRMADA positiva** ($\beta = +0.0721$), ao contrário dos
+  escanteios (negativa). A hipótese ("jogo pegado cartoneia os dois") se sustentou — mas o
+  efeito é fraco: a acoplada **empatou** a independente em log-loss e só melhorou
+  marginalmente o ECE do total. Acoplamento aposentado também aqui.
+* **NB independente vence a quantílica** em log-loss e ECE nos três mercados (ex.: mandante
+  LL 1,584 vs 1,671 e ECE 1,6% vs 7,3%; total LL 2,070 vs 2,120).
+
+### 13.2 Achado importante (honestidade): cartões ≈ Poisson
+O parâmetro de dispersão $r$ **colapsou no teto** ($r_H = r_A = 1000$): **cartões NÃO têm
+sobredispersão real** depois de modelado o $\lambda$ — comportam-se como **gols**, não como
+escanteios (onde $r \approx 20$). O ganho sobre a quantílica vem de usar uma **distribuição
+de contagem própria** (a Normal é péssima para contagem baixa, média ~2), **não** da NB
+explorando dispersão. O modelo de produção é, na prática, Poisson.
+
+### 13.3 Promoção
+* `cards_nb.joblib` treinado na base inteira ($N = 4.102$), viés global ~zero.
+* Exposto no `api/predictor.py` (chave `cartoes`: mandante/visitante/total com estimativa,
+  intervalo 80%, PMF completa e linhas O/U **1.5–6.5** com odds da CDF) e no `odds.py`
+  (`linhas_numericas.cartoes`). Mercado de cartões disponível **pela primeira vez**.
+* Não-regressão (todos os demais mercados byte-idênticos) + teste HTTP real validados.
+* **Caveat registrado:** o intervalo de 80% de cartões é grosseiro (contagem baixa,
+  sobre-cobre ~92%); estimativa e linhas O/U são confiáveis.
+
 
 
 

@@ -186,6 +186,11 @@ def enrich_with_odds(prediction: dict[str, Any], n_train: dict[str, int]) -> dic
                 away_team: corners_line_market(prediction["escanteios"][away_team]),
                 "total": corners_line_market(prediction["escanteios"]["total"]),
             },
+            "cartoes": {
+                home_team: corners_line_market(prediction["cartoes"][home_team]),
+                away_team: corners_line_market(prediction["cartoes"][away_team]),
+                "total": corners_line_market(prediction["cartoes"]["total"]),
+            },
         },
         "nota": (
             "Odd justa = 1/probabilidade, sem margem da casa. Use como referencia analitica; "
