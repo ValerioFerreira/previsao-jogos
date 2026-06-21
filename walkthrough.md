@@ -289,6 +289,22 @@ Avaliamos e comparamos os modelos de contagem de escanteios (Binomial Negativa) 
 * **Decisão:** Adotar a **Abordagem A (NB Independente)** de forma uniforme para os três mercados de escanteios.
 * **Justificativa:** A modelagem conjunta bivariada (Abordagem B) adiciona enorme complexidade de engenharia de software (cálculo e integração de grades conjuntas $26 \times 26$ em produção) sem fornecer qualquer ganho estatístico representativo (empate no visitante e perda clara no total/mandante). Adotando a Abordagem A para tudo, necessitamos de apenas dois modelos independentes simples (Home/Away NB), derivando o Total via convolução rápida e estável. A abordagem acoplada foi oficialmente aposentada para escanteios.
 
+---
+
+## 12. Promoção do Modelo NB de Escanteios à Produção (Passo 2c)
+
+O modelo de Binomial Negativa independente foi oficialmente promovido para produção, substituindo a antiga aproximação Normal baseada em regressão quantílica para escanteios.
+
+### 12.1 Parâmetros Finais (Base Completa)
+O modelo foi re-treinado sobre a base completa com estatísticas avançadas válidas ($N = 4.102$ partidas). Os parâmetros de sobredispersão obtidos por MLE foram:
+* **$r_H$ (Mandante):** $18.20$
+* **$r_A$ (Visitante):** $16.70$
+
+### 12.2 Alterações na API de Previsão e Odds
+1. **Exposição de PMFs Reais**: O preditor no `api/predictor.py` agora consome o modelo treinado `corners_nb.joblib` e expõe a distribuição de probabilidade de massa (PMF) real de escanteios mandante, visitante e total (derivada por convolução direta).
+2. **Substituição da Aproximação Normal**: A antiga lógica baseada em média/sigma obtidos via quantis 10/50/90 no `api/app/services/odds.py` foi aposentada para o mercado de escanteios. As probabilidades e odds de linhas (over/under 5.5, 6.5, 7.5, 8.5, 9.5, 10.5) agora são extraídas diretamente da CDF real da Binomial Negativa.
+3. **Validação de Não-Regressão**: Todos os outros mercados (gols via Dixon-Coles, vencedor H/D/A, BTTS, chutes e cartões) permaneceram inalterados e validados por testes de fumaça e testes HTTP reais da API.
+
 
 
 

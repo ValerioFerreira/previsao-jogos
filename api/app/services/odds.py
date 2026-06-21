@@ -137,6 +137,41 @@ def numeric_line_market(metric: dict[str, Any], label: str) -> dict[str, Any]:
     }
 
 
+def corners_line_market(market: dict[str, Any]) -> dict[str, Any]:
+    """Bloco de odds de escanteios a partir da CDF real da NB (não da Normal).
+
+    A grade completa de linhas (e a PMF) vive em prediction["escanteios"]; aqui
+    expomos uma linha representativa (a mais próxima da estimativa) no formato que
+    a página já consome. A probabilidade da NB para uma linha fixa é pontual, então
+    a faixa colapsa no próprio valor (a incerteza já está na distribuição inteira).
+    """
+    linhas = market.get("linhas") or {}
+    if not linhas:
+        return {"disponivel": False,
+                "motivo": "Distribuição de escanteios indisponível."}
+    estimate = float(market["estimativa"])
+    rep = min((float(k) for k in linhas), key=lambda L: abs(L - estimate))
+    key = next(k for k in linhas if float(k) == rep)
+    side_over, side_under = linhas[key]["over"], linhas[key]["under"]
+
+    def fmt(side: dict[str, Any]) -> dict[str, Any]:
+        p = side["prob"] / 100.0
+        return {
+            "probabilidade": side["prob"],
+            "odd_justa": side["odd_justa"],
+            "faixa_odd_justa": {"min": side["odd_justa"], "max": side["odd_justa"]},
+            "intervalo_probabilidade_80": [side["prob"], side["prob"]],
+        }
+
+    return {
+        "disponivel": True,
+        "linha": rep,
+        "metodo": "CDF real da Binomial Negativa (substitui a aproximação Normal).",
+        "over": fmt(side_over),
+        "under": fmt(side_under),
+    }
+
+
 def enrich_with_odds(prediction: dict[str, Any], n_train: dict[str, int]) -> dict[str, Any]:
     home_team, away_team = [name for name in prediction["vencedor"]["probabilidades"] if name != "Empate"]
     return {
@@ -147,8 +182,9 @@ def enrich_with_odds(prediction: dict[str, Any], n_train: dict[str, int]) -> dic
             "gols": numeric_line_market(prediction["gols"], "total_goals"),
             "chutes": numeric_line_market(prediction["chutes"], "total_shots"),
             "escanteios": {
-                home_team: numeric_line_market(prediction["escanteios"][home_team], "home_corners"),
-                away_team: numeric_line_market(prediction["escanteios"][away_team], "away_corners"),
+                home_team: corners_line_market(prediction["escanteios"][home_team]),
+                away_team: corners_line_market(prediction["escanteios"][away_team]),
+                "total": corners_line_market(prediction["escanteios"]["total"]),
             },
         },
         "nota": (

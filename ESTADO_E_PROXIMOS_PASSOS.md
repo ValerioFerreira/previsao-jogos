@@ -3,12 +3,11 @@
 > Mapa consolidado para retomar o projeto sem reabrir tudo. Resume o que já foi feito,
 > o estado atual dos modelos, e a sequência de próximos passos acordada.
 
-> **PONTO DE RETOMADA (máquina nova):** Passos 1, 1.5 e 2 (escanteios) concluídos.
-> O Dixon-Coles de gols/resultado está EM PRODUÇÃO; a NB independente de escanteios está
-> VALIDADA mas AINDA NÃO PROMOVIDA. Próximo: Passo 2b (cartões — comparar independente vs
-> acoplado, correlação provavelmente positiva; cartões ainda não exposto no predictor) e
-> depois Passo 2c (promover escanteios + cartões à produção juntos). Ao retomar, mostre
-> este documento ao Claude para recolocar o contexto.
+> **PONTO DE RETOMADA:** Passos 1, 1.5, 2 (escanteios) e 2c (promover escanteios) concluídos.
+> O Dixon-Coles de gols/resultado e a NB de escanteios estão EM PRODUÇÃO.
+> Próximo: Passo 2b (cartões — comparar independente vs acoplado, correlação provavelmente
+> positiva; criar e expor cartões no predictor pela primeira vez) e depois a promoção
+> de cartões para fechar o ciclo de modelos de contagem.
 
 ---
 
@@ -83,7 +82,7 @@ Migração final: toda a produção passou a rodar na base da API com um único 
 Backups duplos preservados. Revalidação out-of-sample confirmou que o ganho do Dixon-Coles
 se mantém (ECE resultado 3,16%) e que não há inflação nos mercados de contagem.
 
-### Passo 2 — Binomial Negativa para ESCANTEIOS  ✅ CONCLUÍDO (validado, pendente de promoção)
+### Passo 2 — Binomial Negativa para ESCANTEIOS  ✅ CONCLUÍDO
 Comparadas 3 abordagens (quantílico atual / NB independente / NB acoplada) × 3 mercados.
 **Resultado:** a NB tem sobredispersão real em escanteios (r ~20-29, NÃO colapsou em
 Poisson como gols → NB usada de fato). A correlação entre lados é negativa mas FRACA
@@ -91,19 +90,21 @@ Poisson como gols → NB usada de fato). A correlação entre lados é negativa 
 (ECE 2,75% vs 5,11%) e no mandante, e empatou no visitante (4ª casa decimal).
 **Decisão:** NB independente para os três mercados; acoplamento aposentado para
 escanteios. A NB independente bate a regressão quantílica atual em log-loss e ECE nos
-três mercados. **PENDENTE:** promover a NB de escanteios à produção (ainda não feito;
-produção segue com a quantílica legada até aprovação).
+três mercados.
+
+### Passo 2c — Promover escanteios à produção  ✅ CONCLUÍDO
+A NB independente de escanteios foi promovida com sucesso.
+- O modelo foi re-treinado na base inteira com $r_H=18.20$ e $r_A=16.70$.
+- O `predictor.py` e `odds.py` foram atualizados para expor a PMF real e calcular as odds e
+  linhas de over/under diretamente da CDF da NB (aposentando a aproximação Normal).
+- Validação e testes HTTP de não-regressão concluídos com sucesso.
 
 ### Passo 2b — Cartões (próximo alvo de contagem)  [PRÓXIMO]
 Mesma comparação (independente vs acoplado), MAS atenção: a correlação em cartões
 provavelmente é POSITIVA (jogo pegado gera cartão dos dois lados) — então o acoplamento
 pode compensar aqui mesmo tendo falhado em escanteios. E lembrar: cartões ainda NÃO está
 exposto no `predictor.py`, então este passo inclui criar/expor o mercado pela primeira vez.
-
-### Passo 2c — Promover escanteios (e cartões) à produção
-Promover a NB independente de escanteios (e o modelo de cartões escolhido) à produção,
-com a mesma disciplina do Dixon-Coles: backup, teste de fumaça, não-regressão dos
-mercados inalterados, coerência. Pode ser feito junto com a decisão de cartões.
+Após a definição do modelo, ele será promovido à produção na sequência.
 
 ### Passo 3 — Melhorias de UX/UI
 Já desenhadas. Inclui: slider de probabilidade-alvo → linha correspondente (e entrada

@@ -10,8 +10,25 @@ try:
 except ImportError:
     from api.dixon_coles_model import DixonColesNBRegressor
 
+try:
+    from corners_nb_model import CornersNB
+except ImportError:
+    from api.corners_nb_model import CornersNB
+
 ART = "model_artifacts"
 HOME_ADV_ELO = 65.0
+
+# Linhas over/under expostas para escanteios (mandante, visitante e total).
+# Saem todas da CDF da NB; a UI só escolhe qual exibir, sem recalcular nada.
+CORNER_LINES = [5.5, 6.5, 7.5, 8.5, 9.5, 10.5]
+
+
+def _clamp_p(p):
+    return min(0.999, max(0.001, float(p)))
+
+
+def _fair_odd(p):
+    return round(1.0 / _clamp_p(p), 2)
 
 
 class Predictor:
@@ -21,6 +38,7 @@ class Predictor:
         self.clf_over = joblib.load(f"{art_dir}/clf_over25.joblib")
         self.qm = joblib.load(f"{art_dir}/quantile_models.joblib")
         self.dc = DixonColesNBRegressor.load(f"{art_dir}/dixon_coles_goals.joblib")
+        self.corners = CornersNB.load(f"{art_dir}/corners_nb.joblib")
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
         # historico de confrontos (h2h)
@@ -120,6 +138,35 @@ class Predictor:
         return {"estimativa": round(p, 1), "intervalo": [round(lo, 1), round(hi, 1)],
                 "confianca": self._conf_label(p, lo, hi)}
 
+    def _corners_market(self, pmf):
+        """Monta a saída de um mercado de escanteios a partir da PMF da NB.
+
+        Expõe: estimativa pontual + intervalo 80% (compat), a distribuição/CDF
+        completa (fonte de verdade), e prob/odd-justa das linhas O/U (conveniência
+        para a UI). Tudo derivado da mesma distribuição — cortes diferentes da CDF.
+        """
+        pmf = np.asarray(pmf, dtype=float)
+        k = np.arange(len(pmf))
+        est = float(np.sum(pmf * k))
+        cdf = np.cumsum(pmf)
+        q10 = float(np.searchsorted(cdf, 0.1))
+        q90 = float(np.searchsorted(cdf, 0.9))
+        linhas = {}
+        for L in CORNER_LINES:
+            over = float(pmf[int(L) + 1:].sum())   # P(contagem >= L+1), L é x.5
+            under = 1.0 - over
+            linhas[str(L)] = {
+                "over":  {"prob": round(100 * over, 1),  "odd_justa": _fair_odd(over)},
+                "under": {"prob": round(100 * under, 1), "odd_justa": _fair_odd(under)},
+            }
+        return {
+            "estimativa": round(est, 1),
+            "intervalo": [round(q10, 1), round(q90, 1)],
+            "confianca": self._conf_label(est, q10, q90),
+            "distribuicao": [round(float(x), 6) for x in pmf],
+            "linhas": linhas,
+        }
+
     @staticmethod
     def _binary(pipe, X, feats, pos_label, yes_txt, no_txt):
         proba = pipe.predict_proba(X[feats])[0]
@@ -181,12 +228,16 @@ class Predictor:
             "confianca": conf_label
         }
 
+        # Escanteios via NB independente (CDF real; total por convolução)
+        cd = self.corners.predict_distributions(X)
+
         return {
             "vencedor": winner,
             "gols": gols_res,
             "chutes": self._num("total_shots", X, ff),
-            "escanteios": {home_team: self._num("home_corners", X, ff),
-                           away_team: self._num("away_corners", X, ff)},
+            "escanteios": {home_team: self._corners_market(cd["home"][0]),
+                           away_team: self._corners_market(cd["away"][0]),
+                           "total": self._corners_market(cd["total"][0])},
             "ambas_marcam": btts_res,
             "over_2_5": over_res,
             "confronto_direto": h2h["_resumo"],
@@ -195,6 +246,7 @@ class Predictor:
 
 if __name__ == "__main__":
     import pprint
-    p = Predictor()
+    art_path = "api/model_artifacts" if os.path.exists("api/model_artifacts") else "model_artifacts"
+    p = Predictor(art_path)
     print("Seleções:", len(p.teams()))
     pprint.pprint(p.predict("Brazil", "Argentina", neutral=True, tournament="Copa do Mundo"))
