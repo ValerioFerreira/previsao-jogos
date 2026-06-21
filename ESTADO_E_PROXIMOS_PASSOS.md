@@ -9,7 +9,12 @@
 > escanteios/cartões/chutes) — não há mais mercado legado (quantílica/Normal aposentadas).
 > **Peso temporal e mando/competição foram TESTADOS** (ver achados abaixo): o time decay
 > só ajuda chutes (aplicado lá, H=2); nos demais alvos foi neutro/negativo, então NÃO
-> promovido globalmente. Próximo: **Passo 3 (UX)** ou validação contra odds de mercado.
+> promovido globalmente.
+> **Backend finalizado** (itens 2/3/4): escanteios em campo neutro corrigido (interações
+> de mando); infraestrutura de **odds de mercado + value betting** construída (api-football);
+> código morto da quantílica removido. **Próximo: Passo 3 (UX)** — todos os mercados já
+> expõem PMF + linhas O/U + odds prontos para a interface. Ver `RESUMO_SESSAO_2026-06-21.md`
+> para o passo-a-passo completo desta sessão.
 
 ---
 
@@ -24,13 +29,19 @@
   - **Resultado (H/D/A), gols, BTTS, over/under:** servidos pelo **Dixon-Coles NB**,
     todos derivados da mesma matriz conjunta (sistema coerente, uma voz só).
   - **Escanteios (mandante/visitante/total):** Binomial Negativa independente — PMF real,
-    linhas O/U e odds extraídas da CDF (`corners_nb.joblib`).
+    linhas O/U e odds da CDF (`corners_nb.joblib`). Inclui **interações de mando**
+    (`api/corner_interactions.py`) que corrigem o resíduo em campo neutro (item 2).
   - **Cartões (mandante/visitante/total):** NB independente, exposta desde o Passo 2b —
     na prática **Poisson** (r colapsou em ~1000; sem sobredispersão real), o ganho vem da
     distribuição de contagem própria vs a Normal (`cards_nb.joblib`).
   - **Chutes (total):** NB independente (r≈18/16, sobredispersão real) **com time decay
     H=2** — único alvo onde o peso temporal ajuda (`shots_nb.joblib`). Aposentou a
     quantílica + Normal de chutes; agora expõe PMF + linhas O/U + odds da CDF.
+  - **Odds de mercado + value betting (item 3):** `api/value_betting.py` (compara prob do
+    modelo vs odd da casa → edge/EV, de-vig) e `scripts/fetch_odds.py` (coletor /odds da
+    api-football, mapeando os bet ids dos nossos mercados). **Limitação:** odds só 1-14 dias
+    antes do jogo, 7 dias de histórico → sem backtest retroativo; coleta forward-only,
+    deve ser agendada. Chutes não têm odds (casas não oferecem).
   - Backups duplos preservados: `model_artifacts_backup/` (StatsBomb original) e
     `model_artifacts_pre_unificacao/` (estado pré-migração).
 - **Dixon-Coles (gols) — validado out-of-sample na base da API:** ganho robusto no
