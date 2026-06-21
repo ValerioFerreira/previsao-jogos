@@ -3,12 +3,13 @@
 > Mapa consolidado para retomar o projeto sem reabrir tudo. Resume o que já foi feito,
 > o estado atual dos modelos, e a sequência de próximos passos acordada.
 
-> **PONTO DE RETOMADA:** Passos 1, 1.5, 2 (escanteios), 2c (promover escanteios) e
-> **2b (cartões)** concluídos. Dixon-Coles (gols/resultado), NB de escanteios e NB de
-> cartões estão EM PRODUÇÃO — o **ciclo de modelos de contagem está fechado**.
-> **Ordem revisada dos próximos passos** (acordada após a análise de seleção): próximo é
-> **peso temporal (time decay / EWMA por dias)**, que ataca o viés temporal abaixo; depois
-> **enriquecer mando triplo + peso de competição**; e então o Passo 3 (UX).
+> **PONTO DE RETOMADA:** Passos 1, 1.5, 2/2c (escanteios), 2b (cartões) e a
+> **modernização de chutes (NB + time decay)** concluídos. **TODOS os mercados de
+> contagem agora usam distribuição própria** (Dixon-Coles em gols/resultado; NB em
+> escanteios/cartões/chutes) — não há mais mercado legado (quantílica/Normal aposentadas).
+> **Peso temporal e mando/competição foram TESTADOS** (ver achados abaixo): o time decay
+> só ajuda chutes (aplicado lá, H=2); nos demais alvos foi neutro/negativo, então NÃO
+> promovido globalmente. Próximo: **Passo 3 (UX)** ou validação contra odds de mercado.
 
 ---
 
@@ -27,7 +28,9 @@
   - **Cartões (mandante/visitante/total):** NB independente, exposta desde o Passo 2b —
     na prática **Poisson** (r colapsou em ~1000; sem sobredispersão real), o ganho vem da
     distribuição de contagem própria vs a Normal (`cards_nb.joblib`).
-  - **Chutes:** regressão quantílica (ainda legada).
+  - **Chutes (total):** NB independente (r≈18/16, sobredispersão real) **com time decay
+    H=2** — único alvo onde o peso temporal ajuda (`shots_nb.joblib`). Aposentou a
+    quantílica + Normal de chutes; agora expõe PMF + linhas O/U + odds da CDF.
   - Backups duplos preservados: `model_artifacts_backup/` (StatsBomb original) e
     `model_artifacts_pre_unificacao/` (estado pré-migração).
 - **Dixon-Coles (gols) — validado out-of-sample na base da API:** ganho robusto no
@@ -35,16 +38,19 @@
   BTTS/over equivalentes. Ganho vem do **acoplamento Dixon-Coles**, não da Binomial
   Negativa (r convergiu para região quase-Poisson). **JÁ EM PRODUÇÃO.**
 
-## Achado a investigar (viés temporal sistemático)
+## Viés temporal — INVESTIGADO e resolvido (peso temporal testado)
 
-Na revalidação pós-unificação (teste temporal, ~816 jogos recentes), TODOS os alvos de
-contagem mostraram viés **levemente negativo**: gols −0,10, chutes −0,52, escanteios
-mandante −0,26, visitante −0,19. O modelo subestima sistematicamente o presente. Cada um
-é pequeno (2–5%), mas o fato de todos apontarem na MESMA direção sugere algo sistemático,
-não ruído — provável **tendência temporal** (futebol recente com um pouco mais de
-gols/escanteios que a média histórica de treino). É evidência concreta a favor do
-**peso temporal (Passo 5)**, que daria mais peso a jogos recentes e tenderia a zerar
-esse viés. Não bloqueia nada agora; registrado para quando chegarmos no Passo 5.
+O viés levemente negativo observado (gols −0,10, chutes −0,52, escanteios −0,26/−0,19) foi
+atacado com **time decay (sample_weight = 0,5^(Δdias/H))** e medido por alvo. **Conclusão:**
+- **Chutes:** o viés era genuinamente temporal e grande (−0,80). O decay **H=2** corta para
+  −0,31 e despenca o ECE (5,6%→2,5%). **Aplicado** (`shots_nb.joblib`).
+- **Gols:** o viés (−0,11) é **invariante ao decay** — não é tendência temporal, é estrutural.
+- **Escanteios/cartões:** viés já ~zero no split; o decay no máximo ajuda o ECE marginalmente
+  em H moderado e **piora** com H curto. **Não promovido.**
+Ou seja, a "tendência temporal" era majoritariamente um efeito de chutes. Mando triplo e
+peso de competição também foram testados: 3b (peso de competição) negativo; 3a (mando) tem
+resíduo real em escanteios no campo neutro (~0,30) — registrado como melhoria potencial
+localizada, não promovida. Os experimentos estão em `scripts/experiment_*` (working tree).
 
 ---
 

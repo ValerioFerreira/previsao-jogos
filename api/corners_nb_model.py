@@ -68,7 +68,10 @@ class CornersNB(BaseEstimator):
         res = minimize(obj, [5.0], bounds=[(0.1, 1000.0)], method="L-BFGS-B")
         return float(res.x[0])
 
-    def fit(self, X, y_home, y_away):
+    def fit(self, X, y_home, y_away, sample_weight=None):
+        """sample_weight (opcional): peso por amostra para os regressores de lambda
+        (ex.: time decay). Default None = sem peso (comportamento inalterado). O r de
+        dispersão é estimado sem peso (dispersão não é a alavanca do peso temporal)."""
         X_df = pd.DataFrame(X)
         y_h = np.asarray(y_home, dtype=float)
         y_a = np.asarray(y_away, dtype=float)
@@ -77,12 +80,13 @@ class CornersNB(BaseEstimator):
         X_clean = X_df.iloc[valid]
         y_h_clean = y_h[valid]
         y_a_clean = y_a[valid]
+        sw = np.asarray(sample_weight, dtype=float)[valid] if sample_weight is not None else None
 
         print(f"Treinando regressores de expectativa de contagem (N={len(X_clean)})...")
         self.model_home_ = self._create_base_regressor()
         self.model_away_ = self._create_base_regressor()
-        self.model_home_.fit(X_clean, y_h_clean)
-        self.model_away_.fit(X_clean, y_a_clean)
+        self.model_home_.fit(X_clean, y_h_clean, reg__sample_weight=sw)
+        self.model_away_.fit(X_clean, y_a_clean, reg__sample_weight=sw)
 
         lambdas = np.maximum(self.model_home_.predict(X_clean), 0.1)
         mus = np.maximum(self.model_away_.predict(X_clean), 0.1)

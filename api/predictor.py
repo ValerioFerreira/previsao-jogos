@@ -20,14 +20,20 @@ try:
 except ImportError:
     from api.cards_nb_model import CardsNB
 
+try:
+    from shots_nb_model import ShotsNB
+except ImportError:
+    from api.shots_nb_model import ShotsNB
+
 ART = "model_artifacts"
 HOME_ADV_ELO = 65.0
 
 # Linhas over/under expostas (mandante, visitante e total). Saem todas da CDF da
-# NB; a UI só escolhe qual exibir, sem recalcular nada. Cartões têm contagem mais
-# baixa que escanteios, então usam uma grade própria.
+# NB; a UI só escolhe qual exibir, sem recalcular nada. Cada mercado tem grade
+# própria conforme a magnitude da contagem (cartões baixa, chutes alta).
 CORNER_LINES = [5.5, 6.5, 7.5, 8.5, 9.5, 10.5]
 CARDS_LINES = [1.5, 2.5, 3.5, 4.5, 5.5, 6.5]
+SHOTS_LINES = [18.5, 20.5, 22.5, 24.5, 26.5]
 
 
 def _clamp_p(p):
@@ -47,6 +53,7 @@ class Predictor:
         self.dc = DixonColesNBRegressor.load(f"{art_dir}/dixon_coles_goals.joblib")
         self.corners = CornersNB.load(f"{art_dir}/corners_nb.joblib")
         self.cards = CardsNB.load(f"{art_dir}/cards_nb.joblib")
+        self.shots = ShotsNB.load(f"{art_dir}/shots_nb.joblib")
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
         # historico de confrontos (h2h)
@@ -236,14 +243,15 @@ class Predictor:
             "confianca": conf_label
         }
 
-        # Escanteios e cartões via NB independente (CDF real; total por convolução)
+        # Escanteios, cartões e chutes via NB independente (CDF real)
         cd = self.corners.predict_distributions(X)
         cc = self.cards.predict_distributions(X)
+        cs = self.shots.predict_distributions(X)
 
         return {
             "vencedor": winner,
             "gols": gols_res,
-            "chutes": self._num("total_shots", X, ff),
+            "chutes": self._corners_market(cs["total"][0], SHOTS_LINES),
             "escanteios": {home_team: self._corners_market(cd["home"][0]),
                            away_team: self._corners_market(cd["away"][0]),
                            "total": self._corners_market(cd["total"][0])},

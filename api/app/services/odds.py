@@ -180,7 +180,7 @@ def enrich_with_odds(prediction: dict[str, Any], n_train: dict[str, int]) -> dic
         "over_under_2_5": binary_market_odds(prediction["over_2_5"]["prob_sim"], n_train.get("over25", 1)),
         "linhas_numericas": {
             "gols": numeric_line_market(prediction["gols"], "total_goals"),
-            "chutes": numeric_line_market(prediction["chutes"], "total_shots"),
+            "chutes": corners_line_market(prediction["chutes"]),
             "escanteios": {
                 home_team: corners_line_market(prediction["escanteios"][home_team]),
                 away_team: corners_line_market(prediction["escanteios"][away_team]),

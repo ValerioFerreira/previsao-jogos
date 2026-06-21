@@ -336,6 +336,36 @@ explorando dispersão. O modelo de produção é, na prática, Poisson.
 * **Caveat registrado:** o intervalo de 80% de cartões é grosseiro (contagem baixa,
   sobre-cobre ~92%); estimativa e linhas O/U são confiáveis.
 
+---
+
+## 14. Modernização de CHUTES (NB + Time Decay) e o teste do Peso Temporal
+
+Chutes era o último mercado legado (regressão quantílica + aproximação Normal). Foi
+migrado para contagem e tornou-se a **primeira e única aplicação do time decay**.
+
+### 14.1 Migração para NB independente
+Chutes são **sobredispersos de fato** (var/média ~3,3; $r \approx 18\text{-}20$, NB
+genuinamente usada — como escanteios, ≠ cartões). A NB independente bate a quantílica em
+log-loss e ECE nos três mercados (ex.: total LL 3,24 vs 3,32; ECE 5,6% vs 6,7%).
+
+### 14.2 Time decay — testado em TODOS os alvos, aplicado SÓ em chutes
+Peso de amostra $w = 0.5^{(\Delta dias / H)}$ nos regressores de $\lambda$. Varredura de H:
+* **Chutes:** viés temporal real e grande (−0,80). **H=2** corta para −0,31 e o ECE total
+  cai de 5,6% para 2,5% (validação). H selecionado por ECE com desempate por robustez.
+* **Gols:** viés (−0,11) **invariante ao decay** → estrutural, não temporal.
+* **Escanteios/cartões:** viés já ~zero; decay neutro a levemente negativo.
+Conclusão: a "tendência temporal" era majoritariamente um efeito de chutes. Decay **não
+promovido** nos demais. (Mando triplo + peso de competição também testados: 3b negativo;
+3a com resíduo real em escanteios no neutro ~0,30, registrado como melhoria localizada.)
+
+### 14.3 Promoção
+* `shots_nb.joblib` treinado na base inteira com decay H=2 ($r_H=18.5$, $r_A=16.6$).
+* `CornersNB.fit` ganhou `sample_weight` (backward-compat, default None — corners/cartões
+  inalterados). `ShotsNB` é subclasse com grade maior (M=55).
+* `predictor.py`: `chutes` vira mercado de contagem (PMF + linhas O/U 18.5–26.5 + odds da
+  CDF). `odds.py`: aposenta a Normal de chutes. Não-regressão (demais mercados byte-idênticos)
+  + teste HTTP validados.
+
 
 
 
