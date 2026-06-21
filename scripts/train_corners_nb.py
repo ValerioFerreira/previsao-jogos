@@ -23,6 +23,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path("api").resolve()))
 from corners_nb_model import CornersNB
+from corner_interactions import add_corner_interactions, CORNER_INTERACTIONS
 
 warnings.filterwarnings("ignore")
 try:
@@ -41,13 +42,14 @@ def main():
     print("=" * 80)
 
     meta = json.load(open(META_PATH, encoding="utf-8"))
-    feats = meta["full_feats"]
-    print(f"Features (meta.full_feats): {len(feats)}")
+    feats = meta["full_feats"] + CORNER_INTERACTIONS  # + interacoes de mando (item 2)
+    print(f"Features: {len(meta['full_feats'])} (full_feats) + {len(CORNER_INTERACTIONS)} (interacoes mando)")
 
     df = pd.read_csv(CSV_PATH, parse_dates=["date"])
     df_adv = df[df["has_advanced_stats"] == 1].dropna(
         subset=["home_cur_sb_corners", "away_cur_sb_corners"]
     ).copy()
+    df_adv = add_corner_interactions(df_adv)
     print(f"Jogos com escanteios válidos (base de treino cheia): {len(df_adv)}")
 
     X = df_adv[feats]

@@ -25,6 +25,11 @@ try:
 except ImportError:
     from api.shots_nb_model import ShotsNB
 
+try:
+    from corner_interactions import add_corner_interactions
+except ImportError:
+    from api.corner_interactions import add_corner_interactions
+
 ART = "model_artifacts"
 HOME_ADV_ELO = 65.0
 
@@ -244,6 +249,7 @@ class Predictor:
         }
 
         # Escanteios, cartões e chutes via NB independente (CDF real)
+        X = add_corner_interactions(X)  # interações de mando p/ escanteios (item 2)
         cd = self.corners.predict_distributions(X)
         cc = self.cards.predict_distributions(X)
         cs = self.shots.predict_distributions(X)
