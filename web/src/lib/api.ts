@@ -22,6 +22,24 @@ export type NumericPrediction = {
   confianca: "Alta" | "Media" | "Média" | "Baixa" | string;
 };
 
+// Odd justa direta de uma face (over/under) de uma linha, derivada da CDF real.
+export type LineOdds = {
+  prob: number;
+  odd_justa: number;
+};
+
+export type OverUnderLine = {
+  over: LineOdds;
+  under: LineOdds;
+};
+
+// Mercado de contagem com distribuicao propria (PMF) e grade completa de linhas O/U.
+// Vale para chutes, escanteios (mandante/visitante/total) e cartoes (idem).
+export type CountPrediction = NumericPrediction & {
+  distribuicao: number[];
+  linhas: Record<string, OverUnderLine>;
+};
+
 export type PredictionResponse = {
   vencedor: {
     vencedor: string;
@@ -29,8 +47,9 @@ export type PredictionResponse = {
     probabilidades: Record<string, number>;
   };
   gols: NumericPrediction;
-  chutes: NumericPrediction;
-  escanteios: Record<string, NumericPrediction>;
+  chutes: CountPrediction;
+  escanteios: Record<string, CountPrediction>;
+  cartoes: Record<string, CountPrediction>;
   ambas_marcam: {
     resposta: string;
     confianca: number;
@@ -84,6 +103,7 @@ export type OddsBlock = {
     gols: NumericLineMarket;
     chutes: NumericLineMarket;
     escanteios: Record<string, NumericLineMarket>;
+    cartoes: Record<string, NumericLineMarket>;
   };
   nota: string;
 };
@@ -95,6 +115,8 @@ export type PredictPayload = {
   tournament: string;
   home_vals?: Record<string, number>;
   away_vals?: Record<string, number>;
+  context_overrides?: Record<string, number>;
+  h2h_overrides?: Record<string, number>;
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
