@@ -54,7 +54,6 @@ class Predictor:
         self.clf = joblib.load(f"{art_dir}/clf_result.joblib")
         self.clf_btts = joblib.load(f"{art_dir}/clf_btts.joblib")
         self.clf_over = joblib.load(f"{art_dir}/clf_over25.joblib")
-        self.qm = joblib.load(f"{art_dir}/quantile_models.joblib")
         self.dc = DixonColesNBRegressor.load(f"{art_dir}/dixon_coles_goals.joblib")
         self.corners = CornersNB.load(f"{art_dir}/corners_nb.joblib")
         self.cards = CardsNB.load(f"{art_dir}/cards_nb.joblib")
@@ -137,26 +136,11 @@ class Predictor:
             if k in row: row[k] = v
         return pd.DataFrame([row]), h2h
 
-    # ----------------------------------------------------------------- regressao quantilica
-    def _quantile(self, target, X, feats):
-        m = self.qm[target]
-        lo = float(m[0.1].predict(X[feats])[0])
-        mid = float(m[0.5].predict(X[feats])[0])
-        hi = float(m[0.9].predict(X[feats])[0])
-        lo, mid, hi = max(0.0, lo), max(0.0, mid), max(0.0, hi)
-        lo, hi = min(lo, mid, hi), max(lo, mid, hi)   # evita cruzamento de quantis
-        return mid, lo, hi
-
     @staticmethod
     def _conf_label(point, lo, hi):
         if point <= 0: return "Baixa"
         rel = (hi - lo) / max(point, 1e-6)
         return "Alta" if rel < 0.55 else ("Média" if rel < 1.0 else "Baixa")
-
-    def _num(self, target, X, feats):
-        p, lo, hi = self._quantile(target, X, feats)
-        return {"estimativa": round(p, 1), "intervalo": [round(lo, 1), round(hi, 1)],
-                "confianca": self._conf_label(p, lo, hi)}
 
     def _corners_market(self, pmf, lines=CORNER_LINES):
         """Monta a saída de um mercado de contagem (escanteios/cartões) da PMF da NB.
