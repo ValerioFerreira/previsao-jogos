@@ -36,3 +36,36 @@ class H2HResponse(BaseModel):
     summary: str
     metrics: dict[str, Any]
 
+
+class SystemStatusResponse(BaseModel):
+    last_successful_run: str
+
+
+class RecentMatch(BaseModel):
+    date: str
+    opponent: str
+    is_home: bool
+    goals_scored: int
+    goals_conceded: int
+    sb_shots: float
+    sb_shots_on_target: float
+    sb_corners: float
+    sb_cards: float
+
+
+class RecentMatchesResponse(BaseModel):
+    team: str
+    matches: list[RecentMatch]
+
+
+class Anomaly(BaseModel):
+    stat: str
+    z_score: float
+    window_size: int
+    message: str
+    type: str  # "alert" (negativo/preocupante) ou "positive" (positivo/bom)
+
+
+class AnomaliesResponse(BaseModel):
+    team: str
+    anomalies: list[Anomaly]

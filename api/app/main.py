@@ -3,8 +3,24 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.schemas import H2HResponse, HealthResponse, PredictRequest, TeamResponse, TeamsResponse
-from app.services.predictor_service import allowed_origins, get_predictor, predict_match
+from app.schemas import (
+    H2HResponse,
+    HealthResponse,
+    PredictRequest,
+    TeamResponse,
+    TeamsResponse,
+    SystemStatusResponse,
+    RecentMatchesResponse,
+    AnomaliesResponse
+)
+from app.services.predictor_service import (
+    allowed_origins,
+    get_predictor,
+    predict_match,
+    get_system_status,
+    get_recent_matches,
+    get_team_anomalies
+)
 
 
 app = FastAPI(
@@ -68,3 +84,40 @@ def predict(payload: PredictRequest) -> dict:
         raise HTTPException(status_code=400, detail="Competicao invalida.")
     return predict_match(payload)
 
+
+@app.get("/api/system/status", response_model=SystemStatusResponse)
+def system_status() -> SystemStatusResponse:
+    status = get_system_status()
+    return SystemStatusResponse(**status)
+
+
+@app.get("/api/teams/{team_name:path}/recent", response_model=RecentMatchesResponse)
+def recent_matches(team_name: str) -> RecentMatchesResponse:
+    predictor = get_predictor()
+    # Case-insensitive check
+    team_match = None
+    for t in predictor.teams():
+        if t.lower() == team_name.lower():
+            team_match = t
+            break
+    if not team_match:
+        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+        
+    matches = get_recent_matches(team_match)
+    return RecentMatchesResponse(team=team_match, matches=matches)
+
+
+@app.get("/api/teams/{team_name:path}/anomalies", response_model=AnomaliesResponse)
+def team_anomalies(team_name: str) -> AnomaliesResponse:
+    predictor = get_predictor()
+    # Case-insensitive check
+    team_match = None
+    for t in predictor.teams():
+        if t.lower() == team_name.lower():
+            team_match = t
+            break
+    if not team_match:
+        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+        
+    anomalies = get_team_anomalies(team_match)
+    return AnomaliesResponse(team=team_match, anomalies=anomalies)

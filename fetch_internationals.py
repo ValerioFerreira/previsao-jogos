@@ -374,6 +374,13 @@ def run_fase2():
     print(f"Cota diária restante da conta:        {limiter.remaining_day} / {limiter.day_limit}")
     print("=" * 80)
 
+    # Gravar timestamp de atualização com sucesso
+    import datetime
+    last_update_path = Path("data/state/last_update.json")
+    last_update_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(last_update_path, "w", encoding="utf-8") as f:
+        json.dump({"last_successful_run": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, f)
+
 def main():
     parser = argparse.ArgumentParser(description="Coletor de Seleções Masculinas Adultas")
     group = parser.add_mutually_exclusive_group(required=True)

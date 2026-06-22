@@ -350,6 +350,13 @@ def main():
     print(f"  Req. restantes (estimativa)  : ~{req_restantes_est} de 100/dia")
     print("=" * 60)
 
+    # Gravar timestamp de atualização com sucesso
+    import datetime
+    last_update_path = Path("data/state/last_update.json")
+    last_update_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(last_update_path, "w", encoding="utf-8") as f:
+        json.dump({"last_successful_run": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, f)
+
 
 if __name__ == "__main__":
     main()

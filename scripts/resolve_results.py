@@ -3,160 +3,177 @@
 """
 scripts/resolve_results.py
 ==========================
-Resolver: busca o resultado/estatística REAL dos jogos já coletados (registry) que
-já foram disputados e extrai os desfechos por mercado, para alimentar o backtest de
-value (Passo 4 — value_backtest.py).
-
-Para cada fixture do registry ainda não resolvido cujo horário já passou, consulta
-/fixtures?id= e extrai: resultado (H/D/A) e total de gols pelo placar de 90 min
-(score.fulltime, alinhado com o que o modelo prevê), BTTS, escanteios e cartões
-(amarelos+vermelhos) por lado/total, e chutes. Grava data/odds/results/<id>.json.
-
-A função extract_outcomes funciona sobre a MESMA estrutura de item da api-football,
-seja vinda da API (ao vivo) ou de um .json.gz histórico (para validar a extração).
-
-CAVEAT (cartões): contamos cartão = amarelo + vermelho (cada um conta 1), alinhado
-com o alvo do modelo. Casas às vezes contam vermelho como 2 — divergência possível
-na liquidação do mercado de cartões, registrada.
-
-Uso:
-  python scripts/resolve_results.py            # resolve os que já passaram
-  python scripts/resolve_results.py --all      # tenta todos do registry
+Script de resolução assíncrona para o histórico de acertos do modelo.
+Compara previsões salvas no predictions_log.jsonl com os resultados reais em matches.parquet,
+calcula as estatísticas de acerto e gera data/state/model_accuracy.json para exibição na UI.
 """
-from __future__ import annotations
-
-import argparse
+import os
 import json
-from datetime import datetime, timezone
 from pathlib import Path
-
-import requests
-
-ROOT = Path(__file__).resolve().parents[1]
-import sys
-
-sys.path.insert(0, str(ROOT))
-from scripts.fetch_odds import BASE, load_key  # noqa: E402
-
-ODDS_DIR = ROOT / "data" / "odds"
-REGISTRY = ODDS_DIR / "registry.json"
-RESULTS_DIR = ODDS_DIR / "results"
-
-
-def _num(value):
-    """Converte '80%' -> 80, None -> None, '15' -> 15."""
-    if value is None:
-        return None
-    if isinstance(value, str):
-        value = value.strip().rstrip("%")
-        try:
-            return float(value) if "." in value else int(value)
-        except ValueError:
-            return None
-    return value
-
-
-def extract_outcomes(item: dict) -> dict:
-    """Desfechos por mercado a partir de um item de fixture da api-football."""
-    fx = item.get("fixture", {})
-    status = (fx.get("status") or {}).get("short")
-    teams = item.get("teams", {})
-    home = (teams.get("home") or {}).get("name")
-    away = (teams.get("away") or {}).get("name")
-
-    score = item.get("score", {})
-    ft = (score.get("fulltime") or {})
-    gh, ga = ft.get("home"), ft.get("away")
-    if gh is None or ga is None:  # fallback p/ placar geral
-        g = item.get("goals", {})
-        gh, ga = g.get("home"), g.get("away")
-
-    out = {"status": status, "home": home, "away": away, "resolved": False}
-    if gh is None or ga is None:
-        return out
-
-    by_team = {}
-    for t in item.get("statistics") or []:
-        nm = (t.get("team") or {}).get("name")
-        by_team[nm] = {s.get("type"): s.get("value") for s in (t.get("statistics") or [])}
-
-    def corners(nm):
-        return _num((by_team.get(nm) or {}).get("Corner Kicks"))
-
-    def cards(nm):
-        d = by_team.get(nm) or {}
-        y = _num(d.get("Yellow Cards")) or 0
-        r = _num(d.get("Red Cards")) or 0
-        return y + r if (nm in by_team) else None
-
-    def shots(nm):
-        return _num((by_team.get(nm) or {}).get("Total Shots"))
-
-    ch, ca = corners(home), corners(away)
-    yh, ya = cards(home), cards(away)
-    out.update({
-        "goals_home": gh, "goals_away": ga, "total_goals": gh + ga,
-        "result": "Home" if gh > ga else ("Away" if ga > gh else "Draw"),
-        "btts": bool(gh > 0 and ga > 0),
-        "corners_home": ch, "corners_away": ca,
-        "corners_total": (ch + ca) if (ch is not None and ca is not None) else None,
-        "cards_home": yh, "cards_away": ya,
-        "cards_total": (yh + ya) if (yh is not None and ya is not None) else None,
-        "shots_home": shots(home), "shots_away": shots(away),
-        "has_stats": bool(by_team),
-        "resolved": status in ("FT", "AET", "PEN"),
-    })
-    return out
-
-
-def already_past(fixture_date: str | None) -> bool:
-    if not fixture_date:
-        return False
-    try:
-        dt = datetime.fromisoformat(fixture_date.replace("Z", "+00:00"))
-    except ValueError:
-        return False
-    # +2h de folga para o jogo terminar
-    return (datetime.now(timezone.utc) - dt).total_seconds() > 2 * 3600
+import pandas as pd
+import numpy as np
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--all", action="store_true", help="tenta resolver todos do registry, nao so os ja passados")
-    a = ap.parse_args()
-    if not REGISTRY.exists():
-        raise SystemExit("Sem registry. Rode antes: python scripts/collect_odds_forward.py")
-    registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
-    key = load_key()
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    print("=" * 80)
+    print(" RESOLUÇÃO DE RESULTADOS — Histórico de Acerto do Modelo")
+    print("=" * 80)
 
-    resolved, skipped, pending = 0, 0, 0
-    for fid, meta in registry.items():
-        out_path = RESULTS_DIR / f"{fid}.json"
-        if out_path.exists():
-            skipped += 1
-            continue
-        if not a.all and not already_past(meta.get("fixture_date")):
-            pending += 1
-            continue
-        r = requests.get(BASE + "/fixtures", headers={"x-apisports-key": key}, params={"id": fid}, timeout=30)
-        r.raise_for_status()
-        resp = r.json().get("response", [])
-        if not resp:
-            pending += 1
-            continue
-        outcome = extract_outcomes(resp[0])
-        outcome["fixture_id"] = int(fid)
-        if outcome.get("resolved"):
-            out_path.write_text(json.dumps(outcome, ensure_ascii=False, indent=2), encoding="utf-8")
-            resolved += 1
-            print(f"  resolvido {fid}: {meta['home']} {outcome.get('goals_home')}-{outcome.get('goals_away')} "
-                  f"{meta['away']} | esc {outcome.get('corners_total')} | cart {outcome.get('cards_total')}")
+    repo_root = Path(__file__).resolve().parents[1]
+    log_file = repo_root / "data" / "state" / "predictions_log.jsonl"
+    parquet_file = repo_root / "data" / "built" / "matches.parquet"
+    out_file = repo_root / "data" / "state" / "model_accuracy.json"
+
+    if not log_file.exists():
+        print(f"Log de previsões não encontrado em: {log_file}")
+        # Criar arquivo de estatísticas vazio padrão
+        stats_empty = {
+            "total_evaluated": 0,
+            "markets": {
+                "vencedor": {"total": 0, "acertos": 0, "taxa": 0.0},
+                "over_2_5": {"total": 0, "acertos": 0, "taxa": 0.0},
+                "ambas_marcam": {"total": 0, "acertos": 0, "taxa": 0.0}
+            }
+        }
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_file, "w", encoding="utf-8") as f:
+            json.dump(stats_empty, f, indent=2)
+        return
+
+    if not parquet_file.exists():
+        print(f"Arquivo parquet de partidas não encontrado em: {parquet_file}")
+        return
+
+    # 1. Carregar matches.parquet
+    print("Carregando banco de partidas...")
+    df_matches = pd.read_parquet(parquet_file)
+    
+    # As partidas no parquet são duplicadas por time/opponent. Vamos deduplicar obtendo registros unificados.
+    # Criamos um conjunto de partidas com chaves (date, home_team, away_team) e o resultado real
+    real_results = {}
+    for _, row in df_matches.iterrows():
+        date_str = str(row["date"])
+        team = str(row["team"])
+        opponent = str(row["opponent"])
+        is_home = row["is_home"] == 1
+        
+        # Identificar home/away para unificar
+        if is_home:
+            home = team
+            away = opponent
+            home_goals = int(row["goals_scored"])
+            away_goals = int(row["goals_conceded"])
         else:
-            pending += 1
+            home = opponent
+            away = team
+            home_goals = int(row["goals_conceded"])
+            away_goals = int(row["goals_scored"])
+            
+        key = (date_str, home, away)
+        # Salva o resultado consolidado
+        real_results[key] = {
+            "home_goals": home_goals,
+            "away_goals": away_goals,
+            "winner": home if home_goals > away_goals else (away if away_goals > home_goals else "Empate"),
+            "over_2_5": (home_goals + away_goals) > 2.5,
+            "btts": home_goals > 0 and away_goals > 0
+        }
 
-    print(f"\nResolvidos agora: {resolved} | ja resolvidos: {skipped} | pendentes: {pending}")
-    print(f"Resultados em {RESULTS_DIR}/")
+    # 2. Ler predictions_log.jsonl
+    print("Processando log de previsões...")
+    evaluated = 0
+    markets_count = {
+        "vencedor": {"total": 0, "acertos": 0},
+        "over_2_5": {"total": 0, "acertos": 0},
+        "ambas_marcam": {"total": 0, "acertos": 0}
+    }
+
+    with open(log_file, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+                home_team = entry.get("home_team")
+                away_team = entry.get("away_team")
+                pred = entry.get("prediction")
+                
+                if not (home_team and away_team and pred):
+                    continue
+                
+                # Procurar o resultado no banco real
+                # Como a previsão pode ser para uma data futura que já passou, procuramos partidas correspondentes
+                match_result = None
+                for (d_str, h, a), res in real_results.items():
+                    # Ignorar previsões de amistoso se jogado em outra data, mas geralmente buscamos por nomes das seleções
+                    # Para simplificar, pareamos pelo confronto (home, away) onde o resultado real existe
+                    if h == home_team and a == away_team:
+                        match_result = res
+                        break
+                
+                if not match_result:
+                    continue  # Partida prevista ainda não ocorreu ou não está no parquet
+                
+                evaluated += 1
+                
+                # --- A. Validar Vencedor ---
+                p_venc = pred.get("vencedor", {})
+                winner_pred = p_venc.get("vencedor")
+                actual_winner = match_result["winner"]
+                if winner_pred and actual_winner:
+                    markets_count["vencedor"]["total"] += 1
+                    if winner_pred == actual_winner:
+                        markets_count["vencedor"]["acertos"] += 1
+                        
+                # --- B. Validar Over 2.5 ---
+                p_over = pred.get("over_2_5", {})
+                over_pred_str = p_over.get("resposta") # "Mais de 2,5" ou "Menos de 2,5"
+                actual_over = match_result["over_2_5"]
+                if over_pred_str:
+                    is_over_pred = "Mais" in over_pred_str
+                    markets_count["over_2_5"]["total"] += 1
+                    if is_over_pred == actual_over:
+                        markets_count["over_2_5"]["acertos"] += 1
+                        
+                # --- C. Validar BTTS ---
+                p_btts = pred.get("ambas_marcam", {})
+                btts_pred_str = p_btts.get("resposta") # "Sim" ou "Não"
+                actual_btts = match_result["btts"]
+                if btts_pred_str:
+                    is_btts_pred = "Sim" in btts_pred_str
+                    markets_count["ambas_marcam"]["total"] += 1
+                    if is_btts_pred == actual_btts:
+                        markets_count["ambas_marcam"]["acertos"] += 1
+                        
+            except Exception as e:
+                print(f"Erro ao ler linha do log: {e}")
+
+    # 3. Calcular taxas
+    stats = {
+        "total_evaluated": evaluated,
+        "markets": {}
+    }
+    for m, vals in markets_count.items():
+        tot = vals["total"]
+        ac = vals["acertos"]
+        rate = float(ac / tot) if tot > 0 else 0.0
+        stats["markets"][m] = {
+            "total": tot,
+            "acertos": ac,
+            "taxa": round(rate * 100, 1)
+        }
+
+    # 4. Salvar compilado estatístico
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_file, "w", encoding="utf-8") as f:
+        json.dump(stats, f, indent=2)
+        
+    print(f"\n>> Resolução concluída!")
+    print(f"   Partidas avaliadas: {evaluated}")
+    print(f"   Taxa Vencedor     : {stats['markets']['vencedor']['taxa']}% ({stats['markets']['vencedor']['acertos']}/{stats['markets']['vencedor']['total']})")
+    print(f"   Taxa Over 2.5     : {stats['markets']['over_2_5']['taxa']}% ({stats['markets']['over_2_5']['acertos']}/{stats['markets']['over_2_5']['total']})")
+    print(f"   Taxa Ambas Marcam : {stats['markets']['ambas_marcam']['taxa']}% ({stats['markets']['ambas_marcam']['acertos']}/{stats['markets']['ambas_marcam']['total']})")
+    print(f"   Salvo em: {out_file}")
 
 
 if __name__ == "__main__":

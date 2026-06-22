@@ -1,13 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Loader2, RefreshCcw, RotateCcw, Server, TrendingUp } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCcw, RotateCcw, Server, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { api, CountPrediction, H2HResponse, NumericLineMarket, NumericPrediction, OddsMarket, PredictionResponse, TeamResponse } from "@/lib/api";
+import { api, CountPrediction, H2HResponse, NumericLineMarket, NumericPrediction, OddsMarket, PredictionResponse, TeamResponse, RecentMatch, Anomaly } from "@/lib/api";
 
 // As 10 features de alto impacto (analise de importancia, Passo 3). Destas, 7 sao
 // editaveis por selecao (abaixo); as outras 3 entram por controles dedicados:
@@ -332,6 +332,154 @@ function LinesGrid({ linhas }: { linhas: CountPrediction["linhas"] }) {
   );
 }
 
+function getOverProbability(line: number, distribuicao: number[]): number {
+  const startIdx = Math.floor(line + 1);
+  let sum = 0;
+  for (let k = startIdx; k < distribuicao.length; k++) {
+    sum += distribuicao[k] || 0;
+  }
+  return sum * 100;
+}
+
+function InteractiveLineSelector({
+  title,
+  market
+}: {
+  title: string;
+  market: CountPrediction;
+}) {
+  const [targetProb, setTargetProb] = useState(70);
+  const [oddInput, setOddInput] = useState("1.43");
+  const [mode, setMode] = useState<"prob" | "odd">("prob");
+  const [showTable, setShowTable] = useState(false);
+
+  const lines = useMemo(() => {
+    const titleL = title.toLowerCase();
+    const arr: number[] = [];
+    if (titleL.includes("escanteio") || titleL.includes("corner")) {
+      for (let l = 4.5; l <= 14.5; l += 1.0) arr.push(l);
+    } else if (titleL.includes("cartao") || titleL.includes("card")) {
+      for (let l = 1.5; l <= 6.5; l += 1.0) arr.push(l);
+    } else if (titleL.includes("chute") || titleL.includes("shot") || titleL.includes("finaliza")) {
+      for (let l = 14.5; l <= 28.5; l += 1.0) arr.push(l);
+    } else {
+      return Object.keys(market.linhas).map(Number).sort((a, b) => a - b);
+    }
+    return arr;
+  }, [title, market]);
+
+  const handleProbChange = (val: number) => {
+    setTargetProb(val);
+    const odd = 100 / val;
+    setOddInput(odd.toFixed(2));
+  };
+
+  const handleOddChange = (val: string) => {
+    setOddInput(val);
+    const oddVal = Number(val);
+    if (Number.isFinite(oddVal) && oddVal > 1) {
+      const prob = 100 / oddVal;
+      setTargetProb(Math.min(99, Math.max(1, Math.round(prob))));
+    }
+  };
+
+  const bestLine = useMemo(() => {
+    let pick = lines[0];
+    let pickProb = 0;
+    for (const L of lines) {
+      const prob = getOverProbability(L, market.distribuicao);
+      if (prob >= targetProb) {
+        pick = L;
+        pickProb = prob;
+      }
+    }
+    if (pickProb < targetProb) {
+      pick = lines[0];
+    }
+    return pick;
+  }, [lines, targetProb, market.distribuicao]);
+
+  const bestProb = useMemo(() => getOverProbability(bestLine, market.distribuicao), [bestLine, market.distribuicao]);
+  const bestOdd = bestProb > 0 ? 100 / bestProb : 0;
+
+  const toggleBtn = (active: boolean) =>
+    `rounded-md border px-2 py-1 text-xs transition ${
+      active ? "border-primary bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted"
+    }`;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 border-t pt-2">
+        <div className="flex gap-1.5">
+          <button type="button" className={toggleBtn(mode === "prob")} onClick={() => setMode("prob")}>
+            Prob.
+          </button>
+          <button type="button" className={toggleBtn(mode === "odd")} onClick={() => setMode("odd")}>
+            Odd
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowTable(!showTable)}
+          className="text-xs text-muted-foreground hover:underline"
+        >
+          {showTable ? "Ocultar Grade" : "Ver Grade"}
+        </button>
+      </div>
+
+      {showTable ? (
+        <LinesGrid linhas={market.linhas} />
+      ) : (
+        <div className="space-y-3 rounded-md bg-muted/40 p-2.5 border">
+          {mode === "prob" ? (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Probabilidade-alvo</span>
+                <span className="font-semibold tabular-nums">{targetProb}%</span>
+              </div>
+              <input
+                type="range"
+                min={10}
+                max={95}
+                step={1}
+                value={targetProb}
+                onChange={(event) => handleProbChange(Number(event.target.value))}
+                className="w-full accent-primary h-1"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <label htmlFor={`odd-alvo-${title}`} className="text-muted-foreground">
+                Odd-alvo
+              </label>
+              <input
+                id={`odd-alvo-${title}`}
+                type="number"
+                step="0.05"
+                min="1.05"
+                max="10.0"
+                value={oddInput}
+                onChange={(event) => handleOddChange(event.target.value)}
+                className="w-20 rounded border bg-card px-2 py-0.5 text-right tabular-nums focus:outline-none"
+              />
+            </div>
+          )}
+
+          <div className="border-t pt-2 space-y-1">
+            <div className="text-[10px] uppercase font-bold text-muted-foreground">Aposta Recomendada</div>
+            <div className="flex justify-between items-baseline">
+              <span className="text-sm font-bold text-primary">Over {bestLine.toFixed(1)}</span>
+              <span className="text-xs tabular-nums font-semibold">
+                {bestProb.toFixed(1)}% <span className="text-muted-foreground">({bestOdd.toFixed(2)})</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Card de mercado de contagem (chutes/escanteios/cartoes): estimativa + intervalo + grade O/U.
 function CountCard({ title, market }: { title: string; market: CountPrediction }) {
   return (
@@ -351,7 +499,7 @@ function CountCard({ title, market }: { title: string; market: CountPrediction }
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-3xl font-semibold">{market.estimativa}</div>
-        <LinesGrid linhas={market.linhas} />
+        <InteractiveLineSelector title={title} market={market} />
       </CardContent>
     </Card>
   );
@@ -941,6 +1089,80 @@ function ResultView({ result, home, away }: { result: PredictionResponse; home: 
   );
 }
 
+function AnomalyAlerts({ anomalies, team }: { anomalies: Anomaly[]; team: string }) {
+  if (!anomalies || anomalies.length === 0) return null;
+  return (
+    <div className="space-y-2 mt-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Alertas de Destaque — {team}
+      </div>
+      <div className="grid gap-2">
+        {anomalies.map((anom, idx) => {
+          const isAlert = anom.type === "alert";
+          return (
+            <div
+              key={idx}
+              className={`flex items-start gap-3 rounded-lg border p-3 text-xs leading-relaxed ${
+                isAlert
+                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-950"
+              }`}
+            >
+              {isAlert ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              )}
+              <div>{anom.message}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RecentMatchesList({ matches, team }: { matches: RecentMatch[]; team: string }) {
+  if (!matches || matches.length === 0) return null;
+  return (
+    <div className="space-y-2 mt-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Últimos 5 Jogos Brutos — {team}
+      </div>
+      <div className="overflow-hidden rounded-md border text-xs">
+        <table className="w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b bg-muted/60 text-[10px] font-semibold uppercase text-muted-foreground">
+              <th className="px-3 py-1.5">Data</th>
+              <th className="px-3 py-1.5">Confronto</th>
+              <th className="px-3 py-1.5 text-center">Placar</th>
+              <th className="px-3 py-1.5 text-right">Chutes</th>
+              <th className="px-3 py-1.5 text-right">Cantos</th>
+              <th className="px-3 py-1.5 text-right">Cards</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matches.map((m, idx) => {
+              const score = `${m.goals_scored}x${m.goals_conceded}`;
+              const vsText = m.is_home ? `vs ${m.opponent}` : `@ ${m.opponent}`;
+              return (
+                <tr key={idx} className="border-b last:border-0 hover:bg-muted/30">
+                  <td className="px-3 py-2 text-muted-foreground tabular-nums">{m.date}</td>
+                  <td className="px-3 py-2 font-medium">{vsText}</td>
+                  <td className="px-3 py-2 text-center tabular-nums font-semibold">{score}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{m.sb_shots_on_target.toFixed(0)}/{m.sb_shots.toFixed(0)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{m.sb_corners.toFixed(0)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{m.sb_cards.toFixed(0)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [apiStatus, setApiStatus] = useState<"checking" | "ok" | "error">("checking");
   const [apiError, setApiError] = useState<string | null>(null);
@@ -960,6 +1182,13 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PredictionResponse | null>(null);
 
+  // Novas variáveis de estado da infraestrutura de UX/UI
+  const [lastSuccessfulRun, setLastSuccessfulRun] = useState<string | null>(null);
+  const [homeRecent, setHomeRecent] = useState<RecentMatch[]>([]);
+  const [awayRecent, setAwayRecent] = useState<RecentMatch[]>([]);
+  const [homeAnomalies, setHomeAnomalies] = useState<Anomaly[]>([]);
+  const [awayAnomalies, setAwayAnomalies] = useState<Anomaly[]>([]);
+
   useEffect(() => {
     let mounted = true;
     api
@@ -977,6 +1206,13 @@ export default function Home() {
         setApiStatus("error");
         setApiError(err.message || "A API pode estar acordando no Railway. Tente novamente em alguns segundos.");
       });
+
+    api.systemStatus()
+      .then((res) => {
+        if (mounted) setLastSuccessfulRun(res.last_successful_run);
+      })
+      .catch((err) => console.error("Error fetching system status", err));
+
     return () => {
       mounted = false;
     };
@@ -988,6 +1224,14 @@ export default function Home() {
       setHomeSnapshot(snapshot);
       setHomeValues(asEditable(snapshot.defaults, PRIMARY_FIELDS));
     }).catch((err: Error) => setError(err.message));
+
+    // Carregar histórico recente e anomalias do Mandante
+    api.recentMatches(home)
+      .then((res) => setHomeRecent(res.matches))
+      .catch((err) => console.error("Error fetching home recent matches", err));
+    api.teamAnomalies(home)
+      .then((res) => setHomeAnomalies(res.anomalies))
+      .catch((err) => console.error("Error fetching home anomalies", err));
   }, [home, teams]);
 
   useEffect(() => {
@@ -996,6 +1240,14 @@ export default function Home() {
       setAwaySnapshot(snapshot);
       setAwayValues(asEditable(snapshot.defaults, PRIMARY_FIELDS));
     }).catch((err: Error) => setError(err.message));
+
+    // Carregar histórico recente e anomalias do Visitante
+    api.recentMatches(away)
+      .then((res) => setAwayRecent(res.matches))
+      .catch((err) => console.error("Error fetching away recent matches", err));
+    api.teamAnomalies(away)
+      .then((res) => setAwayAnomalies(res.anomalies))
+      .catch((err) => console.error("Error fetching away anomalies", err));
   }, [away, teams]);
 
   useEffect(() => {
@@ -1066,6 +1318,11 @@ export default function Home() {
             <div>
               <h1 className="text-2xl font-semibold">Previsao de partidas de selecoes</h1>
               <p className="text-sm text-muted-foreground">Modelos scikit-learn com API Python no Railway e front Next.js na Vercel.</p>
+              {lastSuccessfulRun ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Última atualização dos dados: {lastSuccessfulRun}
+                </p>
+              ) : null}
             </div>
             <ApiStatus status={apiStatus} error={apiError} />
           </div>
@@ -1127,20 +1384,28 @@ export default function Home() {
         ) : null}
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <TeamFields
-            title={home}
-            snapshot={homeSnapshot}
-            values={homeValues}
-            onChange={(field, value) => setHomeValues((current) => ({ ...current, [field]: value }))}
-            onReset={(field) => setHomeValues((current) => ({ ...current, [field]: formatDefault(homeSnapshot?.defaults[field]) }))}
-          />
-          <TeamFields
-            title={away}
-            snapshot={awaySnapshot}
-            values={awayValues}
-            onChange={(field, value) => setAwayValues((current) => ({ ...current, [field]: value }))}
-            onReset={(field) => setAwayValues((current) => ({ ...current, [field]: formatDefault(awaySnapshot?.defaults[field]) }))}
-          />
+          <div className="rounded-lg border bg-card p-5 shadow space-y-4">
+            <TeamFields
+              title={home}
+              snapshot={homeSnapshot}
+              values={homeValues}
+              onChange={(field, value) => setHomeValues((current) => ({ ...current, [field]: value }))}
+              onReset={(field) => setHomeValues((current) => ({ ...current, [field]: formatDefault(homeSnapshot?.defaults[field]) }))}
+            />
+            <AnomalyAlerts anomalies={homeAnomalies} team={home} />
+            <RecentMatchesList matches={homeRecent} team={home} />
+          </div>
+          <div className="rounded-lg border bg-card p-5 shadow space-y-4">
+            <TeamFields
+              title={away}
+              snapshot={awaySnapshot}
+              values={awayValues}
+              onChange={(field, value) => setAwayValues((current) => ({ ...current, [field]: value }))}
+              onReset={(field) => setAwayValues((current) => ({ ...current, [field]: formatDefault(awaySnapshot?.defaults[field]) }))}
+            />
+            <AnomalyAlerts anomalies={awayAnomalies} team={away} />
+            <RecentMatchesList matches={awayRecent} team={away} />
+          </div>
         </div>
 
         {error ? (

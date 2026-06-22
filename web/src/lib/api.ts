@@ -138,6 +138,40 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type SystemStatusResponse = {
+  last_successful_run: string;
+};
+
+export type RecentMatch = {
+  date: string;
+  opponent: string;
+  is_home: boolean;
+  goals_scored: number;
+  goals_conceded: number;
+  sb_shots: number;
+  sb_shots_on_target: number;
+  sb_corners: number;
+  sb_cards: number;
+};
+
+export type RecentMatchesResponse = {
+  team: string;
+  matches: RecentMatch[];
+};
+
+export type Anomaly = {
+  stat: string;
+  z_score: number;
+  window_size: number;
+  message: string;
+  type: string;
+};
+
+export type AnomaliesResponse = {
+  team: string;
+  anomalies: Anomaly[];
+};
+
 export const api = {
   health: () => request<{ status: string; service: string }>("/health"),
   teams: () => request<TeamsResponse>("/teams"),
@@ -149,5 +183,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  systemStatus: () => request<SystemStatusResponse>("/api/system/status"),
+  recentMatches: (name: string) => request<RecentMatchesResponse>(`/api/teams/${encodeURIComponent(name)}/recent`),
+  teamAnomalies: (name: string) => request<AnomaliesResponse>(`/api/teams/${encodeURIComponent(name)}/anomalies`),
 };
 
