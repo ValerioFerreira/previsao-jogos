@@ -76,7 +76,11 @@ Ver `RESUMO_SESSAO_2026-06-21_parte2.md`, `ESTADO_E_PROXIMOS_PASSOS.md` e
 `docs/ESPEC_player_power_ranking.md` (§9.1 = resultado do Passo 0). Resumo:
 - Produção intacta; Passo 3 (UX) e harness do Passo 4 prontos; campanha de calibração/
   rating/xG deu negativo (modelos no teto in-sample).
-- **Frente ativa:** player_ranking — coleta em andamento; falta rodar features + o gate
-  no subconjunto de **alta cobertura** (a cobertura é bimodal; ver achado do Passo 0/F0).
-- Decisão pendente: se o gate mostrar sinal, expandir a base (janelas extras, dentro dos
-  60k/dia) antes de concluir.
+- **Frente player_ranking: CONCLUÍDA (gate FALHOU).** Coleta completa (13,2k perfis),
+  features e gate rodados. Ver `player_ranking/RELATORIO.md`: o player-ranking de
+  **agregado-de-temporada é redundante com o Elo** (corr +0,55..+0,72) e não melhora a
+  previsão em nenhum subconjunto. **Não promover.** Em aberto (não testado): forma
+  **recente por jogo** (ortogonal ao Elo), que exige coleta por jogo e só vale se o
+  backtest ao vivo indicar.
+- Próximo passo real do projeto: deixar o **backtest de odds ao vivo** acumular (árbitro
+  empírico de edge); não há alavanca in-sample pendente.
