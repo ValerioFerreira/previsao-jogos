@@ -26,3 +26,7 @@ api/model_artifacts_pre_unificacao/
 modelo_statsbomb_backup/
 
 
+
+# experimentos/saidas locais e backups efemeros
+scratch/
+*.localbak
