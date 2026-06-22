@@ -1,0 +1,242 @@
+{
+  "fixture": {
+    "id": 855734,
+    "referee": "Wilton Pereira Sampaio",
+    "timezone": "UTC",
+    "date": "2022-11-21T16:00:00+00:00",
+    "timestamp": 1669046400,
+    "periods": {
+      "first": 1669046400,
+      "second": 1669050000
+    },
+    "venue": {
+      "id": null,
+      "name": "Al Thumama Stadium",
+      "city": "Doha"
+    },
+    "status": {
+      "long": "Match Finished",
+      "short": "FT",
+      "elapsed": 90,
+      "extra": null
+    }
+  },
+  "league": {
+    "id": 1,
+    "name": "World Cup",
+    "country": "World",
+    "logo": "https://media.api-sports.io/football/leagues/1.png",
+    "flag": null,
+    "season": 2022,
+    "round": "Group Stage - 1",
+    "standings": true
+  },
+  "teams": {
+    "home": {
+      "id": 13,
+      "name": "Senegal",
+      "logo": "https://media.api-sports.io/football/teams/13.png",
+      "winner": false
+    },
+    "away": {
+      "id": 1118,
+      "name": "Netherlands",
+      "logo": "https://media.api-sports.io/football/teams/1118.png",
+      "winner": true
+    }
+  },
+  "goals": {
+    "home": 0,
+    "away": 2
+  },
+  "score": {
+    "halftime": {
+      "home": 0,
+      "away": 0
+    },
+    "fulltime": {
+      "home": 0,
+      "away": 2
+    },
+    "extratime": {
+      "home": null,
+      "away": null
+    },
+    "penalty": {
+      "home": null,
+      "away": null
+    }
+  },
+  "events": [
+    {
+      "time": {
+        "elapsed": 56,
+        "extra": null
+      },
+      "team": {
+        "id": 1118,
+        "name": "Netherlands",
+        "logo": "https://media.api-sports.io/football/teams/1118.png"
+      },
+      "player": {
+        "id": 532,
+        "name": "Matthijs de Ligt"
+      },
+      "assist": {
+        "id": null,
+        "name": null
+      },
+      "type": "Card",
+      "detail": "Yellow Card",
+      "comments": "Foul"
+    },
+    "... (+12 itens; lista de 13 no total)"
+  ],
+  "lineups": [
+    {
+      "team": {
+        "id": 13,
+        "name": "Senegal",
+        "logo": "https://media.api-sports.io/football/teams/13.png",
+        "colors": {
+          "player": {
+            "primary": "ffffff",
+            "number": "027d65",
+            "border": "ffffff"
+          },
+          "goalkeeper": {
+            "primary": "660099",
+            "number": "000000",
+            "border": "660099"
+          }
+        }
+      },
+      "coach": {
+        "id": 340,
+        "name": "A. Cissé",
+        "photo": "https://media.api-sports.io/football/coachs/340.png"
+      },
+      "formation": "4-2-3-1",
+      "startXI": [
+        {
+          "player": {
+            "id": 2986,
+            "name": "É. Mendy",
+            "number": 16,
+            "pos": "G",
+            "grid": "1:1"
+          }
+        },
+        "... (+10 itens; lista de 11 no total)"
+      ],
+      "substitutes": [
+        {
+          "player": {
+            "id": 158121,
+            "name": "I. Jakobs",
+            "number": 14,
+            "pos": "D",
+            "grid": null
+          }
+        },
+        "... (+14 itens; lista de 15 no total)"
+      ]
+    },
+    "... (+1 itens; lista de 2 no total)"
+  ],
+  "statistics": [
+    {
+      "team": {
+        "id": 13,
+        "name": "Senegal",
+        "logo": "https://media.api-sports.io/football/teams/13.png"
+      },
+      "statistics": [
+        {
+          "type": "Shots on Goal",
+          "value": 4
+        },
+        "... (+15 itens; lista de 16 no total)"
+      ]
+    },
+    "... (+1 itens; lista de 2 no total)"
+  ],
+  "players": [
+    {
+      "team": {
+        "id": 13,
+        "name": "Senegal",
+        "logo": "https://media.api-sports.io/football/teams/13.png",
+        "update": "2024-10-07T07:43:32+00:00"
+      },
+      "players": [
+        {
+          "player": {
+            "id": 2986,
+            "name": "Edouard Mendy",
+            "photo": "https://media.api-sports.io/football/players/2986.png"
+          },
+          "statistics": [
+            {
+              "games": {
+                "minutes": 90,
+                "number": 16,
+                "position": "G",
+                "rating": "5.6",
+                "captain": false,
+                "substitute": false
+              },
+              "offsides": null,
+              "shots": {
+                "total": null,
+                "on": null
+              },
+              "goals": {
+                "total": null,
+                "conceded": 2,
+                "assists": null,
+                "saves": 1
+              },
+              "passes": {
+                "total": 28,
+                "key": null,
+                "accuracy": "23"
+              },
+              "tackles": {
+                "total": null,
+                "blocks": null,
+                "interceptions": null
+              },
+              "duels": {
+                "total": 3,
+                "won": 2
+              },
+              "dribbles": {
+                "attempts": null,
+                "success": null,
+                "past": null
+              },
+              "fouls": {
+                "drawn": null,
+                "committed": null
+              },
+              "cards": {
+                "yellow": 0,
+                "red": 0
+              },
+              "penalty": {
+                "won": null,
+                "commited": null,
+                "scored": 0,
+                "missed": 0,
+                "saved": 0
+              }
+            }
+          ]
+        },
+        "... (+25 itens; lista de 26 no total)"
+      ]
+    },
+    "... (+1 itens; lista de 2 no total)"
+  ]
+}
