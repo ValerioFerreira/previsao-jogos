@@ -11,9 +11,9 @@ except ImportError:
     from api.dixon_coles_model import DixonColesNBRegressor
 
 try:
-    from corners_nb_model import CornersNB
+    from corners_dynamic_nb import DynamicCornersNB
 except ImportError:
-    from api.corners_nb_model import CornersNB
+    from api.corners_dynamic_nb import DynamicCornersNB
 
 try:
     from cards_gp_model import CardsGP
@@ -60,7 +60,7 @@ class Predictor:
         self.clf_btts = joblib.load(f"{art_dir}/clf_btts.joblib")
         self.clf_over = joblib.load(f"{art_dir}/clf_over25.joblib")
         self.dc = DixonColesNBRegressor.load(f"{art_dir}/dixon_coles_goals.joblib")
-        self.corners = CornersNB.load(f"{art_dir}/corners_nb.joblib")
+        self.corners = DynamicCornersNB.load(f"{art_dir}/dynamic_corners_nb.joblib")
         self.cards = CardsGP.load(f"{art_dir}/cards_gp.joblib")
         self.shots = ShotsNB.load(f"{art_dir}/shots_nb.joblib")
         self.ortho_weights = joblib.load(f"{art_dir}/style_ortho_weights.joblib")
