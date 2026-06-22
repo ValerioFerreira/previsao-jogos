@@ -403,7 +403,7 @@ def compute_h2h(df):
 # ─── Features SB (apifootball) ───────────────────────────────────────────────
 SB_COLS = ["sb_shots", "sb_shots_on_target", "sb_corners",
            "sb_offsides", "sb_cards", "sb_yellow", "sb_red",
-           "sb_fouls", "sb_possession"]
+           "sb_fouls", "sb_possession", "sb_passes"]
 
 
 def compute_sb_features(stats_csv_path, df_main):
@@ -431,6 +431,10 @@ def compute_sb_features(stats_csv_path, df_main):
     # Por time: calcular medias moveis l3/l5 (so de jogos com stats, shift 1)
     team_rolling = {}  # team -> DataFrame sorted by date com rolling cols
 
+    # Medias de faltas do campeonato para Fouls_Suffered_Ratio
+    global_mean_fouls = stats["sb_fouls"].mean()
+    mean_comp_fouls_map = stats.groupby("competition")["sb_fouls"].mean().to_dict()
+
     for team, grp in stats.groupby("team", sort=False):
         grp = grp.sort_values("date").reset_index(drop=True)
 
@@ -446,6 +450,16 @@ def compute_sb_features(stats_csv_path, df_main):
                 against_rows.append(pd.Series({c: np.nan for c in SB_COLS}))
         against_df = pd.DataFrame(against_rows).reset_index(drop=True)
 
+        # Tactical style features
+        grp["style_crosses"] = grp["sb_corners"] * 2.0
+        
+        opp_passes = against_df["sb_passes"] if "sb_passes" in against_df.columns else pd.Series(np.nan, index=grp.index)
+        grp["style_ppda"] = opp_passes / (grp["sb_fouls"] + 1e-5)
+        
+        opp_fouls = against_df["sb_fouls"] if "sb_fouls" in against_df.columns else pd.Series(np.nan, index=grp.index)
+        mean_comp = grp["competition"].map(mean_comp_fouls_map).fillna(global_mean_fouls)
+        grp["style_fouls_suff_ratio"] = opp_fouls / (mean_comp + 1e-5)
+
         rd = {"date": grp["date"].values}
         for col in SB_COLS:
             s = grp[col]
@@ -453,6 +467,12 @@ def compute_sb_features(stats_csv_path, df_main):
             for w in [3, 5]:
                 rd[f"{col}_l{w}"]         = s.shift(1).rolling(w, min_periods=1).mean().values
                 rd[f"{col}_against_l{w}"] = s_ag.shift(1).rolling(w, min_periods=1).mean().values
+
+        # Rolling windows 5 e 10 para as metricas de estilo
+        for w in [5, 10]:
+            rd[f"style_crosses_l{w}"] = grp["style_crosses"].shift(1).rolling(w, min_periods=1).mean().values
+            rd[f"style_ppda_l{w}"] = grp["style_ppda"].shift(1).rolling(w, min_periods=1).mean().values
+            rd[f"style_fouls_suff_ratio_l{w}"] = grp["style_fouls_suff_ratio"].shift(1).rolling(w, min_periods=1).mean().values
 
         team_rolling[team] = pd.DataFrame(rd)
 
@@ -551,12 +571,19 @@ def compute_sb_features(stats_csv_path, df_main):
         out["has_advanced_stats"] = 1 if has_stats else 0
 
         # Medias moveis lagged
+        STYLE_FEATS = [
+            "style_crosses_l5", "style_crosses_l10",
+            "style_ppda_l5", "style_ppda_l10",
+            "style_fouls_suff_ratio_l5", "style_fouls_suff_ratio_l10"
+        ]
         for side, team in [("home", ht), ("away", at)]:
             if team not in team_rolling:
                 for col in SB_COLS:
                     for w in [3, 5]:
                         out[f"{side}_{col}_l{w}"]         = np.nan
                         out[f"{side}_{col}_against_l{w}"] = np.nan
+                for sf in STYLE_FEATS:
+                    out[f"{side}_{sf}"] = np.nan
                 continue
 
             tr = team_rolling[team]
@@ -567,12 +594,16 @@ def compute_sb_features(stats_csv_path, df_main):
                     for w in [3, 5]:
                         out[f"{side}_{col}_l{w}"]         = np.nan
                         out[f"{side}_{col}_against_l{w}"] = np.nan
+                for sf in STYLE_FEATS:
+                    out[f"{side}_{sf}"] = np.nan
             else:
                 mr = match_rows.iloc[0]
                 for col in SB_COLS:
                     for w in [3, 5]:
                         out[f"{side}_{col}_l{w}"]         = mr.get(f"{col}_l{w}", np.nan)
                         out[f"{side}_{col}_against_l{w}"] = mr.get(f"{col}_against_l{w}", np.nan)
+                for sf in STYLE_FEATS:
+                    out[f"{side}_{sf}"] = mr.get(sf, np.nan)
 
         result_rows.append(out)
 
@@ -794,6 +825,53 @@ def main():
         ac = f"away_{col}"
         if hc in df.columns and ac in df.columns:
             df[f"diff_{col}"] = df[hc] - df[ac]
+
+    # 1. Crie a feature binaria has_boxscore_signal
+    df["has_boxscore_signal"] = df["has_advanced_stats"].fillna(0).astype(int)
+
+    # 2. Imputacao Indicativa para as novas features de estilo
+    STYLE_FEATS_FULL = [
+        "home_style_crosses_l5", "home_style_crosses_l10",
+        "away_style_crosses_l5", "away_style_crosses_l10",
+        "home_style_ppda_l5", "home_style_ppda_l10",
+        "away_style_ppda_l5", "away_style_ppda_l10",
+        "home_style_fouls_suff_ratio_l5", "home_style_fouls_suff_ratio_l10",
+        "away_style_fouls_suff_ratio_l5", "away_style_fouls_suff_ratio_l10"
+    ]
+
+    # Pre-calcula elo_bin para imputacao baseada em Elo
+    df["home_elo_bin"] = (df["home_elo_pre"] // 100) * 100
+    df["away_elo_bin"] = (df["away_elo_pre"] // 100) * 100
+
+    print("\n>> Executando imputacao indicativa para features de estilo...")
+    for feat in STYLE_FEATS_FULL:
+        if feat not in df.columns:
+            df[feat] = np.nan
+        
+        # a) Mediana por campeonato (tournament no df)
+        comp_medians = df.groupby("tournament")[feat].transform("median")
+        df[feat] = df[feat].fillna(comp_medians)
+        
+        # b) Mediana por Elo bin correspondente
+        side = "home" if feat.startswith("home_") else "away"
+        elo_bin_col = f"{side}_elo_bin"
+        elo_medians = df.groupby(elo_bin_col)[feat].transform("median")
+        df[feat] = df[feat].fillna(elo_medians)
+        
+        # c) Mediana global
+        global_median = df[feat].median()
+        if pd.isna(global_median):
+            global_median = 0.0
+        df[feat] = df[feat].fillna(global_median)
+
+    # Remove colunas auxiliares de elo_bin
+    df = df.drop(columns=["home_elo_bin", "away_elo_bin"])
+
+    # Calcular diff para as features de estilo bruto (para o pipeline)
+    for base_feat in ["style_crosses_l5", "style_crosses_l10",
+                      "style_ppda_l5", "style_ppda_l10",
+                      "style_fouls_suff_ratio_l5", "style_fouls_suff_ratio_l10"]:
+        df[f"diff_{base_feat}"] = df[f"home_{base_feat}"] - df[f"away_{base_feat}"]
 
     # Renomear cur_sb_* para corresponder ao CSV original
     # home_cur_sb_shots, home_cur_sb_shots_on_target, etc.

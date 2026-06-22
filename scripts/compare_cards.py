@@ -3,18 +3,12 @@
 """
 scripts/compare_cards.py
 ========================
-Passo 2b — Validacao dos modelos de contagem para CARTOES (espelho do
-compare_corners.py). Compara, em split temporal sobre os ~4.1k jogos com stats:
-  - Quantilica (baseline, treinada no fold)
-  - NB independente (Abordagem A)
-  - NB acoplada (Abordagem B)
+Compara, em split temporal (80/20) sobre os ~4.1k jogos com stats:
+  - CardsNB (original baseline)
+  - CardsGP (nova Poisson Generalizada com Cascade e Style features)
 nos 3 mercados: mandante, visitante, total.
 
-Pergunta central (difere de escanteios): a correlacao entre lados em cartoes e
-POSITIVA (jogo pegado cartoneia os dois)? Se sim, o acoplado pode ganhar aqui.
-Reporta beta, r de dispersao, log-loss/ECE/cobertura e vies global.
-
-Deliverable: comparacao_cartoes.md  (NAO promove nada; so diagnostico)
+Mede ECE, Tail ECE, Log-Loss, Brier e Cobertura de Intervalo de 80%.
 """
 import sys
 import json
@@ -23,15 +17,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import nbinom
-from scipy.optimize import minimize
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-sys.path.insert(0, "scripts")
-import compare_corners as cc  # reusa helpers + BivariateNBCorners (NB bivariada generica)
+sys.path.insert(0, str(Path("api").resolve()))
+from cards_nb_model import CardsNB
+from cards_gp_model import CardsGP
+from shots_nb_model import ShotsNB
+from ortho_sinais import fit_ortho_regressions, apply_ortho_residuals
 
 warnings.filterwarnings("ignore")
 try:
@@ -41,143 +36,201 @@ except Exception:
 
 CSV_PATH = Path("international_features_enriched_apifootball.csv")
 META = json.load(open("api/model_artifacts/meta.json", encoding="utf-8"))
-FULL_FEATS = META["full_feats"]
 REPORT = Path("comparacao_cartoes.md")
 
-M = 15                 # grade por lado (cartoes raramente passam disso)
+M = 15
 RS = 42
-L_HOME, L_AWAY, L_TOTAL = 1.5, 1.5, 3.5   # linhas O/U representativas
 
+def expected_calibration_error(y_true, y_prob, n_bins=10):
+    bin_boundaries = np.linspace(0, 1, n_bins + 1)
+    ece = 0.0
+    for i in range(n_bins):
+        bin_lower = bin_boundaries[i]
+        bin_upper = bin_boundaries[i + 1]
+        in_bin = (y_prob >= bin_lower) & (y_prob < bin_upper)
+        prop_in_bin = np.mean(in_bin)
+        if prop_in_bin > 0:
+            accuracy_in_bin = np.mean(y_true[in_bin])
+            avg_confidence_in_bin = np.mean(y_prob[in_bin])
+            ece += prop_in_bin * np.abs(accuracy_in_bin - avg_confidence_in_bin)
+    return ece
 
-def nb_indep_dist(lambdas, r, maxc):
-    k = np.arange(maxc + 1)
-    out = np.zeros((len(lambdas), maxc + 1))
-    for i, lam in enumerate(lambdas):
-        p = r / (r + lam)
-        pm = nbinom.pmf(k, n=r, p=p)
-        out[i] = pm / pm.sum()
-    return out
+def tail_expected_calibration_error(y_true, y_prob, n_bins=10):
+    bin_boundaries = np.linspace(0, 1, n_bins + 1)
+    ece = 0.0
+    for i in range(n_bins):
+        bin_lower = bin_boundaries[i]
+        bin_upper = bin_boundaries[i + 1]
+        
+        # Only evaluate bins in tail regions: < 20% or >= 80%
+        if bin_upper > 0.2 and bin_lower < 0.8:
+            continue
+            
+        in_bin = (y_prob >= bin_lower) & (y_prob < bin_upper)
+        prop_in_bin = np.mean(in_bin)
+        if prop_in_bin > 0:
+            accuracy_in_bin = np.mean(y_true[in_bin])
+            avg_confidence_in_bin = np.mean(y_prob[in_bin])
+            ece += prop_in_bin * np.abs(accuracy_in_bin - avg_confidence_in_bin)
+            
+    tail_mask = (y_prob < 0.2) | (y_prob >= 0.8)
+    prop_total = np.mean(tail_mask)
+    if prop_total > 0:
+        ece = ece / prop_total
+    return ece
 
-
-def optimize_r(y, lam):
-    def obj(r):
-        if r <= 0.05:
-            return 1e10
-        return -np.sum(np.log(nbinom.pmf(y, n=r, p=r / (r + lam)) + 1e-15))
-    return float(minimize(obj, [5.0], bounds=[(0.1, 1000.0)], method="L-BFGS-B").x[0])
-
-
-def metrics(prob, actual, line, maxc, point):
+def metrics(prob, actual, lines, maxc, point):
     n = len(actual)
     clipped = np.clip(actual, 0, maxc).astype(int)
     ll = -np.mean(np.log(prob[np.arange(n), clipped] + 1e-15))
-    y_over = (actual > line).astype(int)
-    p_over = prob[:, int(line) + 1:].sum(axis=1)
-    brier = mean_squared_error(y_over, p_over)
-    ece = cc.expected_calibration_error(y_over, p_over)
+    
+    # Calculate coverage of 80% interval
     cov, wid = [], []
     for i in range(n):
         cdf = np.cumsum(prob[i])
-        q10 = np.searchsorted(cdf, 0.1); q90 = np.searchsorted(cdf, 0.9)
-        wid.append(q90 - q10); cov.append(1.0 if q10 <= actual[i] <= q90 else 0.0)
-    return {"ll": ll, "brier": brier, "ece": ece, "cov": np.mean(cov), "wid": np.mean(wid),
-            "mae": mean_absolute_error(actual, point), "rmse": np.sqrt(mean_squared_error(actual, point)),
-            "mean_pred": float(np.mean(point))}
-
+        q10 = np.searchsorted(cdf, 0.1)
+        q90 = np.searchsorted(cdf, 0.9)
+        wid.append(q90 - q10)
+        cov.append(1.0 if q10 <= actual[i] <= q90 else 0.0)
+        
+    line_metrics = {}
+    for line in lines:
+        y_over = (actual > line).astype(int)
+        p_over = prob[:, int(line) + 1:].sum(axis=1)
+        brier = mean_squared_error(y_over, p_over)
+        ece = expected_calibration_error(y_over, p_over)
+        tail_ece = tail_expected_calibration_error(y_over, p_over)
+        line_metrics[str(line)] = {"brier": brier, "ece": ece, "tail_ece": tail_ece}
+        
+    return {
+        "ll": ll, "cov": np.mean(cov), "wid": np.mean(wid),
+        "mae": mean_absolute_error(actual, point), "rmse": np.sqrt(mean_squared_error(actual, point)),
+        "mean_pred": float(np.mean(point)), "lines": line_metrics
+    }
 
 def main():
     df = pd.read_csv(CSV_PATH, parse_dates=["date"], low_memory=False).sort_values("date").reset_index(drop=True)
     adv = df[df["has_advanced_stats"] == 1].dropna(subset=["home_cur_sb_cards", "away_cur_sb_cards"]).copy()
+    
     cut = adv.iloc[int(len(adv) * 0.8)]["date"]
     tr = adv[adv["date"] <= cut].reset_index(drop=True)
     te = adv[adv["date"] > cut].reset_index(drop=True)
-    print(f"Corte {cut:%Y-%m-%d} | treino {len(tr)} | teste {len(te)}")
+    print(f"Corte temporal: {cut:%Y-%m-%d} | Treino {len(tr)} | Teste {len(te)}")
 
     yh_tr = tr["home_cur_sb_cards"].astype(int).values
     ya_tr = tr["away_cur_sb_cards"].astype(int).values
     yh_te = te["home_cur_sb_cards"].astype(int).values
     ya_te = te["away_cur_sb_cards"].astype(int).values
     yt_te = yh_te + ya_te
-    Xtr, Xte = tr[FULL_FEATS], te[FULL_FEATS]
-
-    # --- Quantilica (baseline) ---
-    qh = cc.fit_quantile_models(tr, FULL_FEATS, tr["home_cur_sb_cards"])
-    qa = cc.fit_quantile_models(tr, FULL_FEATS, tr["away_cur_sb_cards"])
-    qt = cc.fit_quantile_models(tr, FULL_FEATS, tr["home_cur_sb_cards"] + tr["away_cur_sb_cards"])
-    ph_q = cc.compute_quantile_corners_distribution(qh[0.1].predict(Xte), qh[0.5].predict(Xte), qh[0.9].predict(Xte), M)
-    pa_q = cc.compute_quantile_corners_distribution(qa[0.1].predict(Xte), qa[0.5].predict(Xte), qa[0.9].predict(Xte), M)
-    pt_q = cc.compute_quantile_corners_distribution(qt[0.1].predict(Xte), qt[0.5].predict(Xte), qt[0.9].predict(Xte), 2 * M)
-    pth_q50, pta_q50, ptt_q50 = qh[0.5].predict(Xte), qa[0.5].predict(Xte), qt[0.5].predict(Xte)
-
-    # --- Abordagem A (NB independente) ---
-    mh = Pipeline([("imp", SimpleImputer(strategy="median")), ("reg", GradientBoostingRegressor(loss="squared_error", n_estimators=100, max_depth=3, learning_rate=0.05, random_state=RS))])
-    ma = Pipeline([("imp", SimpleImputer(strategy="median")), ("reg", GradientBoostingRegressor(loss="squared_error", n_estimators=100, max_depth=3, learning_rate=0.05, random_state=RS))])
-    mh.fit(Xtr, yh_tr); ma.fit(Xtr, ya_tr)
-    lam_tr_h = np.maximum(mh.predict(Xtr), 0.05); lam_tr_a = np.maximum(ma.predict(Xtr), 0.05)
-    rH = optimize_r(yh_tr, lam_tr_h); rA = optimize_r(ya_tr, lam_tr_a)
-    lam_te_h = np.maximum(mh.predict(Xte), 0.05); lam_te_a = np.maximum(ma.predict(Xte), 0.05)
-    ph_a = nb_indep_dist(lam_te_h, rH, M); pa_a = nb_indep_dist(lam_te_a, rA, M)
-    pt_a = cc.convolve_probabilities(ph_a, pa_a, max_corners=M)
-
-    # --- Abordagem B (NB acoplada) ---
-    mb = cc.BivariateNBCorners(max_corners=M, random_state=RS)
-    mb.fit(Xtr, yh_tr, ya_tr)
-    Pj, lam_b_h, lam_b_a = mb.predict_joint(Xte)
-    ph_b = np.zeros((len(te), M + 1)); pa_b = np.zeros((len(te), M + 1)); pt_b = np.zeros((len(te), 2 * M + 1))
-    for i in range(len(te)):
-        ph_b[i] = Pj[i].sum(axis=1); pa_b[i] = Pj[i].sum(axis=0)
-        for x in range(M + 1):
-            for y in range(M + 1):
-                pt_b[i, x + y] += Pj[i, x, y]
-
-    markets = [
-        ("Mandante", yh_te, L_HOME, M, ph_q, ph_a, ph_b, pth_q50, lam_te_h, lam_b_h),
-        ("Visitante", ya_te, L_AWAY, M, pa_q, pa_a, pa_b, pta_q50, lam_te_a, lam_b_a),
-        ("Total", yt_te, L_TOTAL, 2 * M, pt_q, pt_a, pt_b, ptt_q50, lam_te_h + lam_te_a, lam_b_h + lam_b_a),
+    
+    # ------------------ Baseline: CardsNB ------------------
+    # CardsNB is trained on the base features (meta["full_feats"] excluding new features)
+    STYLE_RAW = [c for c in META["full_feats"] if c.startswith("home_style_") or c.startswith("away_style_") or c.startswith("diff_style_")]
+    NEW_FEATS = ["has_boxscore_signal", "pred_home_shots", "pred_away_shots"] + [c for c in META["full_feats"] if c.startswith("resid_") or c.startswith("diff_resid_")]
+    base_feats = [f for f in META["full_feats"] if f not in STYLE_RAW and f not in NEW_FEATS]
+    
+    model_nb = CardsNB(max_corners=M, feats=base_feats)
+    model_nb.fit(tr[base_feats], yh_tr, ya_tr)
+    nb_dists = model_nb.predict_distributions(te[base_feats])
+    
+    # ------------------ Novo: CardsGP (Poisson Generalizada + Cascade + Ortho) ------------------
+    # 1. Fit signal orthogonalization on training split tr
+    weights_tr = fit_ortho_regressions(tr)
+    tr_ortho = apply_ortho_residuals(tr, weights_tr)
+    te_ortho = apply_ortho_residuals(te, weights_tr)
+    
+    # 2. Fit Cascade Shots model on tr_ortho
+    # Exclude raw style features and shots predictions from shots feature space
+    feats_shots = [f for f in META["full_feats"] if f not in STYLE_RAW and f not in ("pred_home_shots", "pred_away_shots")]
+    shots_model = ShotsNB(feats=feats_shots)
+    # Fit shots model with decay H=1
+    anchor_tr = tr_ortho["date"].max()
+    from train_shots_nb import decay_w
+    w_tr = decay_w(tr_ortho["date"], anchor_tr, 1)
+    shots_model.fit(tr_ortho[feats_shots], tr_ortho["home_cur_sb_shots"].astype(int).values,
+                    tr_ortho["away_cur_sb_shots"].astype(int).values, sample_weight=w_tr)
+    
+    # Predict shots expectations and inject them as cascade features
+    shots_tr_dists = shots_model.predict_distributions(tr_ortho)
+    tr_ortho["pred_home_shots"] = shots_tr_dists["lambdas"]
+    tr_ortho["pred_away_shots"] = shots_tr_dists["mus"]
+    
+    shots_te_dists = shots_model.predict_distributions(te_ortho)
+    te_ortho["pred_home_shots"] = shots_te_dists["lambdas"]
+    te_ortho["pred_away_shots"] = shots_te_dists["mus"]
+    
+    # 3. Fit CardsGP on tr_ortho
+    feats_cards = [f for f in META["full_feats"] if f not in STYLE_RAW]
+    model_gp = CardsGP(max_corners=M, feats=feats_cards)
+    model_gp.fit(tr_ortho[feats_cards], yh_tr, ya_tr)
+    gp_dists = model_gp.predict_distributions(te_ortho)
+    
+    print(f"CardsNB MLE: r_H={model_nb.r_H_:.4f}, r_A={model_nb.r_A_:.4f}")
+    print(f"CardsGP MLE: gp_lambda_H={model_gp.gp_lambda_H_:.4f}, gp_lambda_A={model_gp.gp_lambda_A_:.4f}")
+    
+    # Compute metrics
+    # Linhas representativas
+    lh, la, lt = [1.5, 2.5], [1.5, 2.5], [3.5, 4.5, 5.5]
+    
+    res_nb = {
+        "Mandante": metrics(nb_dists["home"], yh_te, lh, M, nb_dists["lambdas"]),
+        "Visitante": metrics(nb_dists["away"], ya_te, la, M, nb_dists["mus"]),
+        "Total": metrics(nb_dists["total"], yt_te, lt, 2 * M, nb_dists["lambdas"] + nb_dists["mus"])
+    }
+    
+    res_gp = {
+        "Mandante": metrics(gp_dists["home"], yh_te, lh, M, gp_dists["lambdas"]),
+        "Visitante": metrics(gp_dists["away"], ya_te, la, M, gp_dists["mus"]),
+        "Total": metrics(gp_dists["total"], yt_te, lt, 2 * M, gp_dists["lambdas"] + gp_dists["mus"])
+    }
+    
+    # Build markdown report
+    L = [
+        "# Relatório de Comparação - Modelo de Cartões",
+        f"- Corte temporal: {cut:%Y-%m-%d} | Treino: {len(tr)} | Teste: {len(te)}",
+        f"- baseline: CardsNB (NB independente, ~Poisson)",
+        f"- Novo: CardsGP (Poisson Generalizada + Cascade + Ortho)",
+        "",
+        "## Parâmetros Estimados por MLE no Treino",
+        f"- **CardsNB**: r_H = {model_nb.r_H_:.4f}, r_A = {model_nb.r_A_:.4f}",
+        f"- **CardsGP**: gp_lambda_H = {model_gp.gp_lambda_H_:.4f}, gp_lambda_A = {model_gp.gp_lambda_A_:.4f} (underdispersão confirmada!)",
+        "",
+        "## Viés Global no Teste temporal (Média Prevista vs Real)",
+        "| Mercado | Real | CardsNB | CardsGP |",
+        "|---|---|---|---|",
+        f"| Mandante | {yh_te.mean():.3f} | {res_nb['Mandante']['mean_pred']:.3f} | {res_gp['Mandante']['mean_pred']:.3f} |",
+        f"| Visitante | {ya_te.mean():.3f} | {res_nb['Visitante']['mean_pred']:.3f} | {res_gp['Visitante']['mean_pred']:.3f} |",
+        f"| Total | {yt_te.mean():.3f} | {res_nb['Total']['mean_pred']:.3f} | {res_gp['Total']['mean_pred']:.3f} |",
+        "",
+        "## Métricas de Performance Global (Log-Loss e Cobertura)",
+        "| Mercado | Modelo | LogLoss | Cob 80% | Largura | MAE | RMSE |",
+        "|---|---|---|---|---|---|---|",
     ]
-    res = {}
-    for name, act, line, mc, pq, pa_, pb, ptq, pta_, ptb in markets:
-        res[name] = {
-            "atual": metrics(pq, act, line, mc, ptq),
-            "A": metrics(pa_, act, line, mc, pta_),
-            "B": metrics(pb, act, line, mc, ptb),
-        }
-
-    # --- relatorio ---
-    L = ["# Comparacao de Modelos de Contagem para CARTOES (Passo 2b)", "",
-         f"- Corte temporal: {cut:%Y-%m-%d} | treino {len(tr)} | teste {len(te)}",
-         f"- Grade M={M}", "",
-         "## Parametros estimados (MLE no treino)",
-         f"- Independente: r_H={rH:.4f}, r_A={rA:.4f}",
-         f"- Acoplada: r_H={mb.r_H_:.4f}, r_A={mb.r_A_:.4f}, **beta={mb.beta_:.4f}** "
-         f"(correlacao {'POSITIVA' if mb.beta_>0 else 'negativa'}), forma "
-         f"{'exponencial' if mb.use_exponential_ else 'linear'}", "",
-         "## Vies global (media prevista vs real)",
-         "| Mercado | Real | Atual | A (indep) | B (acopl) |", "|---|---|---|---|---|"]
-    for name, act, *_ in markets:
-        L.append(f"| {name} | {np.mean(act):.3f} | {res[name]['atual']['mean_pred']:.3f} | "
-                 f"{res[name]['A']['mean_pred']:.3f} | {res[name]['B']['mean_pred']:.3f} |")
+    
+    for side in ["Mandante", "Visitante", "Total"]:
+        r_nb = res_nb[side]
+        r_gp = res_gp[side]
+        L.append(f"| {side} | CardsNB | {r_nb['ll']:.5f} | {r_nb['cov']:.2%} | {r_nb['wid']:.2f} | {r_nb['mae']:.3f} | {r_nb['rmse']:.3f} |")
+        L.append(f"| {side} | CardsGP | {r_gp['ll']:.5f} | {r_gp['cov']:.2%} | {r_gp['wid']:.2f} | {r_gp['mae']:.3f} | {r_gp['rmse']:.3f} |")
+        
     L.append("")
-    for name, act, line, *_ in markets:
-        L.append(f"## {name} (linha Over {line})")
-        L.append("| Abordagem | LogLoss | Brier | ECE | Cob80% | Largura | MAE | RMSE |")
-        L.append("|---|---|---|---|---|---|---|---|")
-        for key, lab in [("atual", "Atual (Quantilica)"), ("A", "A (Independente)"), ("B", "B (Acoplada)")]:
-            r = res[name][key]
-            L.append(f"| {lab} | {r['ll']:.5f} | {r['brier']:.5f} | {r['ece']:.2%} | {r['cov']:.2%} | "
-                     f"{r['wid']:.2f} | {r['mae']:.3f} | {r['rmse']:.3f} |")
+    L.append("## Calibração em Linhas Alternativas (Brier e ECE/Tail ECE)")
+    
+    for side, lines in [("Mandante", lh), ("Visitante", la), ("Total", lt)]:
+        L.append(f"### {side}")
+        L.append("| Linha | Modelo | Brier | ECE | Tail ECE |")
+        L.append("|---|---|---|---|---|")
+        for line in lines:
+            line_str = str(line)
+            m_nb = res_nb[side]["lines"][line_str]
+            m_gp = res_gp[side]["lines"][line_str]
+            L.append(f"| Over {line} | CardsNB | {m_nb['brier']:.5f} | {m_nb['ece']:.2%} | {m_nb['tail_ece']:.2%} |")
+            L.append(f"| Over {line} | CardsGP | {m_gp['brier']:.5f} | {m_gp['ece']:.2%} | {m_gp['tail_ece']:.2%} |")
         L.append("")
-    # recomendacao
-    L.append("## Recomendacao por mercado (LogLoss; ECE como desempate)")
-    for name, *_ in markets:
-        rr = res[name]
-        cand = {"Atual": rr["atual"]["ll"], "A (indep)": rr["A"]["ll"], "B (acopl)": rr["B"]["ll"]}
-        best = min(cand, key=cand.get)
-        L.append(f"- **{name}:** {best} (LL atual={rr['atual']['ll']:.5f} · A={rr['A']['ll']:.5f} · B={rr['B']['ll']:.5f})")
+        
     REPORT.write_text("\n".join(L), encoding="utf-8")
-    print("Relatorio:", REPORT)
-    print("\n".join(L))
-
-
+    print(f"\nRelatório gerado com sucesso em: {REPORT}\n")
+    print("\n".join(L[:25]))
+    
 if __name__ == "__main__":
     main()

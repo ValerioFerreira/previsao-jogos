@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 import sys
@@ -110,19 +111,62 @@ def main():
               f"sob os filtros (min-ev={a.min_ev}, max-odd={a.max_odd}).")
         return
 
+    def expected_calibration_error(y_true, y_prob, n_bins=10):
+        bin_boundaries = np.linspace(0, 1, n_bins + 1)
+        ece = 0.0
+        for i in range(n_bins):
+            bin_lower = bin_boundaries[i]
+            bin_upper = bin_boundaries[i + 1]
+            in_bin = (y_prob >= bin_lower) & (y_prob < bin_upper)
+            prop_in_bin = np.mean(in_bin)
+            if prop_in_bin > 0:
+                accuracy_in_bin = np.mean(y_true[in_bin])
+                avg_confidence_in_bin = np.mean(y_prob[in_bin])
+                ece += prop_in_bin * np.abs(accuracy_in_bin - avg_confidence_in_bin)
+        return ece
+
+    def tail_expected_calibration_error(y_true, y_prob, n_bins=10):
+        bin_boundaries = np.linspace(0, 1, n_bins + 1)
+        ece = 0.0
+        for i in range(n_bins):
+            bin_lower = bin_boundaries[i]
+            bin_upper = bin_boundaries[i + 1]
+            if bin_upper > 0.2 and bin_lower < 0.8:
+                continue
+            in_bin = (y_prob >= bin_lower) & (y_prob < bin_upper)
+            prop_in_bin = np.mean(in_bin)
+            if prop_in_bin > 0:
+                accuracy_in_bin = np.mean(y_true[in_bin])
+                avg_confidence_in_bin = np.mean(y_prob[in_bin])
+                ece += prop_in_bin * np.abs(accuracy_in_bin - avg_confidence_in_bin)
+        tail_mask = (y_prob < 0.2) | (y_prob >= 0.8)
+        prop_total = np.mean(tail_mask)
+        if prop_total > 0:
+            ece = ece / prop_total
+        return ece
+
     def roi(rows):
         pnl = sum(r["pnl"] for r in rows)
         return pnl, 100 * pnl / len(rows), sum(r["win"] for r in rows), len(rows)
 
     print(f"Jogos resolvidos: {n_games} | apostas liquidadas: {len(settled)}\n")
     pnl, r, w, n = roi(settled)
-    print(f"GERAL: {n} apostas | acerto {w}/{n} ({100*w/n:.0f}%) | P&L {pnl:+.2f}u | ROI {r:+.1f}%")
+    
+    y_true_all = np.array([float(s["win"]) for s in settled])
+    y_prob_all = np.array([s["p_model"] / 100.0 for s in settled])
+    ece_all = expected_calibration_error(y_true_all, y_prob_all)
+    tail_ece_all = tail_expected_calibration_error(y_true_all, y_prob_all)
+    
+    print(f"GERAL: {n} apostas | acerto {w}/{n} ({100*w/n:.0f}%) | P&L {pnl:+.2f}u | ROI {r:+.1f}% | ECE {ece_all:.2%} | Tail ECE {tail_ece_all:.2%}")
 
     ev_pos = [s for s in settled if s["ev"] > 0]
     if ev_pos:
         pnl, r, w, n = roi(ev_pos)
-        print(f"+EV (modelo): {n} apostas | acerto {w}/{n} ({100*w/n:.0f}%) | P&L {pnl:+.2f}u | ROI {r:+.1f}%  "
-              f"<- teste central: o edge do modelo paga?")
+        y_true_ev = np.array([float(s["win"]) for s in ev_pos])
+        y_prob_ev = np.array([s["p_model"] / 100.0 for s in ev_pos])
+        ece_ev = expected_calibration_error(y_true_ev, y_prob_ev)
+        tail_ece_ev = tail_expected_calibration_error(y_true_ev, y_prob_ev)
+        print(f"+EV (modelo): {n} apostas | acerto {w}/{n} ({100*w/n:.0f}%) | P&L {pnl:+.2f}u | ROI {r:+.1f}% | ECE {ece_ev:.2%} | Tail ECE {tail_ece_ev:.2%}")
 
     # por mercado
     print("\nPor mercado:")
@@ -130,7 +174,11 @@ def main():
     for m in mercados:
         rows = [s for s in settled if s["mercado"] == m]
         pnl, r, w, n = roi(rows)
-        print(f"  {m:<17} {n:>3} apostas | acerto {100*w/n:>3.0f}% | ROI {r:+6.1f}%")
+        y_true_m = np.array([float(s["win"]) for s in rows])
+        y_prob_m = np.array([s["p_model"] / 100.0 for s in rows])
+        ece_m = expected_calibration_error(y_true_m, y_prob_m)
+        tail_ece_m = tail_expected_calibration_error(y_true_m, y_prob_m)
+        print(f"  {m:<17} {n:>3} apostas | acerto {100*w/n:>3.0f}% | ROI {r:+6.1f}% | ECE {ece_m:.2%} | Tail ECE {tail_ece_m:.2%}")
 
     # calibracao por faixa de prob do modelo
     print("\nCalibracao (prob do modelo x acerto real):")

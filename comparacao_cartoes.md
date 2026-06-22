@@ -1,41 +1,52 @@
-# Comparacao de Modelos de Contagem para CARTOES (Passo 2b)
+# Relatório de Comparação - Modelo de Cartões
+- Corte temporal: 2024-10-12 | Treino: 3286 | Teste: 816
+- baseline: CardsNB (NB independente, ~Poisson)
+- Novo: CardsGP (Poisson Generalizada + Cascade + Ortho)
 
-- Corte temporal: 2024-10-12 | treino 3286 | teste 816
-- Grade M=15
+## Parâmetros Estimados por MLE no Treino
+- **CardsNB**: r_H = 1000.0000, r_A = 1000.0000
+- **CardsGP**: gp_lambda_H = -0.1208, gp_lambda_A = -0.1283 (underdispersão confirmada!)
 
-## Parametros estimados (MLE no treino)
-- Independente: r_H=1000.0000, r_A=1000.0000
-- Acoplada: r_H=471.1530, r_A=563.1815, **beta=0.0721** (correlacao POSITIVA), forma exponencial
+## Viés Global no Teste temporal (Média Prevista vs Real)
+| Mercado | Real | CardsNB | CardsGP |
+|---|---|---|---|
+| Mandante | 1.787 | 1.777 | 1.776 |
+| Visitante | 2.096 | 2.067 | 2.066 |
+| Total | 3.882 | 3.844 | 3.842 |
 
-## Vies global (media prevista vs real)
-| Mercado | Real | Atual | A (indep) | B (acopl) |
+## Métricas de Performance Global (Log-Loss e Cobertura)
+| Mercado | Modelo | LogLoss | Cob 80% | Largura | MAE | RMSE |
+|---|---|---|---|---|---|---|
+| Mandante | CardsNB | 1.58451 | 92.77% | 3.38 | 0.994 | 1.268 |
+| Mandante | CardsGP | 1.58941 | 89.22% | 2.98 | 0.996 | 1.269 |
+| Visitante | CardsNB | 1.69448 | 91.42% | 3.68 | 1.112 | 1.419 |
+| Visitante | CardsGP | 1.70556 | 87.75% | 3.15 | 1.113 | 1.417 |
+| Total | CardsNB | 2.07395 | 88.11% | 4.92 | 1.650 | 2.043 |
+| Total | CardsGP | 2.09870 | 83.82% | 4.43 | 1.647 | 2.043 |
+
+## Calibração em Linhas Alternativas (Brier e ECE/Tail ECE)
+### Mandante
+| Linha | Modelo | Brier | ECE | Tail ECE |
 |---|---|---|---|---|
-| Mandante | 1.787 | 1.711 | 1.782 | 1.782 |
-| Visitante | 2.096 | 1.847 | 2.067 | 2.067 |
-| Total | 3.882 | 3.601 | 3.849 | 3.849 |
+| Over 1.5 | CardsNB | 0.22979 | 1.22% | 3.26% |
+| Over 1.5 | CardsGP | 0.23067 | 2.98% | 2.63% |
+| Over 2.5 | CardsNB | 0.18348 | 1.67% | 2.24% |
+| Over 2.5 | CardsGP | 0.18345 | 1.97% | 2.94% |
 
-## Mandante (linha Over 1.5)
-| Abordagem | LogLoss | Brier | ECE | Cob80% | Largura | MAE | RMSE |
-|---|---|---|---|---|---|---|---|
-| Atual (Quantilica) | 1.67052 | 0.24462 | 7.32% | 85.78% | 2.98 | 0.978 | 1.312 |
-| A (Independente) | 1.58375 | 0.23023 | 1.63% | 92.40% | 3.38 | 0.996 | 1.266 |
-| B (Acoplada) | 1.58494 | 0.23025 | 1.57% | 92.65% | 3.43 | 0.996 | 1.266 |
+### Visitante
+| Linha | Modelo | Brier | ECE | Tail ECE |
+|---|---|---|---|---|
+| Over 1.5 | CardsNB | 0.23084 | 3.88% | 33.05% |
+| Over 1.5 | CardsGP | 0.23060 | 3.74% | 7.26% |
+| Over 2.5 | CardsNB | 0.20980 | 3.51% | 3.67% |
+| Over 2.5 | CardsGP | 0.21037 | 1.64% | 1.70% |
 
-## Visitante (linha Over 1.5)
-| Abordagem | LogLoss | Brier | ECE | Cob80% | Largura | MAE | RMSE |
-|---|---|---|---|---|---|---|---|
-| Atual (Quantilica) | 1.81468 | 0.25038 | 8.91% | 84.56% | 3.02 | 1.112 | 1.489 |
-| A (Independente) | 1.69291 | 0.22942 | 3.37% | 91.54% | 3.66 | 1.109 | 1.416 |
-| B (Acoplada) | 1.69349 | 0.22943 | 3.08% | 92.16% | 3.72 | 1.109 | 1.416 |
-
-## Total (linha Over 3.5)
-| Abordagem | LogLoss | Brier | ECE | Cob80% | Largura | MAE | RMSE |
-|---|---|---|---|---|---|---|---|
-| Atual (Quantilica) | 2.11958 | 0.25029 | 7.80% | 89.09% | 5.09 | 1.664 | 2.099 |
-| A (Independente) | 2.06998 | 0.24239 | 5.81% | 87.99% | 4.92 | 1.639 | 2.035 |
-| B (Acoplada) | 2.07111 | 0.24172 | 4.64% | 91.05% | 5.34 | 1.639 | 2.035 |
-
-## Recomendacao por mercado (LogLoss; ECE como desempate)
-- **Mandante:** A (indep) (LL atual=1.67052 · A=1.58375 · B=1.58494)
-- **Visitante:** A (indep) (LL atual=1.81468 · A=1.69291 · B=1.69349)
-- **Total:** A (indep) (LL atual=2.11958 · A=2.06998 · B=2.07111)
+### Total
+| Linha | Modelo | Brier | ECE | Tail ECE |
+|---|---|---|---|---|
+| Over 3.5 | CardsNB | 0.24352 | 5.44% | 18.07% |
+| Over 3.5 | CardsGP | 0.24473 | 5.70% | 27.36% |
+| Over 4.5 | CardsNB | 0.21270 | 1.75% | 2.70% |
+| Over 4.5 | CardsGP | 0.21161 | 1.89% | 0.97% |
+| Over 5.5 | CardsNB | 0.15442 | 1.67% | 1.12% |
+| Over 5.5 | CardsGP | 0.15590 | 3.11% | 2.43% |

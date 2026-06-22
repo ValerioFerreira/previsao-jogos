@@ -16,9 +16,14 @@ except ImportError:
     from api.corners_nb_model import CornersNB
 
 try:
-    from cards_nb_model import CardsNB
+    from cards_gp_model import CardsGP
 except ImportError:
-    from api.cards_nb_model import CardsNB
+    from api.cards_gp_model import CardsGP
+
+try:
+    from ortho_sinais import apply_ortho_residuals
+except ImportError:
+    from api.ortho_sinais import apply_ortho_residuals
 
 try:
     from shots_nb_model import ShotsNB
@@ -56,8 +61,9 @@ class Predictor:
         self.clf_over = joblib.load(f"{art_dir}/clf_over25.joblib")
         self.dc = DixonColesNBRegressor.load(f"{art_dir}/dixon_coles_goals.joblib")
         self.corners = CornersNB.load(f"{art_dir}/corners_nb.joblib")
-        self.cards = CardsNB.load(f"{art_dir}/cards_nb.joblib")
+        self.cards = CardsGP.load(f"{art_dir}/cards_gp.joblib")
         self.shots = ShotsNB.load(f"{art_dir}/shots_nb.joblib")
+        self.ortho_weights = joblib.load(f"{art_dir}/style_ortho_weights.joblib")
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
         # historico de confrontos (h2h)
@@ -232,11 +238,20 @@ class Predictor:
             "confianca": conf_label
         }
 
-        # Escanteios, cartões e chutes via NB independente (CDF real)
-        X = add_corner_interactions(X)  # interações de mando p/ escanteios (item 2)
-        cd = self.corners.predict_distributions(X)
-        cc = self.cards.predict_distributions(X)
-        cs = self.shots.predict_distributions(X)
+        # 1. Ortogonalizacao de estilo
+        X_resid = apply_ortho_residuals(X, self.ortho_weights)
+        
+        # 2. Cascade: Predict shots first
+        cs = self.shots.predict_distributions(X_resid)
+        
+        # 3. Inject shots prediction as active features for corners and cards
+        X_resid["pred_home_shots"] = cs["lambdas"]
+        X_resid["pred_away_shots"] = cs["mus"]
+        
+        # 4. Predict corners and cards
+        X_corners = add_corner_interactions(X_resid)
+        cd = self.corners.predict_distributions(X_corners)
+        cc = self.cards.predict_distributions(X_resid)
 
         return {
             "vencedor": winner,

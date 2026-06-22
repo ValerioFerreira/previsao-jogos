@@ -1,0 +1,51 @@
+Você vai retomar um projeto de ML de previsão de jogos de seleções, continuando
+de onde outra máquina parou. TODO o código e a documentação de estado já estão no
+repositório remoto. Produção NÃO deve ser tocada.
+
+## 1. Bootstrap (execute)
+git clone https://github.com/ValerioFerreira/previsao-jogos.git
+cd previsao-jogos
+py -3.12 -m venv api/.venv
+api/.venv/Scripts/python -m pip install -r api/requirements.txt
+
+## 2. Leia o estado (são os documentos-âncora, nesta ordem)
+- MIGRACAO.md                          (checklist exato desta migração)
+- ESTADO_E_PROXIMOS_PASSOS.md          (mapa de estado + próximos passos)
+- RESUMO_SESSAO_2026-06-21_parte2.md   (o que foi feito na última sessão)
+- player_ranking/RELATORIO.md          (frente player_ranking: gate FALHOU)
+- docs/ESPEC_player_power_ranking.md   (spec da arquitetura paralela)
+
+## 3. Restaurar o que NÃO vem pelo git (peça ao usuário / copie do drive externo)
+- .env na raiz com: APIFOOTBALL_KEY=<a chave>   (49 bytes; nunca está no git)
+- web/.env.local com: NEXT_PUBLIC_API_URL=http://localhost:8010
+- Dados locais gitignored a copiar fisicamente (ver tabela em MIGRACAO.md §2):
+  CRÍTICO:  data/odds/  (odds do Passo 4, forward-only, insubstituível)
+  ALTO:     international_features_enriched_apifootball.csv  (dataset de produção)
+            data/raw/  e  data/built/  (fixtures crus + históricos)
+  OPCIONAL: player_ranking/data/  (cache de 13,2k perfis; a frente já foi concluída,
+            só copie se for reabrir player_ranking)
+
+## 4. Validar que subiu (sem tocar produção)
+cd api && ../api/.venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 --reload
+# em outro terminal: curl http://127.0.0.1:8010/health   (espera {"status":"ok",...})
+# front (se for usar): cd web && npm install && npm run dev   (aponta p/ porta 8010)
+
+## 5. Re-registrar a coleta de odds (estado de máquina, não viaja)
+schtasks /Create /SC HOURLY /MO 3 /TN "PrevisaoJogos\CollectOdds" /TR "<caminho>\scripts\collect_odds_task.cmd" /F /RL LIMITED
+# confirme: schtasks /Query /TN "PrevisaoJogos\CollectOdds"
+
+## 6. Onde estamos / próximo passo REAL
+- Produção intacta. Passo 3 (UX) e harness do Passo 4 (value vs mercado) prontos.
+- Campanha de melhoria de modelos ESGOTADA com resultado negativo: calibração,
+  confiabilidade de rating, xG e player-ranking-de-temporada — nenhuma rende ganho
+  promovível (os modelos estão no teto in-sample; Elo domina).
+- NÃO há alavanca in-sample pendente. O único caminho de melhoria/validação real é
+  o BACKTEST DE ODDS AO VIVO, que já está coletando (tarefa 3/3h). Conforme os jogos
+  da Copa 2026 resolvem, rode:
+      api/.venv/Scripts/python scripts/resolve_results.py
+      api/.venv/Scripts/python scripts/value_backtest.py    (o veredito de edge)
+- Em aberto (só se o backtest indicar valor): testar player-ranking de FORMA RECENTE
+  por jogo (ortogonal ao Elo) — exige coleta por jogo e point-in-time; ver RELATORIO.md §9.
+
+Comece lendo os documentos do passo 2 e confirmando comigo o que foi copiado (passo 3)
+antes de qualquer execução que gaste cota de API.

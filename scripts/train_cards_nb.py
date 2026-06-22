@@ -19,7 +19,10 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path("api").resolve()))
-from cards_nb_model import CardsNB
+from cards_gp_model import CardsGP
+from shots_nb_model import ShotsNB
+from ortho_sinais import apply_ortho_residuals
+import joblib
 
 warnings.filterwarnings("ignore")
 try:
@@ -29,30 +32,42 @@ except Exception:
 
 CSV_PATH = Path("international_features_enriched_apifootball.csv")
 META_PATH = Path("api/model_artifacts/meta.json")
-OUT_PATH = Path("api/model_artifacts/cards_nb.joblib")
+OUT_PATH = Path("api/model_artifacts/cards_gp.joblib")
 
 
 def main():
     print("=" * 78)
-    print(" TREINO DE PRODUCAO — CardsNB (NB independente / ~Poisson) base inteira")
+    print(" TREINO DE PRODUCAO — CardsGP (Poisson Generalizada) base inteira")
     print("=" * 78)
 
     meta = json.load(open(META_PATH, encoding="utf-8"))
-    feats = meta["full_feats"]
-    print(f"Features (meta.full_feats): {len(feats)}")
+    STYLE_RAW = [c for c in meta["full_feats"] if c.startswith("home_style_") or c.startswith("away_style_") or c.startswith("diff_style_")]
+    feats = [f for f in meta["full_feats"] if f not in STYLE_RAW]
+    print(f"Features: {len(feats)} (full_feats sem raw_style + cascade)")
 
     df = pd.read_csv(CSV_PATH, parse_dates=["date"], low_memory=False)
     adv = df[df["has_advanced_stats"] == 1].dropna(
         subset=["home_cur_sb_cards", "away_cur_sb_cards"]).copy()
+    
+    # 1. Aplicar ortogonalizacao de estilo
+    weights = joblib.load("api/model_artifacts/style_ortho_weights.joblib")
+    adv = apply_ortho_residuals(adv, weights)
+    
+    # 2. Carregar modelo de chutes e prever expectativas (cascade)
+    shots_model = ShotsNB.load("api/model_artifacts/shots_nb.joblib")
+    shots_dists = shots_model.predict_distributions(adv)
+    adv["pred_home_shots"] = shots_dists["lambdas"]
+    adv["pred_away_shots"] = shots_dists["mus"]
+    
     print(f"Jogos com cartoes validos: {len(adv)}")
 
     X = adv[feats]
     y_h = adv["home_cur_sb_cards"].astype(int).values
     y_a = adv["away_cur_sb_cards"].astype(int).values
 
-    model = CardsNB(max_corners=15, feats=feats)
+    model = CardsGP(max_corners=15, feats=feats)
     model.fit(X, y_h, y_a)
-    print(f"  r_H={model.r_H_:.2f} r_A={model.r_A_:.2f}  (alto = colapso em Poisson, esperado)")
+    print(f"  gp_lambda_H={model.gp_lambda_H_:.4f} gp_lambda_A={model.gp_lambda_A_:.4f}")
 
     # vies global (in-sample, sanidade)
     d = model.predict_distributions(X)

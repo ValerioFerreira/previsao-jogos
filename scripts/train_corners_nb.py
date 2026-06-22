@@ -24,6 +24,9 @@ import pandas as pd
 sys.path.insert(0, str(Path("api").resolve()))
 from corners_nb_model import CornersNB
 from corner_interactions import add_corner_interactions, CORNER_INTERACTIONS
+from shots_nb_model import ShotsNB
+from ortho_sinais import apply_ortho_residuals
+import joblib
 
 warnings.filterwarnings("ignore")
 try:
@@ -42,14 +45,26 @@ def main():
     print("=" * 80)
 
     meta = json.load(open(META_PATH, encoding="utf-8"))
-    feats = meta["full_feats"] + CORNER_INTERACTIONS  # + interacoes de mando (item 2)
-    print(f"Features: {len(meta['full_feats'])} (full_feats) + {len(CORNER_INTERACTIONS)} (interacoes mando)")
+    STYLE_RAW = [c for c in meta["full_feats"] if c.startswith("home_style_") or c.startswith("away_style_") or c.startswith("diff_style_")]
+    feats = [f for f in meta["full_feats"] if f not in STYLE_RAW] + CORNER_INTERACTIONS
+    print(f"Features: {len(feats)} (full_feats sem raw_style + cascade + interacoes mando)")
 
     df = pd.read_csv(CSV_PATH, parse_dates=["date"])
     df_adv = df[df["has_advanced_stats"] == 1].dropna(
         subset=["home_cur_sb_corners", "away_cur_sb_corners"]
     ).copy()
     df_adv = add_corner_interactions(df_adv)
+    
+    # 1. Aplicar ortogonalizacao de estilo
+    weights = joblib.load("api/model_artifacts/style_ortho_weights.joblib")
+    df_adv = apply_ortho_residuals(df_adv, weights)
+    
+    # 2. Carregar modelo de chutes e prever expectativas (cascade)
+    shots_model = ShotsNB.load("api/model_artifacts/shots_nb.joblib")
+    shots_dists = shots_model.predict_distributions(df_adv)
+    df_adv["pred_home_shots"] = shots_dists["lambdas"]
+    df_adv["pred_away_shots"] = shots_dists["mus"]
+    
     print(f"Jogos com escanteios válidos (base de treino cheia): {len(df_adv)}")
 
     X = df_adv[feats]

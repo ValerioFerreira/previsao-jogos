@@ -21,6 +21,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path("api").resolve()))
 from shots_nb_model import ShotsNB
+from ortho_sinais import fit_ortho_regressions, apply_ortho_residuals
+import joblib
 
 warnings.filterwarnings("ignore")
 try:
@@ -30,7 +32,9 @@ except Exception:
 
 CSV = Path("international_features_enriched_apifootball.csv")
 META = json.load(open("api/model_artifacts/meta.json", encoding="utf-8"))
-FEATS = META["full_feats"]
+# Features for shots model must exclude raw style features and predicted shots
+STYLE_RAW = [c for c in META["full_feats"] if c.startswith("home_style_") or c.startswith("away_style_") or c.startswith("diff_style_")]
+FEATS = [f for f in META["full_feats"] if f not in STYLE_RAW and f not in ("pred_home_shots", "pred_away_shots")]
 OUT = Path("api/model_artifacts/shots_nb.joblib")
 H_GRID = [None, 3, 2, 1]
 
@@ -76,11 +80,16 @@ def main():
     ytv = (val["home_cur_sb_shots"].astype(int).values + val["away_cur_sb_shots"].astype(int).values)
     scores = []
     for H in H_GRID:
-        w = decay_w(tri["date"], anchor_tri, H)
+        # Fit orthogonalization regressions on training split tri
+        weights_tri = fit_ortho_regressions(tri)
+        tri_ortho = apply_ortho_residuals(tri, weights_tri)
+        val_ortho = apply_ortho_residuals(val, weights_tri)
+        
+        w = decay_w(tri_ortho["date"], anchor_tri, H)
         m = ShotsNB(feats=FEATS)
-        m.fit(tri[FEATS], tri["home_cur_sb_shots"].astype(int).values,
-              tri["away_cur_sb_shots"].astype(int).values, sample_weight=w)
-        ece = val_ece_total(m, val[FEATS], ytv)
+        m.fit(tri_ortho[FEATS], tri_ortho["home_cur_sb_shots"].astype(int).values,
+              tri_ortho["away_cur_sb_shots"].astype(int).values, sample_weight=w)
+        ece = val_ece_total(m, val_ortho[FEATS], ytv)
         scores.append((H, ece))
         print(f"   {'sem decay' if H is None else f'H={H}':10s} -> val ECE(total) {ece:.2%}")
     # melhor ECE; desempate (dentro de 0,3pp) prefere H MAIOR (menos agressivo/mais robusto)
@@ -91,15 +100,22 @@ def main():
           f"(ECE {dict(scores).get(best_H):.2%}; desempate por robustez = H maior)")
 
     # ---- modelo final na base inteira com H escolhido ----
-    anchor_full = adv["date"].max()
-    w_full = decay_w(adv["date"], anchor_full, best_H)
+    # Fit orthogonalization on the entire production training set (adv)
+    weights_full = fit_ortho_regressions(adv)
+    joblib.dump(weights_full, "api/model_artifacts/style_ortho_weights.joblib")
+    print("Saved style orthogonalization weights to api/model_artifacts/style_ortho_weights.joblib")
+    
+    adv_ortho = apply_ortho_residuals(adv, weights_full)
+    
+    anchor_full = adv_ortho["date"].max()
+    w_full = decay_w(adv_ortho["date"], anchor_full, best_H)
     model = ShotsNB(feats=FEATS)
-    model.fit(adv[FEATS], yh, ya, sample_weight=w_full)
+    model.fit(adv_ortho[FEATS], yh, ya, sample_weight=w_full)
     model.decay_H_ = best_H  # registra o H usado
     print(f"  r_H={model.r_H_:.2f} r_A={model.r_A_:.2f}")
 
     # vies global in-sample (sanidade)
-    d = model.predict_distributions(adv[FEATS])
+    d = model.predict_distributions(adv_ortho[FEATS])
     ks = np.arange(model.max_corners + 1); kt = np.arange(2 * model.max_corners + 1)
     print("\n>> Vies global (in-sample):")
     print(f"  Mandante  real {yh.mean():.2f}  E[PMF] {(d['home']@ks).mean():.2f}")

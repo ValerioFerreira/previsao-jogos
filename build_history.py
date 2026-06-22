@@ -73,6 +73,7 @@ STAT_MAP = {
     "Red Cards":       "sb_red",
     "Fouls":           "sb_fouls",
     "Ball Possession": "sb_possession",
+    "Total passes":    "sb_passes",
 }
 
 def normalize_team(name):

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 train_and_save_apifootball.py
@@ -194,6 +194,23 @@ def main():
     slim_cols = ["date", "home_team", "away_team", "home_score", "away_score"]
     slim_cols_avail = [c for c in slim_cols if c in df.columns]
     df[slim_cols_avail].to_csv(f"{OUT}/results_slim.csv", index=False)
+
+    new_feats = [
+        "has_boxscore_signal",
+        "resid_home_style_crosses_l5", "resid_home_style_crosses_l10",
+        "resid_away_style_crosses_l5", "resid_away_style_crosses_l10",
+        "resid_home_style_ppda_l5", "resid_home_style_ppda_l10",
+        "resid_away_style_ppda_l5", "resid_away_style_ppda_l10",
+        "resid_home_style_fouls_suff_ratio_l5", "resid_home_style_fouls_suff_ratio_l10",
+        "resid_away_style_fouls_suff_ratio_l5", "resid_away_style_fouls_suff_ratio_l10",
+        "diff_resid_style_crosses_l5", "diff_resid_style_crosses_l10",
+        "diff_resid_style_ppda_l5", "diff_resid_style_ppda_l10",
+        "diff_resid_style_fouls_suff_ratio_l5", "diff_resid_style_fouls_suff_ratio_l10",
+        "pred_home_shots", "pred_away_shots"
+    ]
+    for f in new_feats:
+        if f not in full_feats:
+            full_feats.append(f)
 
     meta = {
         "classes":       classes,
