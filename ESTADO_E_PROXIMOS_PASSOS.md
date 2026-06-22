@@ -24,8 +24,13 @@
 >   rende ganho promovível**: os modelos estão no teto in-sample (ECE já 1.78–3.71%);
 >   o caso Curaçao é inflação de Elo não-flagável; xG é muro de dados (258/9.511 jogos).
 >   Commits `a488189`, `5f59209`, xG-audit. Detalhe em `RESUMO_SESSAO_2026-06-21_parte2.md`.
-> - **PRÓXIMO:** não há alavanca in-sample; **deixar o backtest ao vivo acumular** e usá-lo
->   como árbitro empírico de edge real. Eventual retorno ao front/UX é refino, não bloqueio.
+> - **EM ANDAMENTO (2026-06-22): forma recente por jogo (ortogonal ao Elo) ⏳** — a única
+>   hipótese in-sample não-testada (RELATORIO §9). Coleta point-in-time de forma de clube
+>   (rating/minutos/fadiga das últimas partidas) lançada, resumável (~165k req / ~3-4 dias).
+>   Gate só quando a coleta terminar. Ver `player_ranking/FORMA_PERGAME.md`. Prior cético
+>   (agregado-de-temporada foi redundante; cobertura bimodal), mas vale o teste com cota ociosa.
+> - **PRÓXIMO:** **deixar o backtest ao vivo acumular** (árbitro empírico de edge real) e
+>   **concluir a coleta de forma-por-jogo** + rodar seu gate. Sem outra alavanca in-sample.
 >
 > *(Histórico anterior preservado abaixo. Ver `RESUMO_SESSAO_2026-06-21.md` para a sessão
 > do backend; `RESUMO_SESSAO_2026-06-21_parte2.md` para UX + Passo 4 + campanha de modelos.)*
