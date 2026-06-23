@@ -11,7 +11,8 @@ from app.schemas import (
     TeamsResponse,
     SystemStatusResponse,
     RecentMatchesResponse,
-    AnomaliesResponse
+    AnomaliesResponse,
+    TeamHistoryResponse
 )
 from app.services.predictor_service import (
     allowed_origins,
@@ -19,7 +20,8 @@ from app.services.predictor_service import (
     predict_match,
     get_system_status,
     get_recent_matches,
-    get_team_anomalies
+    get_team_anomalies,
+    get_team_history
 )
 
 
@@ -103,8 +105,8 @@ def recent_matches(team_name: str) -> RecentMatchesResponse:
     if not team_match:
         raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
         
-    matches = get_recent_matches(team_match)
-    return RecentMatchesResponse(team=team_match, matches=matches)
+    data = get_recent_matches(team_match)
+    return RecentMatchesResponse(team=team_match, matches=data["matches"], total_matches=data["total_matches"])
 
 
 @app.get("/api/teams/{team_name:path}/anomalies", response_model=AnomaliesResponse)
@@ -121,3 +123,18 @@ def team_anomalies(team_name: str) -> AnomaliesResponse:
         
     anomalies = get_team_anomalies(team_match)
     return AnomaliesResponse(team=team_match, anomalies=anomalies)
+
+
+@app.get("/api/teams/{team_name:path}/history", response_model=TeamHistoryResponse)
+def team_history(team_name: str) -> TeamHistoryResponse:
+    predictor = get_predictor()
+    team_match = None
+    for t in predictor.teams():
+        if t.lower() == team_name.lower():
+            team_match = t
+            break
+    if not team_match:
+        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+        
+    history = get_team_history(team_match)
+    return TeamHistoryResponse(**history)

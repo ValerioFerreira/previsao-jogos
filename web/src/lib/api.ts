@@ -157,6 +157,7 @@ export type RecentMatch = {
 export type RecentMatchesResponse = {
   team: string;
   matches: RecentMatch[];
+  total_matches: number;
 };
 
 export type Anomaly = {
@@ -170,6 +171,25 @@ export type Anomaly = {
 export type AnomaliesResponse = {
   team: string;
   anomalies: Anomaly[];
+};
+
+export type EloHistoryPoint = {
+  date: string;
+  elo: number;
+};
+
+export type FrequencyPoint = {
+  label: string;
+  frequency: number;
+};
+
+export type TeamHistoryResponse = {
+  team: string;
+  elo_history: EloHistoryPoint[];
+  attack_avg: number;
+  defense_avg: number;
+  corners_freq: FrequencyPoint[];
+  cards_freq: FrequencyPoint[];
 };
 
 export const api = {
@@ -186,5 +206,6 @@ export const api = {
   systemStatus: () => request<SystemStatusResponse>("/api/system/status"),
   recentMatches: (name: string) => request<RecentMatchesResponse>(`/api/teams/${encodeURIComponent(name)}/recent`),
   teamAnomalies: (name: string) => request<AnomaliesResponse>(`/api/teams/${encodeURIComponent(name)}/anomalies`),
+  teamHistory: (name: string) => request<TeamHistoryResponse>(`/api/teams/${encodeURIComponent(name)}/history`),
 };
 

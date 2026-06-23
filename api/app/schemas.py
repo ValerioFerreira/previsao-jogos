@@ -56,6 +56,7 @@ class RecentMatch(BaseModel):
 class RecentMatchesResponse(BaseModel):
     team: str
     matches: list[RecentMatch]
+    total_matches: int = 0
 
 
 class Anomaly(BaseModel):
@@ -69,3 +70,22 @@ class Anomaly(BaseModel):
 class AnomaliesResponse(BaseModel):
     team: str
     anomalies: list[Anomaly]
+
+
+class EloHistoryPoint(BaseModel):
+    date: str
+    elo: float
+
+
+class FrequencyPoint(BaseModel):
+    label: str
+    frequency: int
+
+
+class TeamHistoryResponse(BaseModel):
+    team: str
+    elo_history: list[EloHistoryPoint]
+    attack_avg: float
+    defense_avg: float
+    corners_freq: list[FrequencyPoint]
+    cards_freq: list[FrequencyPoint]

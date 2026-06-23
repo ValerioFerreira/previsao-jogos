@@ -96,9 +96,18 @@ class Predictor:
                     else (x.away_score - x.home_score)) > 0)
         d = sum(1 for _, x in m.iterrows() if x.home_score == x.away_score)
         a = n - h - d
+        
+        # BTTS e Average Goals
+        btts_count = sum(1 for _, x in m.iterrows() if x.home_score > 0 and x.away_score > 0)
+        total_goals = sum(x.home_score + x.away_score for _, x in m.iterrows())
+        btts_percentage = (btts_count / n * 100) if n > 0 else 0
+        avg_total_goals = (total_goals / n) if n > 0 else 0
+        
         return {"h2h_played": n, "h2h_home_winrate": wins / n,
                 "h2h_home_gd_mean": gds / n,
                 "days_since_last_h2h": float((self.anchor_date - last).days),
+                "btts_percentage": btts_percentage,
+                "avg_total_goals": avg_total_goals,
                 "_resumo": f"{n} jogos · {home_team} {h}V · {d}E · {away_team} {a}V"}
 
     # ----------------------------------------------------------------- montagem da linha
@@ -235,7 +244,8 @@ class Predictor:
         gols_res = {
             "estimativa": round(expected_goals, 1),
             "intervalo": [round(q10, 1), round(q90, 1)],
-            "confianca": conf_label
+            "confianca": conf_label,
+            "distribuicao": [round(float(x), 6) for x in prob_total_goals]
         }
 
         # 1. Ortogonalizacao de estilo

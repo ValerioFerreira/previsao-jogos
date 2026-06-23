@@ -83,17 +83,18 @@ def get_system_status() -> dict[str, str]:
     return {"last_successful_run": "2026-06-22 00:00:00"}
 
 
-def get_recent_matches(team_name: str) -> list[dict[str, Any]]:
+def get_recent_matches(team_name: str) -> dict[str, Any]:
     """Carrega matches.parquet e extrai as últimas 5 partidas reais da equipe."""
     if not PARQUET_PATH.exists():
-        return []
+        return {"matches": [], "total_matches": 0}
     
     df = pd.read_parquet(PARQUET_PATH)
     
     # Filtrar jogos do time correspondente
     df_team = df[df["team"] == team_name].copy()
-    if len(df_team) == 0:
-        return []
+    total_matches = len(df_team)
+    if total_matches == 0:
+        return {"matches": [], "total_matches": 0}
         
     # Ordenar por data decrescente
     df_team = df_team.sort_values(by="date", ascending=False).reset_index(drop=True)
@@ -115,7 +116,70 @@ def get_recent_matches(team_name: str) -> list[dict[str, Any]]:
             "sb_cards": float(row["sb_cards"]) if pd.notna(row["sb_cards"]) else 0.0
         })
         
-    return matches
+    return {"matches": matches, "total_matches": total_matches}
+
+
+def get_team_history(team_name: str) -> dict[str, Any]:
+    """Extrai histórico do time para os gráficos da página de Estatísticas."""
+    if not PARQUET_PATH.exists():
+        return {"team": team_name, "elo_history": [], "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
+
+    df = pd.read_parquet(PARQUET_PATH)
+    df_team = df[df["team"] == team_name].copy()
+    
+    if df_team.empty:
+        return {"team": team_name, "elo_history": [], "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
+
+    df_team = df_team.sort_values(by="date", ascending=True).reset_index(drop=True)
+    
+    # 1. Histórico de Elo Rating (pegando um ponto por ano para simplificar ou todos)
+    elo_history = []
+    # Pegamos o Elo pre_match
+    # Como pode haver muitos jogos, agrupamos por ano para plotar a evolução temporal anual
+    df_team['year'] = pd.to_datetime(df_team['date']).dt.year
+    elo_yearly = df_team.groupby('year')['pre_match_elo'].last().reset_index()
+    for _, row in elo_yearly.iterrows():
+        if pd.notna(row['pre_match_elo']):
+            elo_history.append({"date": str(row['year']), "elo": float(row['pre_match_elo'])})
+    
+    # Se nao houver elo pre-match disponivel
+    if not elo_history:
+        predictor = get_predictor()
+        current_elo = predictor.team_defaults(team_name).get("elo_rating", 1500)
+        elo_history.append({"date": "Current", "elo": float(current_elo)})
+
+    # 2. Attack vs Defense nas últimas 20 partidas (Ataque = Gols pró, Defesa = Gols sofridos)
+    df_recent_20 = df_team.tail(20)
+    if len(df_recent_20) > 0:
+        attack_avg = df_recent_20["goals_scored"].mean()
+        defense_avg = df_recent_20["goals_conceded"].mean()
+    else:
+        attack_avg = 0.0
+        defense_avg = 0.0
+
+    # 3. Frequência de Escanteios (últimas 20 partidas)
+    corners_freq = []
+    cards_freq = []
+    
+    if len(df_recent_20) > 0:
+        corners_counts = df_recent_20["sb_corners"].value_counts().sort_index()
+        for val, count in corners_counts.items():
+            if pd.notna(val):
+                corners_freq.append({"label": str(int(val)), "frequency": int(count)})
+                
+        cards_counts = df_recent_20["sb_cards"].value_counts().sort_index()
+        for val, count in cards_counts.items():
+            if pd.notna(val):
+                cards_freq.append({"label": str(int(val)), "frequency": int(count)})
+
+    return {
+        "team": team_name,
+        "elo_history": elo_history,
+        "attack_avg": float(attack_avg),
+        "defense_avg": float(defense_avg),
+        "corners_freq": corners_freq,
+        "cards_freq": cards_freq
+    }
 
 
 def get_team_anomalies(team_name: str) -> list[dict[str, Any]]:
