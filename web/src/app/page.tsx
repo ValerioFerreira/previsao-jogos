@@ -99,12 +99,19 @@ export default function Previsoes() {
     if (!canGenerate) return;
     setLoading(true);
     setProjection(null);
+    setH2hBtts(null);
+    setH2hGoals(null);
     
     // Fetch H2H explicitly to get extra metrics if needed, although prediction might not have it.
     api.h2h(homeTeamId, awayTeamId).then(h2h => {
-      setH2hBtts(h2h.metrics.btts_percentage as number);
-      setH2hGoals(h2h.metrics.avg_total_goals as number);
-    }).catch(() => {});
+      const btts = h2h?.metrics?.btts_percentage;
+      const goals = h2h?.metrics?.avg_total_goals;
+      setH2hBtts(typeof btts === 'number' ? btts : null);
+      setH2hGoals(typeof goals === 'number' ? goals : null);
+    }).catch(() => {
+      setH2hBtts(null);
+      setH2hGoals(null);
+    });
 
     api.predict({
       home_team: homeTeamId,
@@ -277,7 +284,7 @@ export default function Previsoes() {
                   <span className="font-semibold text-foreground block mb-1">Resumo do Confronto Direto (H2H):</span>
                   <span className="italic">{projection.confronto_direto}</span>
                 </div>
-                {h2hBtts !== null && h2hGoals !== null && (
+                {typeof h2hBtts === 'number' && typeof h2hGoals === 'number' && (
                   <div className="flex gap-4 sm:border-l border-border/50 sm:pl-4 shrink-0">
                      <div>
                        <span className="block text-[10px] uppercase tracking-wide">Média Gols H2H</span>

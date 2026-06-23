@@ -234,7 +234,7 @@ export default function Estatisticas() {
               </h3>
               <div className="flex flex-wrap items-center gap-4 mb-4">
                 <span className="text-xs text-muted-foreground">
-                  Jogos: <span className="text-foreground font-semibold">{h2h.metrics.total_matches || "N/A"}</span>
+                  Jogos: <span className="text-foreground font-semibold">{h2h.metrics.total_matches || h2h.metrics.h2h_played || "N/A"}</span>
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Média de Gols: <span className="text-foreground font-semibold">
