@@ -83,9 +83,16 @@ class FrequencyPoint(BaseModel):
     frequency: int
 
 
+class GoalTrendPoint(BaseModel):
+    label: str
+    scored: int
+    conceded: int
+
+
 class TeamHistoryResponse(BaseModel):
     team: str
     elo_history: list[EloHistoryPoint]
+    goal_trend: list[GoalTrendPoint] = []
     attack_avg: float
     defense_avg: float
     corners_freq: list[FrequencyPoint]

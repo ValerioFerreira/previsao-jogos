@@ -23,9 +23,11 @@ interface TeamSelectProps {
   onValueChange: (value: string) => void;
   teams: string[];
   placeholder?: string;
+  searchPlaceholder?: string;
+  labelFn?: (s: string) => string;   // rótulo exibido (default: tradução PT-BR)
 }
 
-export function TeamSelect({ value, onValueChange, teams, placeholder = "Selecione..." }: TeamSelectProps) {
+export function TeamSelect({ value, onValueChange, teams, placeholder = "Selecione...", searchPlaceholder = "Buscar...", labelFn = teamPt }: TeamSelectProps) {
   const [open, setOpen] = React.useState(false)
 
   return (
@@ -37,27 +39,27 @@ export function TeamSelect({ value, onValueChange, teams, placeholder = "Selecio
           aria-expanded={open}
           className="w-full justify-between h-10 font-normal"
         >
-          {value ? teamPt(value) : <span className="text-muted-foreground">{placeholder}</span>}
+          {value ? labelFn(value) : <span className="text-muted-foreground">{placeholder}</span>}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Buscar equipe..." className="h-9" />
+          <CommandInput placeholder={searchPlaceholder} className="h-9" />
           <CommandList>
             <CommandEmpty>Nenhuma equipe encontrada.</CommandEmpty>
             <CommandGroup>
               {teams.map((team) => (
                 <CommandItem
                   key={team}
-                  value={`${teamPt(team)} ${team}`}
+                  value={`${labelFn(team)} ${team}`}
                   onSelect={() => {
                     // Usamos `team` (id em inglês) diretamente; o value é composto só p/ busca.
                     onValueChange(team === value ? "" : team)
                     setOpen(false)
                   }}
                 >
-                  {teamPt(team)}
+                  {labelFn(team)}
                   <Check
                     className={cn(
                       "ml-auto h-4 w-4",

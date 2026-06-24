@@ -19,6 +19,59 @@ ARTIFACT_DIR = API_ROOT / "model_artifacts"
 PARQUET_PATH = REPO_ROOT / "data" / "built" / "matches.parquet"
 LAST_UPDATE_PATH = REPO_ROOT / "data" / "state" / "last_update.json"
 LOG_FILE_PATH = REPO_ROOT / "data" / "state" / "predictions_log.jsonl"
+REFEREES_PATH = REPO_ROOT / "data" / "built" / "referees.json"
+TEAM_IDS_PATH = REPO_ROOT / "data" / "built" / "team_ids.json"
+ODDS_REGISTRY_PATH = REPO_ROOT / "data" / "odds" / "registry.json"
+
+
+@lru_cache(maxsize=1)
+def get_referees() -> list[str]:
+    """Lista de árbitros (autocomplete). Offline, extraída dos fixtures brutos."""
+    if REFEREES_PATH.exists():
+        try:
+            return json.loads(REFEREES_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+
+@lru_cache(maxsize=1)
+def get_team_ids() -> dict[str, int]:
+    """Mapa nome_da_seleção -> team_id (para montar URL do logo). Offline."""
+    if TEAM_IDS_PATH.exists():
+        try:
+            return json.loads(TEAM_IDS_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def get_upcoming_fixtures() -> list[dict[str, Any]]:
+    """Partidas futuras a partir do registry do coletor de odds (sem cota nova).
+    Já traz tournament/neutral mapeados para o nosso sistema."""
+    if not ODDS_REGISTRY_PATH.exists():
+        return []
+    try:
+        reg = json.loads(ODDS_REGISTRY_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    out = []
+    for fid, info in reg.items():
+        date = info.get("fixture_date", "")
+        if date and date < now:
+            continue  # já ocorreu
+        out.append({
+            "fixture_id": fid,
+            "home": info.get("home"),
+            "away": info.get("away"),
+            "tournament": info.get("tournament", "Amistoso"),
+            "neutral": bool(info.get("neutral", False)),
+            "date": date,
+            "league_name": info.get("league_name", ""),
+        })
+    out.sort(key=lambda x: x["date"] or "")
+    return out
 
 
 @lru_cache(maxsize=1)
@@ -152,6 +205,16 @@ def get_team_history(team_name: str) -> dict[str, Any]:
         current_elo = predictor.team_defaults(team_name).get("elo_rating", 1500)
         elo_history.append({"date": "Current", "elo": float(current_elo)})
 
+    # 1b. Tendência de gols nas últimas 10 partidas (marcados vs sofridos) — dado real,
+    # substitui a antiga série de Elo (matches.parquet não tem Elo histórico).
+    goal_trend = []
+    for _, row in df_team.tail(10).iterrows():
+        goal_trend.append({
+            "label": pd.to_datetime(row["date"]).strftime("%d/%m/%y"),
+            "scored": int(row["goals_scored"]),
+            "conceded": int(row["goals_conceded"]),
+        })
+
     # 2. Attack vs Defense nas últimas 20 partidas (Ataque = Gols pró, Defesa = Gols sofridos)
     df_recent_20 = df_team.tail(20)
     if len(df_recent_20) > 0:
@@ -179,6 +242,7 @@ def get_team_history(team_name: str) -> dict[str, Any]:
     return {
         "team": team_name,
         "elo_history": elo_history,
+        "goal_trend": goal_trend,
         "attack_avg": float(attack_avg),
         "defense_avg": float(defense_avg),
         "corners_freq": corners_freq,

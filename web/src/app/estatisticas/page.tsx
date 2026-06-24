@@ -8,6 +8,7 @@ import { api, TeamHistoryResponse, H2HResponse } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
+import { teamPt } from '@/lib/teamNames';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -43,6 +44,26 @@ export default function Estatisticas() {
       });
     }
   }, [homeTeamId, awayTeamId, bothSelected]);
+
+  // Tendência de gols marcados nos últimos jogos, alinhada por "jogos atrás" (J-N),
+  // já que cada seleção tem datas próprias. Compara ataque recente das duas.
+  const goalTrendData = useMemo(() => {
+    const h = homeHistory?.goal_trend || [];
+    const a = awayHistory?.goal_trend || [];
+    const n = Math.max(h.length, a.length);
+    if (n === 0) return [];
+    const rows = [];
+    for (let i = 0; i < n; i++) {
+      const hi = h.length - n + i;
+      const ai = a.length - n + i;
+      rows.push({
+        jogo: `J-${n - i}`,
+        [homeTeamId]: hi >= 0 ? h[hi].scored : null,
+        [awayTeamId]: ai >= 0 ? a[ai].scored : null,
+      });
+    }
+    return rows;
+  }, [homeHistory, awayHistory, homeTeamId, awayTeamId]);
 
   const eloHistoryData = useMemo(() => {
     if (!homeHistory?.elo_history || !awayHistory?.elo_history) return [];
@@ -117,27 +138,29 @@ export default function Estatisticas() {
           transition={{ duration: 0.4 }}
           className="space-y-6"
         >
-          {/* Elo Rating History */}
+          {/* Tendência de Gols (últimos jogos) */}
           <div className="bg-card border border-border/50 rounded-xl p-5">
             <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
               <TrendingUp className="w-4 h-4 text-emerald-500" />
-              Evolução do Elo Rating
-              <InfoTooltip text="O Elo Rating é um sistema de classificação que mede a força relativa de cada equipe. Quanto maior o Elo, mais forte a equipe é considerada historicamente." />
+              Tendência de Gols Marcados
+              <InfoTooltip text="Gols marcados por cada seleção nos jogos recentes, alinhados por 'jogos atrás' (J-1 é o mais recente). Compara a fase ofensiva das duas." />
             </h3>
-            <p className="text-xs text-muted-foreground mb-4">Flutuação comparativa do poder histórico ao longo dos anos</p>
+            <p className="text-xs text-muted-foreground mb-4">Gols marcados nos últimos jogos de cada seleção</p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={eloHistoryData}>
+                <LineChart data={goalTrendData} margin={{ top: 5, right: 20, bottom: 24, left: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                  <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                  <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} domain={['auto', 'auto']} />
+                  <XAxis dataKey="jogo" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    label={{ value: 'Jogos atrás (J-1 = mais recente)', position: 'insideBottom', offset: -12, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' } }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    label={{ value: 'Gols marcados', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                   <RTooltip
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
                     labelStyle={{ color: 'hsl(var(--foreground))' }}
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Line type="monotone" dataKey={homeTeamId} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey={awayTeamId} stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey={homeTeamId} name={teamPt(homeTeamId)} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -162,8 +185,8 @@ export default function Estatisticas() {
                     formatter={(value: any, name: any) => [Number(value).toFixed(2), name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Scatter name={homeTeamId} data={[{ attack: homeHistory.attack_avg || 0, defense: homeHistory.defense_avg || 0 }]} fill="#10b981" opacity={0.7} />
-                  <Scatter name={awayTeamId} data={[{ attack: awayHistory.attack_avg || 0, defense: awayHistory.defense_avg || 0 }]} fill="#06b6d4" opacity={0.7} />
+                  <Scatter name={teamPt(homeTeamId)} data={[{ attack: homeHistory.attack_avg || 0, defense: homeHistory.defense_avg || 0 }]} fill="#10b981" opacity={0.7} />
+                  <Scatter name={teamPt(awayTeamId)} data={[{ attack: awayHistory.attack_avg || 0, defense: awayHistory.defense_avg || 0 }]} fill="#06b6d4" opacity={0.7} />
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
@@ -180,18 +203,18 @@ export default function Estatisticas() {
               <p className="text-xs text-muted-foreground mb-4">Últimos 20 jogos</p>
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={(homeHistory.corners_freq || []).map(h => ({
+                  <BarChart margin={{ top: 5, right: 8, bottom: 22, left: 4 }} data={(homeHistory.corners_freq || []).map(h => ({
                     value: h.label,
                     [homeTeamId]: h.frequency,
                     [awayTeamId]: (awayHistory.corners_freq || []).find(a => a.label === h.label)?.frequency || 0,
                   }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                    <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                    <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                    <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Escanteios na partida', position: 'insideBottom', offset: -10, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Nº de jogos', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                     <RTooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
-                    <Bar dataKey={homeTeamId} fill="#10b981" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey={awayTeamId} fill="#06b6d4" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey={homeTeamId} name={teamPt(homeTeamId)} fill="#10b981" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#06b6d4" radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -206,18 +229,18 @@ export default function Estatisticas() {
               <p className="text-xs text-muted-foreground mb-4">Últimos 20 jogos</p>
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={(homeHistory.cards_freq || []).map(h => ({
+                  <BarChart margin={{ top: 5, right: 8, bottom: 22, left: 4 }} data={(homeHistory.cards_freq || []).map(h => ({
                     value: h.label,
                     [homeTeamId]: h.frequency,
                     [awayTeamId]: (awayHistory.cards_freq || []).find(a => a.label === h.label)?.frequency || 0,
                   }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                    <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                    <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                    <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Cartões na partida', position: 'insideBottom', offset: -10, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Nº de jogos', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                     <RTooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
-                    <Bar dataKey={homeTeamId} fill="#f59e0b" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey={awayTeamId} fill="#ef4444" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey={homeTeamId} name={teamPt(homeTeamId)} fill="#f59e0b" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#ef4444" radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

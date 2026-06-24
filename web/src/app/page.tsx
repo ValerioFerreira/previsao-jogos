@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { api, PredictionResponse, RecentMatch, Anomaly } from '@/lib/api';
+import { api, PredictionResponse, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
@@ -123,6 +123,29 @@ export default function Previsoes() {
   const [h2hBtts, setH2hBtts] = useState<number | null>(null);
   const [h2hGoals, setH2hGoals] = useState<number | null>(null);
 
+  // Modo de análise: partida futura (pré-preenche de um jogo agendado) ou independente.
+  const [mode, setMode] = useState<'independente' | 'futura'>('independente');
+  const [referee, setReferee] = useState('');
+  const [referees, setReferees] = useState<string[]>([]);
+  const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
+  const [teamIds, setTeamIds] = useState<Record<string, number>>({});
+
+  React.useEffect(() => {
+    api.referees().then(r => setReferees(r.referees)).catch(() => {});
+    api.upcomingFixtures().then(r => setUpcoming(r.fixtures)).catch(() => {});
+    api.teamIds().then(setTeamIds).catch(() => {});
+  }, []);
+
+  const selectFutureFixture = (fid: string) => {
+    const fx = upcoming.find(f => f.fixture_id === fid);
+    if (!fx) return;
+    setHomeTeamId(fx.home);
+    setAwayTeamId(fx.away);
+    setCompetition(fx.tournament);
+    setNeutralField(fx.neutral);
+    setProjection(null);
+  };
+
   React.useEffect(() => {
     api.teams().then(res => {
       setTeams(res.teams);
@@ -191,6 +214,39 @@ export default function Previsoes() {
           <TrendingUp className="w-5 h-5 text-emerald-500" /> Configuração do Confronto
         </h2>
 
+        {/* Modo de análise: partida futura agendada x análise independente */}
+        <div className="inline-flex p-1 mb-4 rounded-lg bg-muted text-xs font-medium">
+          <button
+            onClick={() => setMode('futura')}
+            className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'futura' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >Selecionar Partida Futura</button>
+          <button
+            onClick={() => setMode('independente')}
+            className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'independente' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >Análise Independente</button>
+        </div>
+
+        {mode === 'futura' && (
+          <div className="mb-4">
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Partida Agendada</Label>
+            {upcoming.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Nenhuma partida futura disponível no momento.</p>
+            ) : (
+              <Select onValueChange={selectFutureFixture}>
+                <SelectTrigger className="h-10 max-w-xl"><SelectValue placeholder="Escolha um jogo agendado..." /></SelectTrigger>
+                <SelectContent>
+                  {upcoming.map(fx => (
+                    <SelectItem key={fx.fixture_id} value={fx.fixture_id}>
+                      {formatDateBR(fx.date)} · {teamPt(fx.home)} x {teamPt(fx.away)} · {fx.league_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <p className="text-[11px] text-muted-foreground mt-1.5">Selecionar um jogo pré-preenche as equipes, competição e mando abaixo.</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
@@ -224,6 +280,20 @@ export default function Previsoes() {
               <Label htmlFor="neutral" className="text-sm cursor-pointer">Campo Neutro</Label>
               <InfoTooltip text="Remove a vantagem de mando de campo do modelo preditivo." />
             </div>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1">
+              Árbitro (opcional)
+              <InfoTooltip text="Você pode informar o árbitro da partida. No momento não influencia os cálculos; ficará disponível para análises futuras." />
+            </Label>
+            <TeamSelect
+              value={referee}
+              onValueChange={setReferee}
+              teams={referees}
+              labelFn={(s) => s}
+              placeholder="Buscar árbitro..."
+            />
           </div>
         </div>
       </motion.div>
@@ -297,6 +367,9 @@ export default function Previsoes() {
               <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">PROBABILIDADES DE RESULTADOS</p>
               <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mb-4">
                 <div className="text-center w-full sm:w-1/4">
+                  {teamLogoUrl(teamIds[homeTeamId]) && (
+                    <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" />
+                  )}
                   <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
                   <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
                   <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[homeTeamId])}</p>
@@ -307,12 +380,37 @@ export default function Previsoes() {
                   <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades["Empate"])}</p>
                 </div>
                 <div className="text-center w-full sm:w-1/4">
+                  {teamLogoUrl(teamIds[awayTeamId]) && (
+                    <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" />
+                  )}
                   <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
                   <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>
                   <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[awayTeamId])}</p>
                 </div>
               </div>
             </div>
+
+            {/* Ambas Marcam (BTTS) — logo abaixo das probabilidades de resultado */}
+            {projection.ambas_marcam && (
+              <div className="bg-card border border-border/50 rounded-xl p-5">
+                <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                  Ambas Marcam (BTTS)
+                  <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
+                </h4>
+                <div className="flex flex-wrap items-center justify-around gap-4 text-center">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
+                    <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
+                    <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* H2H — só quando há histórico de confronto direto */}
             {projection.confronto_direto && !projection.confronto_direto.includes('Sem confrontos') && (
@@ -353,28 +451,6 @@ export default function Previsoes() {
                     <MarketCard title="Gols" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={goalPeriods(projection, homeTeamId)} />
                     <MarketCard title="Gols" subtitle="Totais (Partida)" periods={goalPeriods(projection, 'total')} />
                     <MarketCard title="Gols" subtitle={`Visitante (${teamPt(awayTeamId)})`} periods={goalPeriods(projection, awayTeamId)} />
-                  </div>
-                </div>
-              )}
-
-              {/* Ambas Marcam (BTTS) */}
-              {projection.ambas_marcam && (
-                <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
-                    Ambas Marcam (BTTS)
-                    <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
-                  </h4>
-                  <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-wrap items-center justify-around gap-4 text-center">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
-                      <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
-                      <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
-                    </div>
                   </div>
                 </div>
               )}

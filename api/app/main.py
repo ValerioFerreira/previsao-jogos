@@ -21,7 +21,10 @@ from app.services.predictor_service import (
     get_system_status,
     get_recent_matches,
     get_team_anomalies,
-    get_team_history
+    get_team_history,
+    get_referees,
+    get_team_ids,
+    get_upcoming_fixtures,
 )
 
 
@@ -85,6 +88,21 @@ def predict(payload: PredictRequest) -> dict:
     if payload.tournament not in predictor.meta["tournament_weights"]:
         raise HTTPException(status_code=400, detail="Competicao invalida.")
     return predict_match(payload)
+
+
+@app.get("/api/referees")
+def referees() -> dict:
+    return {"referees": get_referees()}
+
+
+@app.get("/api/team-ids")
+def team_ids() -> dict:
+    return get_team_ids()
+
+
+@app.get("/api/fixtures/upcoming")
+def upcoming_fixtures() -> dict:
+    return {"fixtures": get_upcoming_fixtures()}
 
 
 @app.get("/api/system/status", response_model=SystemStatusResponse)

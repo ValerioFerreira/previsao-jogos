@@ -200,9 +200,16 @@ export type FrequencyPoint = {
   frequency: number;
 };
 
+export type GoalTrendPoint = {
+  label: string;
+  scored: number;
+  conceded: number;
+};
+
 export type TeamHistoryResponse = {
   team: string;
   elo_history: EloHistoryPoint[];
+  goal_trend?: GoalTrendPoint[];
   attack_avg: number;
   defense_avg: number;
   corners_freq: FrequencyPoint[];
@@ -224,5 +231,23 @@ export const api = {
   recentMatches: (name: string) => request<RecentMatchesResponse>(`/api/teams/${encodeURIComponent(name)}/recent`),
   teamAnomalies: (name: string) => request<AnomaliesResponse>(`/api/teams/${encodeURIComponent(name)}/anomalies`),
   teamHistory: (name: string) => request<TeamHistoryResponse>(`/api/teams/${encodeURIComponent(name)}/history`),
+  referees: () => request<{ referees: string[] }>("/api/referees"),
+  teamIds: () => request<Record<string, number>>("/api/team-ids"),
+  upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),
 };
+
+export type UpcomingFixture = {
+  fixture_id: string;
+  home: string;
+  away: string;
+  tournament: string;
+  neutral: boolean;
+  date: string;
+  league_name: string;
+};
+
+// URL do logo da seleção (api-football media; não conta cota).
+export function teamLogoUrl(teamId?: number): string | null {
+  return teamId ? `https://media.api-sports.io/football/teams/${teamId}.png` : null;
+}
 
