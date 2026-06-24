@@ -47,15 +47,17 @@ export type PredictionResponse = {
     probabilidades: Record<string, number>;
   };
   gols: NumericPrediction;
+  // Gols por equipe (mandante/visitante) — marginais da conjunta do Dixon-Coles.
+  gols_equipe?: Record<string, CountPrediction>;
   chutes: CountPrediction;
   // Chutes divididos por equipe (mandante/visitante) e chutes a gol (mand/vis/total).
   chutes_equipe?: Record<string, CountPrediction>;
   chutes_a_gol?: Record<string, CountPrediction>;
   escanteios: Record<string, CountPrediction>;
   cartoes: Record<string, CountPrediction>;
-  // Mercados por tempo (1º/2º) — populado quando o backend dos tempos estiver pronto.
-  // Chaves esperadas: gols_1t, gols_2t, cartoes_1t, cartoes_2t.
-  tempos?: Record<string, CountPrediction>;
+  // Mercados por tempo (1º/2º): cada chave (gols_1t, gols_2t, cartoes_1t, cartoes_2t)
+  // é um mapa {mandante, visitante, total} -> CountPrediction.
+  tempos?: Record<string, Record<string, CountPrediction>>;
   // Tier de confiabilidade do jogo pela cobertura de dados refinados (box-score).
   confiabilidade?: {
     tier: string;                 // "Alta" | "Média" | "Baixa"
@@ -159,6 +161,7 @@ export type SystemStatusResponse = {
 export type RecentMatch = {
   date: string;
   opponent: string;
+  competition?: string;
   is_home: boolean;
   goals_scored: number;
   goals_conceded: number;

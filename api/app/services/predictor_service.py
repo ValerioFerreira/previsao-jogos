@@ -107,6 +107,7 @@ def get_recent_matches(team_name: str) -> dict[str, Any]:
         matches.append({
             "date": str(row["date"]),
             "opponent": str(row["opponent"]),
+            "competition": str(row["competition"]) if pd.notna(row.get("competition")) else "",
             "is_home": bool(row["is_home"] == 1),
             "goals_scored": int(row["goals_scored"]),
             "goals_conceded": int(row["goals_conceded"]),
@@ -137,10 +138,13 @@ def get_team_history(team_name: str) -> dict[str, Any]:
     # Pegamos o Elo pre_match
     # Como pode haver muitos jogos, agrupamos por ano para plotar a evolução temporal anual
     df_team['year'] = pd.to_datetime(df_team['date']).dt.year
-    elo_yearly = df_team.groupby('year')['pre_match_elo'].last().reset_index()
-    for _, row in elo_yearly.iterrows():
-        if pd.notna(row['pre_match_elo']):
-            elo_history.append({"date": str(row['year']), "elo": float(row['pre_match_elo'])})
+    # matches.parquet pode não ter Elo pré-jogo; só monta a série se a coluna existir.
+    elo_col = next((c for c in ("pre_match_elo", "elo_pre", "elo_rating") if c in df_team.columns), None)
+    if elo_col:
+        elo_yearly = df_team.groupby('year')[elo_col].last().reset_index()
+        for _, row in elo_yearly.iterrows():
+            if pd.notna(row[elo_col]):
+                elo_history.append({"date": str(row['year']), "elo": float(row[elo_col])})
     
     # Se nao houver elo pre-match disponivel
     if not elo_history:

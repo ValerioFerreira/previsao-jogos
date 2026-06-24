@@ -44,6 +44,7 @@ class SystemStatusResponse(BaseModel):
 class RecentMatch(BaseModel):
     date: str
     opponent: str
+    competition: str = ""
     is_home: bool
     goals_scored: int
     goals_conceded: int

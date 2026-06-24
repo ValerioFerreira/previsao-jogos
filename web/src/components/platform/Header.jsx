@@ -31,11 +31,9 @@ export default function Header() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
               <Activity className="w-5 h-5 text-white" />
             </div>
-            <span className="font-heading font-bold text-sm sm:text-base tracking-tight hidden sm:block">
-              Honestidade Probabilística
-            </span>
-            <span className="font-heading font-bold text-sm tracking-tight sm:hidden">
-              HP
+            <span className="font-heading font-bold text-base sm:text-lg tracking-tight flex items-center gap-0.5">
+              Apost
+              <span className="font-mono font-extrabold bg-gradient-to-br from-emerald-500 to-cyan-500 text-white px-1.5 py-0.5 rounded-md leading-none">AI</span>
             </span>
           </Link>
 

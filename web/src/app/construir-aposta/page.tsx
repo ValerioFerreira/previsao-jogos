@@ -424,10 +424,13 @@ function ParlayBuilder({ prediction, homeTeam, awayTeam }: { prediction: Predict
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-5">
         {parlayOptions.map(option => (
-          <button
+          <div
             key={option.id}
+            role="button"
+            tabIndex={0}
             onClick={() => toggleSelection(option.id)}
-            className={`flex items-center gap-2 p-3 rounded-lg border text-left text-xs transition-all ${
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSelection(option.id); } }}
+            className={`flex items-center gap-2 p-3 rounded-lg border text-left text-xs transition-all cursor-pointer ${
               selections.includes(option.id)
                 ? 'bg-purple-500/10 border-purple-500/30 text-foreground'
                 : 'bg-muted/30 border-border/30 text-muted-foreground hover:border-border'
@@ -442,7 +445,7 @@ function ParlayBuilder({ prediction, homeTeam, awayTeam }: { prediction: Predict
               <p className="font-medium truncate">{option.label}</p>
               <p className="text-[10px] opacity-60 font-mono">{(option.prob * 100).toFixed(1)}%</p>
             </div>
-          </button>
+          </div>
         ))}
       </div>
 

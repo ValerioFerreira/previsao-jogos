@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -10,14 +11,37 @@ import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
 import { MarketCard } from '@/components/platform/MarketCard';
+import { teamPt } from '@/lib/teamNames';
 
-// Labels amigáveis para os mercados por tempo (renderizados quando o backend enviar `tempos`).
-const TEMPO_LABELS: Record<string, string> = {
-  gols_1t: 'Gols — 1º Tempo',
-  gols_2t: 'Gols — 2º Tempo',
-  cartoes_1t: 'Cartões — 1º Tempo',
-  cartoes_2t: 'Cartões — 2º Tempo',
-};
+// Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
+function formatDateBR(s: string): string {
+  const d = (s || '').slice(0, 10).split('-');
+  return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : s;
+}
+
+// Faixa de odd justa (margem de 7% para menos até 1/prob) a partir de uma prob em %.
+function oddRangeStr(probPct: number): string {
+  if (!probPct || probPct <= 0) return '—';
+  const odd = 100 / probPct;
+  if (odd > 50) return '50+';
+  return `${(odd * 0.93).toFixed(2)}–${odd.toFixed(2)}`;
+}
+
+// Recortes por tempo para gols e cartões (Partida inteira / 1º / 2º), por lado.
+function goalPeriods(p: PredictionResponse, side: string) {
+  return {
+    'Partida inteira': side === 'total' ? (p.gols as any) : p.gols_equipe?.[side],
+    '1º tempo': p.tempos?.gols_1t?.[side],
+    '2º tempo': p.tempos?.gols_2t?.[side],
+  };
+}
+function cardPeriods(p: PredictionResponse, side: string) {
+  return {
+    'Partida inteira': p.cartoes?.[side],
+    '1º tempo': p.tempos?.cartoes_1t?.[side],
+    '2º tempo': p.tempos?.cartoes_2t?.[side],
+  };
+}
 
 // Badge de confiabilidade do JOGO pela cobertura de dados refinados (box-score).
 function MatchReliabilityBadge({ confiabilidade }: { confiabilidade: PredictionResponse['confiabilidade'] }) {
@@ -46,22 +70,29 @@ function DataReliabilityBadge({ totalMatches }: { totalMatches: number }) {
   );
 }
 
-function RecentMatchCard({ match }: { match: RecentMatch }) {
+function RecentMatchCard({ match, onOpen }: { match: RecentMatch; onOpen?: () => void }) {
   const diff = match.goals_scored - match.goals_conceded;
   const result = diff > 0 ? 'V' : diff < 0 ? 'D' : 'E';
   const color = result === 'V' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' : result === 'D' ? 'bg-red-500/20 text-red-500 border-red-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30';
-  
+
   return (
-    <div className="flex flex-col p-2 bg-muted/40 border border-border/50 rounded-lg text-xs min-w-[140px] shrink-0">
+    <button
+      onClick={onOpen}
+      className="flex flex-col p-2 bg-muted/40 border border-border/50 rounded-lg text-xs min-w-[150px] shrink-0 text-left hover:border-cyan-500/40 hover:bg-muted/70 transition-colors cursor-pointer"
+      title="Ver estatísticas deste jogo"
+    >
       <div className="flex justify-between items-center mb-1 border-b border-border/30 pb-1">
-        <span className="text-[10px] text-muted-foreground">{match.date.split(' ')[0]}</span>
+        <span className="text-[10px] text-muted-foreground">{formatDateBR(match.date)}</span>
         <div className={`flex items-center justify-center w-5 h-5 rounded-[4px] border font-bold ${color}`}>
           {result}
         </div>
       </div>
-      <p className="font-semibold truncate max-w-[120px]" title={match.opponent}>
-        {match.is_home ? 'C' : 'F'} vs {match.opponent}
+      <p className="font-semibold truncate max-w-[130px]" title={teamPt(match.opponent)}>
+        {match.is_home ? 'Mandante' : 'Fora'} vs {teamPt(match.opponent)}
       </p>
+      {match.competition && (
+        <p className="text-[10px] text-muted-foreground truncate max-w-[130px]" title={match.competition}>{match.competition}</p>
+      )}
       <p className="text-[11px] font-mono mt-1 text-muted-foreground">
         Placar: <span className="text-foreground">{match.is_home ? `${match.goals_scored}-${match.goals_conceded}` : `${match.goals_conceded}-${match.goals_scored}`}</span>
       </p>
@@ -70,7 +101,7 @@ function RecentMatchCard({ match }: { match: RecentMatch }) {
         <span title="Escanteios">🚩 {match.sb_corners || 0}</span>
         <span title="Cartões">🟨 {match.sb_cards || 0}</span>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -78,6 +109,7 @@ export default function Previsoes() {
   const [teams, setTeams] = React.useState<string[]>([]);
   const [tournaments, setTournaments] = React.useState<string[]>([]);
   
+  const router = useRouter();
   const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, setCompetition, neutralField, setNeutralField } = usePrediction();
   
   const [loading, setLoading] = useState(false);
@@ -205,14 +237,14 @@ export default function Previsoes() {
             ].map(({ teamId, form, anomalies, label }) => teamId && (
               <div key={teamId} className="bg-card border border-border/50 rounded-xl p-5 overflow-hidden">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold"><span className="text-muted-foreground">{label}: </span>{teamId}</h3>
+                  <h3 className="text-sm font-semibold"><span className="text-muted-foreground">{label}: </span>{teamPt(teamId)}</h3>
                 </div>
                 <DataReliabilityBadge totalMatches={form.total} />
 
                 <div className="mt-4 mb-4">
-                  <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">Forma Recente (5 jogos)</p>
+                  <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">Resultados dos últimos 5 jogos</p>
                   <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                    {form.matches.map((m, i) => <RecentMatchCard key={i} match={m} />)}
+                    {form.matches.map((m, i) => <RecentMatchCard key={i} match={m} onOpen={() => router.push('/estatisticas')} />)}
                   </div>
                 </div>
 
@@ -260,111 +292,123 @@ export default function Previsoes() {
               </div>
             )}
 
-            {/* Vitória Matrix */}
+            {/* Probabilidades de Resultados */}
             <div className="bg-card border border-border/50 rounded-xl p-6 text-center shadow-sm">
-              <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">Probabilidades de Vitória (Dixon-Coles)</p>
+              <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">PROBABILIDADES DE RESULTADOS</p>
               <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mb-4">
                 <div className="text-center w-full sm:w-1/4">
-                  <p className="text-sm font-medium text-foreground mb-1 truncate">{homeTeamId}</p>
+                  <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
                   <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Odd Justa: {(100 / projection.vencedor.probabilidades[homeTeamId]).toFixed(2)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[homeTeamId])}</p>
                 </div>
                 <div className="text-center w-full sm:w-1/4 border-y sm:border-y-0 sm:border-x border-border/50 py-4 sm:py-0">
                   <p className="text-sm font-medium text-muted-foreground mb-1">Empate</p>
                   <p className="text-2xl font-bold font-mono text-muted-foreground">{projection.vencedor.probabilidades["Empate"]}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Odd Justa: {(100 / projection.vencedor.probabilidades["Empate"]).toFixed(2)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades["Empate"])}</p>
                 </div>
                 <div className="text-center w-full sm:w-1/4">
-                  <p className="text-sm font-medium text-foreground mb-1 truncate">{awayTeamId}</p>
+                  <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
                   <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Odd Justa: {(100 / projection.vencedor.probabilidades[awayTeamId]).toFixed(2)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[awayTeamId])}</p>
                 </div>
               </div>
             </div>
 
-            {/* Core General Markets (Gols Totais & BTTS) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-               {/* Gols */}
-               <div className="bg-card border border-border/50 rounded-xl p-5 flex justify-between items-center">
-                 <div>
-                   <h3 className="font-semibold text-sm">Gols Totais</h3>
-                   <p className="text-[10px] text-muted-foreground mt-1">Over 2.5: <span className="font-mono text-foreground font-semibold">{projection.over_2_5.prob_sim}%</span> (Justa: {(100 / projection.over_2_5.prob_sim).toFixed(2)})</p>
-                 </div>
-                 <div className="text-right">
-                   <p className="text-3xl font-mono font-bold">{projection.gols.estimativa.toFixed(2)}</p>
-                   <p className="text-[10px] text-muted-foreground mt-1">Projeção Média</p>
-                 </div>
-               </div>
-               
-               {/* BTTS */}
-               <div className="bg-card border border-border/50 rounded-xl p-5 flex justify-between items-center">
-                 <div>
-                   <h3 className="font-semibold text-sm">Ambas Marcam (BTTS)</h3>
-                   <p className="text-[10px] text-muted-foreground mt-1">Odd Justa: <span className="font-mono text-foreground font-semibold">{(100 / projection.ambas_marcam.prob_sim).toFixed(2)}</span></p>
-                 </div>
-                 <div className="text-right">
-                   <p className="text-3xl font-mono font-bold text-amber-400">{projection.ambas_marcam.prob_sim}%</p>
-                   <p className="text-[10px] text-muted-foreground mt-1">Probabilidade</p>
-                 </div>
-               </div>
-            </div>
-
-            {/* H2H Panel Enrichment */}
-            <div className="bg-card border border-border/50 rounded-xl p-4 text-sm text-muted-foreground shadow-sm">
-              <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-                <div>
-                  <span className="font-semibold text-foreground block mb-1">Resumo do Confronto Direto (H2H):</span>
-                  <span className="italic">{projection.confronto_direto}</span>
-                </div>
-                {typeof h2hBtts === 'number' && typeof h2hGoals === 'number' && (
-                  <div className="flex gap-4 sm:border-l border-border/50 sm:pl-4 shrink-0">
-                     <div>
-                       <span className="block text-[10px] uppercase tracking-wide">Média Gols H2H</span>
-                       <span className="font-mono font-bold text-foreground">{h2hGoals.toFixed(2)}</span>
-                     </div>
-                     <div>
-                       <span className="block text-[10px] uppercase tracking-wide">Ambas Marcam H2H</span>
-                       <span className="font-mono font-bold text-foreground">{h2hBtts.toFixed(1)}%</span>
-                     </div>
+            {/* H2H — só quando há histórico de confronto direto */}
+            {projection.confronto_direto && !projection.confronto_direto.includes('Sem confrontos') && (
+              <div className="bg-card border border-border/50 rounded-xl p-4 text-sm text-muted-foreground shadow-sm">
+                <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-foreground block mb-1">Resumo do Confronto Direto (H2H):</span>
+                    <span className="italic">{projection.confronto_direto}</span>
                   </div>
-                )}
+                  {typeof h2hBtts === 'number' && typeof h2hGoals === 'number' && (
+                    <div className="flex gap-4 sm:border-l border-border/50 sm:pl-4 shrink-0">
+                       <div>
+                         <span className="block text-[10px] uppercase tracking-wide">Média Gols H2H</span>
+                         <span className="font-mono font-bold text-foreground">{h2hGoals.toFixed(2)}</span>
+                       </div>
+                       <div>
+                         <span className="block text-[10px] uppercase tracking-wide">Ambas Marcam H2H</span>
+                         <span className="font-mono font-bold text-foreground">{h2hBtts.toFixed(1)}%</span>
+                       </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Fractional Market Grids */}
-            <h3 className="text-lg font-heading font-bold mt-8 mb-4 border-b border-border/50 pb-2">Mercados Fracionados (CDF)</h3>
-            
+            {/* MERCADOS */}
+            <h3 className="text-lg font-heading font-bold mt-8 mb-4 border-b border-border/50 pb-2">MERCADOS</h3>
+
             <div className="space-y-8">
-              {/* Shots (Chutes) */}
+              {/* Gols (mandante/total/visitante, com seletor de tempo) */}
+              {projection.gols && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    Gols
+                    <InfoTooltip text="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." />
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <MarketCard title="Gols" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={goalPeriods(projection, homeTeamId)} />
+                    <MarketCard title="Gols" subtitle="Totais (Partida)" periods={goalPeriods(projection, 'total')} />
+                    <MarketCard title="Gols" subtitle={`Visitante (${teamPt(awayTeamId)})`} periods={goalPeriods(projection, awayTeamId)} />
+                  </div>
+                </div>
+              )}
+
+              {/* Ambas Marcam (BTTS) */}
+              {projection.ambas_marcam && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    Ambas Marcam (BTTS)
+                    <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
+                  </h4>
+                  <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-wrap items-center justify-around gap-4 text-center">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
+                      <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
+                      <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Finalizações */}
               {projection.chutes && (
                 <div>
                   <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
                     Finalizações
-                    <InfoTooltip text="Linhas exatas calculadas para o mercado de finalizações da partida (totais e por equipe)." />
+                    <InfoTooltip text="Conta qualquer tentativa de marcar gol, independentemente da direção. Inclui chutes no alvo, para fora, na trave e também os bloqueados pela defesa adversária." />
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {projection.chutes_equipe && projection.chutes_equipe[homeTeamId] && (
-                      <MarketCard title="Finalizações" subtitle={`Mandante (${homeTeamId})`} prediction={projection.chutes_equipe[homeTeamId]} />
+                      <MarketCard title="Finalizações" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.chutes_equipe[homeTeamId]} />
                     )}
                     <MarketCard title="Finalizações" subtitle="Totais (Partida)" prediction={projection.chutes as any} />
                     {projection.chutes_equipe && projection.chutes_equipe[awayTeamId] && (
-                      <MarketCard title="Finalizações" subtitle={`Visitante (${awayTeamId})`} prediction={projection.chutes_equipe[awayTeamId]} />
+                      <MarketCard title="Finalizações" subtitle={`Visitante (${teamPt(awayTeamId)})`} prediction={projection.chutes_equipe[awayTeamId]} />
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Chutes a gol (Shots on target) */}
+              {/* Chutes a Gol */}
               {projection.chutes_a_gol && projection.chutes_a_gol.total && (
                 <div>
                   <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
                     Chutes a Gol
-                    <InfoTooltip text="Finalizações no alvo (shots on target), totais e por equipe." />
+                    <InfoTooltip text="Considera apenas os chutes que vão na direção exata da baliza e que seriam gol se não houvesse intervenção do goleiro. Chutes na trave, para fora ou bloqueados não contam." />
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <MarketCard title="Chutes a Gol" subtitle={`Mandante (${homeTeamId})`} prediction={projection.chutes_a_gol[homeTeamId]} />
+                    <MarketCard title="Chutes a Gol" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.chutes_a_gol[homeTeamId]} />
                     <MarketCard title="Chutes a Gol" subtitle="Totais (Partida)" prediction={projection.chutes_a_gol.total} />
-                    <MarketCard title="Chutes a Gol" subtitle={`Visitante (${awayTeamId})`} prediction={projection.chutes_a_gol[awayTeamId]} />
+                    <MarketCard title="Chutes a Gol" subtitle={`Visitante (${teamPt(awayTeamId)})`} prediction={projection.chutes_a_gol[awayTeamId]} />
                   </div>
                 </div>
               )}
@@ -372,38 +416,29 @@ export default function Previsoes() {
               {/* Escanteios */}
               {projection.escanteios && projection.escanteios.total && (
                 <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3">Escanteios</h4>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    Escanteios
+                    <InfoTooltip text="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." />
+                  </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <MarketCard title="Escanteios" subtitle={`Mandante (${homeTeamId})`} prediction={projection.escanteios[homeTeamId]} />
+                    <MarketCard title="Escanteios" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.escanteios[homeTeamId]} />
                     <MarketCard title="Escanteios" subtitle="Totais (Partida)" prediction={projection.escanteios.total} />
-                    <MarketCard title="Escanteios" subtitle={`Visitante (${awayTeamId})`} prediction={projection.escanteios[awayTeamId]} />
+                    <MarketCard title="Escanteios" subtitle={`Visitante (${teamPt(awayTeamId)})`} prediction={projection.escanteios[awayTeamId]} />
                   </div>
                 </div>
               )}
 
-              {/* Cartões */}
+              {/* Cartões (com seletor de tempo) */}
               {projection.cartoes && projection.cartoes.total && (
                 <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3">Cartões</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <MarketCard title="Cartões" subtitle={`Mandante (${homeTeamId})`} prediction={projection.cartoes[homeTeamId]} />
-                    <MarketCard title="Cartões" subtitle="Totais (Partida)" prediction={projection.cartoes.total} />
-                    <MarketCard title="Cartões" subtitle={`Visitante (${awayTeamId})`} prediction={projection.cartoes[awayTeamId]} />
-                  </div>
-                </div>
-              )}
-
-              {/* Mercados por Tempo (1º / 2º) — renderiza automaticamente quando o backend enviar `tempos` */}
-              {projection.tempos && Object.keys(projection.tempos).length > 0 && (
-                <div>
                   <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
-                    Mercados por Tempo (1º / 2º)
-                    <InfoTooltip text="Linhas de gols e cartões por tempo de jogo." />
+                    Cartões
+                    <InfoTooltip text="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." />
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(projection.tempos).map(([key, pred]) => (
-                      <MarketCard key={key} title={TEMPO_LABELS[key] ?? key} prediction={pred} />
-                    ))}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <MarketCard title="Cartões" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={cardPeriods(projection, homeTeamId)} />
+                    <MarketCard title="Cartões" subtitle="Totais (Partida)" periods={cardPeriods(projection, 'total')} />
+                    <MarketCard title="Cartões" subtitle={`Visitante (${teamPt(awayTeamId)})`} periods={cardPeriods(projection, awayTeamId)} />
                   </div>
                 </div>
               )}

@@ -16,6 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { teamPt } from "@/lib/teamNames"
 
 interface TeamSelectProps {
   value: string;
@@ -36,7 +37,7 @@ export function TeamSelect({ value, onValueChange, teams, placeholder = "Selecio
           aria-expanded={open}
           className="w-full justify-between h-10 font-normal"
         >
-          {value ? value : <span className="text-muted-foreground">{placeholder}</span>}
+          {value ? teamPt(value) : <span className="text-muted-foreground">{placeholder}</span>}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -49,15 +50,14 @@ export function TeamSelect({ value, onValueChange, teams, placeholder = "Selecio
               {teams.map((team) => (
                 <CommandItem
                   key={team}
-                  value={team}
-                  onSelect={(currentValue) => {
-                    // Shadcn Command lowercases the value on select sometimes, so we find the real team name.
-                    // We use `team` directly since we bind it correctly.
+                  value={`${teamPt(team)} ${team}`}
+                  onSelect={() => {
+                    // Usamos `team` (id em inglês) diretamente; o value é composto só p/ busca.
                     onValueChange(team === value ? "" : team)
                     setOpen(false)
                   }}
                 >
-                  {team}
+                  {teamPt(team)}
                   <Check
                     className={cn(
                       "ml-auto h-4 w-4",

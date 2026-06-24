@@ -49,6 +49,7 @@ SOT_LINES = [5.5, 6.5, 7.5, 8.5, 9.5, 10.5]       # chutes a gol (total)
 SOT_TEAM_LINES = [2.5, 3.5, 4.5, 5.5, 6.5]        # chutes a gol por equipe
 GOALS_HALF_LINES = [0.5, 1.5, 2.5, 3.5]           # gols por tempo (total)
 CARDS_HALF_LINES = [1.5, 2.5, 3.5, 4.5]           # cartões por tempo (total)
+GOALS_LINES = [0.5, 1.5, 2.5, 3.5, 4.5]           # gols (equipe/total, partida)
 
 
 def _clamp_p(p):
@@ -190,14 +191,21 @@ class Predictor:
         ch, ca = self._coverage(snap_h), self._coverage(snap_a)
         score = min(ch, ca)
         tier = "Alta" if score >= 0.7 else ("Média" if score >= 0.3 else "Baixa")
+        explica = {
+            "Alta": "Temos bastante histórico detalhado das duas seleções, então a previsão "
+                    "usa todas as informações de jogo (chutes, posse, estilo). É a nossa melhor estimativa.",
+            "Média": "Temos histórico detalhado de uma das seleções, mas pouco da outra. A "
+                     "previsão ainda é boa, mas com mais incerteza do que o normal.",
+            "Baixa": "Uma das seleções tem pouco histórico detalhado disponível. A previsão se "
+                     "apoia principalmente na força geral (ranking) e nos resultados recentes — "
+                     "leia com cautela.",
+        }[tier]
         return {
             "tier": tier,
             "score": round(score, 2),
             "cobertura_mandante": round(ch, 2),
             "cobertura_visitante": round(ca, 2),
-            "_resumo": (f"Confiabilidade {tier} — cobertura de box-score: "
-                        f"mandante {ch:.0%}, visitante {ca:.0%}. "
-                        f"{'Previsão usa as features refinadas.' if tier == 'Alta' else ('Cobertura parcial: features refinadas com peso reduzido.' if tier == 'Média' else 'Dados pobres: previsão apoiada sobretudo em Elo e forma de resultado.')}"),
+            "_resumo": explica,
         }
 
     @staticmethod
@@ -293,6 +301,12 @@ class Predictor:
             "distribuicao": [round(float(x), 6) for x in prob_total_goals]
         }
 
+        # Gols por equipe (marginais da matriz conjunta do Dixon-Coles)
+        home_goals_pmf = np.asarray(P_joint_single).sum(axis=1)
+        away_goals_pmf = np.asarray(P_joint_single).sum(axis=0)
+        gols_equipe = {home_team: self._corners_market(home_goals_pmf, GOALS_LINES),
+                       away_team: self._corners_market(away_goals_pmf, GOALS_LINES)}
+
         # 1. Ortogonalizacao de estilo
         X_resid = apply_ortho_residuals(X, self.ortho_weights)
         
@@ -311,17 +325,23 @@ class Predictor:
         # 5. Chutes a gol (shots on target) — mesma cascata/estilo
         sot = self.shots_on_target.predict_distributions(X_resid)
 
-        # 6. Mercados por tempo (1º/2º) — gols e cartões (sobre base_feats)
+        # 6. Mercados por tempo (1º/2º) — gols e cartões (mandante/visitante/total)
+        def _half(model, lines):
+            d = model.predict_distributions(X[bf])
+            return {home_team: self._corners_market(d["home"][0], lines),
+                    away_team: self._corners_market(d["away"][0], lines),
+                    "total": self._corners_market(d["total"][0], lines)}
         tempos = {
-            "gols_1t": self._corners_market(self.gols_1t.predict_distributions(X[bf])["total"][0], GOALS_HALF_LINES),
-            "gols_2t": self._corners_market(self.gols_2t.predict_distributions(X[bf])["total"][0], GOALS_HALF_LINES),
-            "cartoes_1t": self._corners_market(self.cartoes_1t.predict_distributions(X[bf])["total"][0], CARDS_HALF_LINES),
-            "cartoes_2t": self._corners_market(self.cartoes_2t.predict_distributions(X[bf])["total"][0], CARDS_HALF_LINES),
+            "gols_1t": _half(self.gols_1t, GOALS_HALF_LINES),
+            "gols_2t": _half(self.gols_2t, GOALS_HALF_LINES),
+            "cartoes_1t": _half(self.cartoes_1t, CARDS_HALF_LINES),
+            "cartoes_2t": _half(self.cartoes_2t, CARDS_HALF_LINES),
         }
 
         return {
             "vencedor": winner,
             "gols": gols_res,
+            "gols_equipe": gols_equipe,
             "chutes": self._corners_market(cs["total"][0], SHOTS_LINES),
             "chutes_equipe": {home_team: self._corners_market(cs["home"][0], SHOTS_TEAM_LINES),
                               away_team: self._corners_market(cs["away"][0], SHOTS_TEAM_LINES)},
