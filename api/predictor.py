@@ -44,6 +44,9 @@ HOME_ADV_ELO = 65.0
 CORNER_LINES = [5.5, 6.5, 7.5, 8.5, 9.5, 10.5]
 CARDS_LINES = [1.5, 2.5, 3.5, 4.5, 5.5, 6.5]
 SHOTS_LINES = [18.5, 20.5, 22.5, 24.5, 26.5]
+SHOTS_TEAM_LINES = [6.5, 8.5, 10.5, 12.5, 14.5]   # chutes por equipe (contagem menor)
+SOT_LINES = [5.5, 6.5, 7.5, 8.5, 9.5, 10.5]       # chutes a gol (total)
+SOT_TEAM_LINES = [2.5, 3.5, 4.5, 5.5, 6.5]        # chutes a gol por equipe
 
 
 def _clamp_p(p):
@@ -66,9 +69,14 @@ class Predictor:
         self.corners = CornersNB.load(f"{art_dir}/corners_cascade_rfixo.joblib")
         self.cards = CardsGP.load(f"{art_dir}/cards_gp.joblib")
         self.shots = ShotsNB.load(f"{art_dir}/shots_nb.joblib")
+        self.shots_on_target = ShotsNB.load(f"{art_dir}/shots_on_target_nb.joblib")
         self.ortho_weights = joblib.load(f"{art_dir}/style_ortho_weights.joblib")
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
+        # Bases de box-score (sb_*): são o sinal "rico" que falta às seleções de
+        # ligas/confederações com pouca cobertura. A fração presente vira o tier de
+        # confiabilidade do jogo (ver _reliability).
+        self._box_bases = [b for b in self.meta["bases"] if b.startswith("sb_")]
         # historico de confrontos (h2h)
         self.results = pd.read_csv(f"{art_dir}/results_slim.csv", parse_dates=["date"])
         self.anchor_date = self.results["date"].max()
@@ -154,6 +162,37 @@ class Predictor:
             if k in row: row[k] = v
         return pd.DataFrame([row]), h2h
 
+    # ----------------------------------------------------------------- confiabilidade (cobertura de dados)
+    def _coverage(self, snap):
+        """Fração das features de box-score (sb_*) presentes no snapshot do time."""
+        if not self._box_bases:
+            return 1.0
+        present = sum(1 for b in self._box_bases
+                      if snap.get(b) is not None
+                      and not (isinstance(snap.get(b), float) and np.isnan(snap.get(b))))
+        return present / len(self._box_bases)
+
+    def _reliability(self, snap_h, snap_a):
+        """Tier de confiabilidade do jogo a partir da cobertura de dados refinados.
+
+        Um jogo é tão confiável quanto o lado com MENOS dados: seleções de ligas com
+        pouca cobertura (sem box-score) caem para Baixa e dependem só de Elo+forma de
+        resultado; jogos entre seleções ricas em dados ficam Alta e usam de fato as
+        features refinadas (chutes, posse, estilo) que afinam escanteios/cartões/chutes.
+        """
+        ch, ca = self._coverage(snap_h), self._coverage(snap_a)
+        score = min(ch, ca)
+        tier = "Alta" if score >= 0.7 else ("Média" if score >= 0.3 else "Baixa")
+        return {
+            "tier": tier,
+            "score": round(score, 2),
+            "cobertura_mandante": round(ch, 2),
+            "cobertura_visitante": round(ca, 2),
+            "_resumo": (f"Confiabilidade {tier} — cobertura de box-score: "
+                        f"mandante {ch:.0%}, visitante {ca:.0%}. "
+                        f"{'Previsão usa as features refinadas.' if tier == 'Alta' else ('Cobertura parcial: features refinadas com peso reduzido.' if tier == 'Média' else 'Dados pobres: previsão apoiada sobretudo em Elo e forma de resultado.')}"),
+        }
+
     @staticmethod
     def _conf_label(point, lo, hi):
         if point <= 0: return "Baixa"
@@ -195,6 +234,11 @@ class Predictor:
         X, h2h = self.build_row(home_team, away_team, neutral, tournament,
                                 home_vals, away_vals, context_overrides, h2h_overrides)
         bf, ff = self.meta["base_feats"], self.meta["full_feats"]
+
+        # confiabilidade do jogo pela cobertura de dados refinados (box-score)
+        snap_h = {**self.team_defaults(home_team), **dict(home_vals or {})}
+        snap_a = {**self.team_defaults(away_team), **dict(away_vals or {})}
+        confiabilidade = self._reliability(snap_h, snap_a)
 
         # vencedor, gols, ambas_marcam, over_2_5 via Dixon-Coles
         dc_probs = self.dc.predict_proba_markets(X[bf])
@@ -257,10 +301,18 @@ class Predictor:
         cd = self.corners.predict_distributions(X_corners)
         cc = self.cards.predict_distributions(X_resid)
 
+        # 5. Chutes a gol (shots on target) — mesma cascata/estilo
+        sot = self.shots_on_target.predict_distributions(X_resid)
+
         return {
             "vencedor": winner,
             "gols": gols_res,
             "chutes": self._corners_market(cs["total"][0], SHOTS_LINES),
+            "chutes_equipe": {home_team: self._corners_market(cs["home"][0], SHOTS_TEAM_LINES),
+                              away_team: self._corners_market(cs["away"][0], SHOTS_TEAM_LINES)},
+            "chutes_a_gol": {home_team: self._corners_market(sot["home"][0], SOT_TEAM_LINES),
+                             away_team: self._corners_market(sot["away"][0], SOT_TEAM_LINES),
+                             "total": self._corners_market(sot["total"][0], SOT_LINES)},
             "escanteios": {home_team: self._corners_market(cd["home"][0]),
                            away_team: self._corners_market(cd["away"][0]),
                            "total": self._corners_market(cd["total"][0])},
@@ -270,6 +322,7 @@ class Predictor:
             "ambas_marcam": btts_res,
             "over_2_5": over_res,
             "confronto_direto": h2h["_resumo"],
+            "confiabilidade": confiabilidade,
         }
 
 

@@ -48,8 +48,19 @@ export type PredictionResponse = {
   };
   gols: NumericPrediction;
   chutes: CountPrediction;
+  // Chutes divididos por equipe (mandante/visitante) e chutes a gol (mand/vis/total).
+  chutes_equipe?: Record<string, CountPrediction>;
+  chutes_a_gol?: Record<string, CountPrediction>;
   escanteios: Record<string, CountPrediction>;
   cartoes: Record<string, CountPrediction>;
+  // Tier de confiabilidade do jogo pela cobertura de dados refinados (box-score).
+  confiabilidade?: {
+    tier: string;                 // "Alta" | "Média" | "Baixa"
+    score: number;
+    cobertura_mandante: number;
+    cobertura_visitante: number;
+    _resumo: string;
+  };
   ambas_marcam: {
     resposta: string;
     confianca: number;
