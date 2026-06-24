@@ -11,9 +11,9 @@ except ImportError:
     from api.dixon_coles_model import DixonColesNBRegressor
 
 try:
-    from corners_dynamic_nb import DynamicCornersNB
+    from corners_nb_model import CornersNB
 except ImportError:
-    from api.corners_dynamic_nb import DynamicCornersNB
+    from api.corners_nb_model import CornersNB
 
 try:
     from cards_gp_model import CardsGP
@@ -56,11 +56,14 @@ def _fair_odd(p):
 
 class Predictor:
     def __init__(self, art_dir=ART):
-        self.clf = joblib.load(f"{art_dir}/clf_result.joblib")
-        self.clf_btts = joblib.load(f"{art_dir}/clf_btts.joblib")
-        self.clf_over = joblib.load(f"{art_dir}/clf_over25.joblib")
+        # vencedor / BTTS / over_2_5 saem todos da matriz conjunta do Dixon-Coles
+        # (ver predict()). Os classificadores legados clf_result/btts/over25 não são
+        # mais servidos; os .joblib ficam em disco como legado, mas não carregamos.
         self.dc = DixonColesNBRegressor.load(f"{art_dir}/dixon_coles_goals.joblib")
-        self.corners = DynamicCornersNB.load(f"{art_dir}/dynamic_corners_nb.joblib")
+        # Escanteios: modelo intermediário cascata + estilo, dispersão FIXA (r_H=10, r_A=8.5).
+        # O DynamicCornersNB foi REPROVADO no gate OOS (regressão de log-loss/MAE + Tail ECE
+        # Over 8.5 = 22.4% vs limite 4%) — ver POST_MORTEM_DYNAMIC_DISPERSION.md. Rollback.
+        self.corners = CornersNB.load(f"{art_dir}/corners_cascade_rfixo.joblib")
         self.cards = CardsGP.load(f"{art_dir}/cards_gp.joblib")
         self.shots = ShotsNB.load(f"{art_dir}/shots_nb.joblib")
         self.ortho_weights = joblib.load(f"{art_dir}/style_ortho_weights.joblib")
@@ -185,15 +188,6 @@ class Predictor:
             "distribuicao": [round(float(x), 6) for x in pmf],
             "linhas": linhas,
         }
-
-    @staticmethod
-    def _binary(pipe, X, feats, pos_label, yes_txt, no_txt):
-        proba = pipe.predict_proba(X[feats])[0]
-        cls = list(pipe.classes_)
-        p_yes = float(proba[cls.index(pos_label)]) if pos_label in cls else float(proba.max())
-        resp = yes_txt if p_yes >= 0.5 else no_txt
-        conf = round(100 * (p_yes if p_yes >= 0.5 else 1 - p_yes), 1)
-        return {"resposta": resp, "confianca": conf, "prob_sim": round(100 * p_yes, 1)}
 
     # ----------------------------------------------------------------- previsao completa
     def predict(self, home_team, away_team, neutral=False, tournament="Amistoso",

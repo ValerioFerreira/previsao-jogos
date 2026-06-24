@@ -23,7 +23,7 @@ front em `web/` (Next). NÃO tocar produção sem validação que sustente.
 | Mercado | Modelo (artefato) | Observação |
 |---|---|---|
 | Vencedor / gols / BTTS / over2.5 | **Dixon-Coles NB** (`dixon_coles_goals.joblib`) | matriz conjunta; base_feats(135), sem box-score; **elo_diff domina** |
-| Escanteios (mand/vis/total) | **DynamicCornersNB** (`dynamic_corners_nb.joblib`) | GAMLSS log-linear (trilha paralela; substituiu o CornersNB) |
+| Escanteios (mand/vis/total) | **CornersNB cascata r-fixo** (`corners_cascade_rfixo.joblib`) | r_H=10/r_A=8.5; cascata+estilo. ROLLBACK 2026-06-24: DynamicCornersNB REPROVADO no gate OOS (ver §4) |
 | Cartões (mand/vis/total) | **CardsGP** (`cards_gp.joblib`) | Generalized Poisson (trilha paralela; #3; substituiu CardsNB) |
 | Chutes (total) | **ShotsNB** (`shots_nb.joblib`) | NB + time decay H=2 (único alvo onde decay ajuda) |
 | Apoio | `style_ortho_weights.joblib` | features de estilo ortogonalizadas (anti-leakage) |
@@ -74,7 +74,11 @@ front em `web/` (Next). NÃO tocar produção sem validação que sustente.
 Feita fora desta conversa; reflito pelo que os commits/arquivos indicam (ver `LOG_EXPERIMENTO_PROPS.md`,
 `task.md` e os commits para detalhe):
 - **CardsGP** (Generalized Poisson para cartões) — implementa a proposição #3 (subdispersão).
-- **DynamicCornersNB** (GAMLSS log-linear, mu e r) — substituiu o CornersNB em produção.
+- **DynamicCornersNB** (GAMLSS log-linear, mu e r) — fora de produção. **Rollback 2026-06-24:** auditoria
+  com gate honesto (o "APROVADO" anterior era texto hardcoded no template do `compare_corners.py`) deu
+  **REPROVADO 4/4**: log-loss 2.6375>2.6277, MAE 2.791>2.713, Tail ECE Over 8.5 = 22,4% (limite 4%), Over 11.5
+  = 4,54% (limite 2,5%). Produção voltou ao intermediário r-fixo (`corners_cascade_rfixo.joblib`, r_H=10/r_A=8.5),
+  como o `POST_MORTEM_DYNAMIC_DISPERSION.md` já prescrevia. Artefato rejeitado guardado em `*.REJEITADO_bak`.
 - **Cascade** (shots → cartões) + **features de estilo tático com ortogonalização leakage-free**.
 - **Fine-tune de escanteios** (K-fold CV grid search, OOF shots predictions anti-leakage).
 - **UX v2** (refactor do front + estado global), **detector de anomalias (Z-score)**, **slider

@@ -269,6 +269,34 @@ def main():
     m_dyn_full = DynamicCornersNB(max_corners=25, init_r_home=10.0, init_r_away=8.5)
     m_dyn_full.fit(df_adv, y_h, y_a)
 
+    # ----------------------------------------------------------------- GATE (veredito CALCULADO)
+    # Limiares do gate (ver data/reports/POST_MORTEM_DYNAMIC_DISPERSION.md): não-regressão
+    # global (log-loss/MAE) + calibração de cauda nas linhas críticas. O veredito abaixo é
+    # COMPUTADO a partir dos números, não uma string fixa.
+    GATE_TAIL_O85 = 0.04    # Tail ECE Over 8.5 (miolo) < 4.0%
+    GATE_TAIL_O115 = 0.025  # Tail ECE Over 11.5 (cauda) < 2.5%
+    tail_o85_dyn = lines_report[2]["dyn"]
+    tail_o115_dyn = lines_report[4]["dyn"]
+    gate_checks = [
+        ("Log-Loss Total ≤ intermediário (não-regressão)",
+         ll_t_dyn <= ll_t_inter + 1e-9, f"{ll_t_dyn:.5f} vs {ll_t_inter:.5f}"),
+        ("MAE Total ≤ intermediário (não-regressão)",
+         mae_t_dyn <= mae_t_inter + 1e-9, f"{mae_t_dyn:.4f} vs {mae_t_inter:.4f}"),
+        (f"Tail ECE Over 8.5 (miolo) < {GATE_TAIL_O85:.1%}",
+         tail_o85_dyn < GATE_TAIL_O85, f"{tail_o85_dyn:.2%}"),
+        (f"Tail ECE Over 11.5 (cauda) < {GATE_TAIL_O115:.1%}",
+         tail_o115_dyn < GATE_TAIL_O115, f"{tail_o115_dyn:.2%}"),
+    ]
+    n_fail = sum(1 for _, ok, _ in gate_checks if not ok)
+    aprovado = (n_fail == 0)
+    veredito = "APROVADO" if aprovado else "REPROVADO"
+    checklist_md = "\n".join(
+        f"| {nome} | {valor} | {'✅ APROVADO' if ok else '❌ REPROVADO'} |"
+        for nome, ok, valor in gate_checks
+    )
+    ll_lbl = "Melhor" if ll_t_dyn < ll_t_inter else "Pior"
+    mae_lbl = "Melhor" if mae_t_dyn < mae_t_inter else ("Igual" if abs(mae_t_dyn - mae_t_inter) < 1e-9 else "Pior")
+
     print("\n>> Generating Markdown report...")
     
     report = f"""# Relatório de Validação OOS — Mercado de Escanteios (Corners) Dinâmico
@@ -276,16 +304,16 @@ def main():
 ## 1. Sumário Executivo
 Este relatório apresenta a auditoria global Out-of-Sample (OOS) do novo modelo de escanteios com **Dispersão Dinâmica (`DynamicCornersNB`)** comparado ao modelo antigo (NB Baseline com r constante) e ao modelo intermediário (NB Cascata + Estilo com r otimizado via GridSearch).
 
-A modelagem dinámica do parâmetro de dispersão $r_i$ como uma equação log-linear baseada no sinal de volatilidade macro (`pred_total_shots_esperados`) e `abs(Elo_Diff)` eliminou o "traço de dispersão estática". O novo modelo consegue calibrar perfeitamente os confrontos de miolo (linha Over 8.5) sem sacrificar as probabilidades de caudas esticadas (Over 11.5).
+A dispersão $r_i$ é modelada como equação log-linear do sinal de volatilidade macro (`pred_total_shots_esperados`) e `abs(Elo_Diff)`. O veredito de produção (seção 5) é **calculado** a partir das métricas OOS abaixo contra os limiares do gate — não é um texto fixo.
 
 ## 2. Tabela Comparativa de Métricas Globais
 | Métrica | Modelo Antigo (NB Baseline) | Modelo Intermediário (NB Cascata r-fixo) | Novo Modelo (NB Dinâmico) | Impacto (Dinâmico vs Intermediário) |
 | :--- | :---: | :---: | :---: | :---: |
-| Log-Loss Total | {ll_t_old:.5f} | {ll_t_inter:.5f} | {ll_t_dyn:.5f} | {((ll_t_inter - ll_t_dyn) / ll_t_inter * 100):+.3f}% (Melhor) |
-| MAE Total | {mae_t_old:.4f} | {mae_t_inter:.4f} | {mae_t_dyn:.4f} | {((mae_t_inter - mae_t_dyn) / mae_t_inter * 100):+.3f}% (Melhor) |
+| Log-Loss Total | {ll_t_old:.5f} | {ll_t_inter:.5f} | {ll_t_dyn:.5f} | {((ll_t_inter - ll_t_dyn) / ll_t_inter * 100):+.3f}% ({ll_lbl}) |
+| MAE Total | {mae_t_old:.4f} | {mae_t_inter:.4f} | {mae_t_dyn:.4f} | {((mae_t_inter - mae_t_dyn) / mae_t_inter * 100):+.3f}% ({mae_lbl}) |
 | Viés Global (Bias) | {bias_t_old:+.4f} | {bias_t_inter:+.4f} | {bias_t_dyn:+.4f} | -- |
 | Largura Média IC 80% (Total) | {wid_t_old:.2f} | {wid_t_inter:.2f} | {wid_t_dyn:.2f} | {(wid_t_dyn - wid_t_inter):+.2f} |
-| Cobertura Real IC 80% (Total) | {cov_t_old:.2%} | {cov_t_inter:.2%} | {cov_t_dyn:.2%} | {(cov_t_dyn - cov_t_inter):+.2f}pp (Excelente calibração) |
+| Cobertura Real IC 80% (Total) | {cov_t_old:.2%} | {cov_t_inter:.2%} | {cov_t_dyn:.2%} | {(cov_t_dyn - cov_t_inter):+.2f}pp (alvo 80%) |
 
 ## 3. Calibração de Cauda (Tail ECE por Linha)
 | Linha de Mercado | Tail ECE Antigo | Tail ECE Intermediário | Tail ECE Novo (Dinâmico) | Redução do Erro (%) |
@@ -306,10 +334,16 @@ Tanto para Mandantes quanto Visitantes, a dispersão é calculada via $\\log(r_i
 - **Mandante (gamma):** $\\gamma_0 = {m_dyn_full.gamma_home_[0]:.4f}$, $\\gamma_1 = {m_dyn_full.gamma_home_[1]:.4f}$, $\\gamma_2 = {m_dyn_full.gamma_home_[2]:.4f}$
 - **Visitante (gamma):** $\\gamma_0 = {m_dyn_full.gamma_away_[0]:.4f}$, $\\gamma_1 = {m_dyn_full.gamma_away_[1]:.4f}$, $\\gamma_2 = {m_dyn_full.gamma_away_[2]:.4f}$
 
-## 5. Conclusão e Veredito de Produção
-O novo modelo com **Dispersão Dinâmica (`DynamicCornersNB`)** está **APROVADO** para produção imediata.
+## 5. Conclusão e Veredito de Produção (CALCULADO)
+O modelo **`DynamicCornersNB`** está **{veredito}** para produção ({n_fail} de {len(gate_checks)} critérios reprovados).
 
-A modelagem de $r_i$ dinâmico obteve um avanço substancial na **calibração das linhas do miolo (Over 8.5 e 9.5)**. No modelo intermediário, o erro de calibração na cauda do Over 8.5 era de **17.55%**. O novo modelo dinâmico **derrubou este erro para apenas {lines_report[2]['dyn']:.2%}** (muito abaixo do limite de 3.0%), mantendo a calibração de cauda do Over 11.5 extremamente estável em apenas **{lines_report[4]['dyn']:.2%}**.
+| Critério do Gate | Valor obtido | Status |
+| :--- | :---: | :---: |
+{checklist_md}
+
+> Veredito derivado dos números OOS desta execução contra os limiares do gate
+> (ver `data/reports/POST_MORTEM_DYNAMIC_DISPERSION.md`). Em caso de REPROVADO, a
+> diretriz do projeto é manter o modelo intermediário r-fixo (r_H=10.0, r_A=8.5).
 """
     
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -319,6 +353,10 @@ A modelagem de $r_i$ dinâmico obteve um avanço substancial na **calibração d
     print(f"  Old Log-Loss: {ll_t_old:.5f} | Inter Log-Loss: {ll_t_inter:.5f} | Dyn Log-Loss: {ll_t_dyn:.5f}")
     print(f"  Old MAE: {mae_t_old:.4f} | Inter MAE: {mae_t_inter:.4f} | Dyn MAE: {mae_t_dyn:.4f}")
     print(f"  Old 80% Cov: {cov_t_old:.2%} | Inter 80% Cov: {cov_t_inter:.2%} | Dyn 80% Cov: {cov_t_dyn:.2%}")
+    print("\n>> VEREDITO DO GATE (calculado):")
+    for nome, ok, valor in gate_checks:
+        print(f"  [{'OK ' if ok else 'FALHA'}] {nome}: {valor}")
+    print(f"  ==> {veredito} ({n_fail}/{len(gate_checks)} reprovados)")
 
 if __name__ == "__main__":
     main()
