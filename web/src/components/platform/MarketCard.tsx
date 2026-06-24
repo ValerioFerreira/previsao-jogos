@@ -69,12 +69,11 @@ export function MarketCard({ title, subtitle, prediction, periods, icon }: Marke
         <div className="min-w-0">
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             {icon}
-            {title}
+            {subtitle ?? title}
             <InfoTooltip text="Média projetada é o valor esperado. A linha em destaque é a mais próxima da média. A faixa de odd justa vai da odd com 7% de margem até a odd prevista (1/probabilidade)." />
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             Média Projetada: <span className="font-bold text-foreground">{mean.toFixed(1)}</span>
-            {subtitle && <span> • {subtitle}</span>}
           </p>
         </div>
         <div className="bg-muted p-1 rounded-md flex text-[10px] font-medium shrink-0">

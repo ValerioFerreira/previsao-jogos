@@ -26,6 +26,7 @@ from app.services.predictor_service import (
     get_team_ids,
     get_upcoming_fixtures,
     get_match_detail,
+    get_past_fixtures,
 )
 
 
@@ -70,6 +71,7 @@ def team(nome: str) -> TeamResponse:
 @app.get("/h2h", response_model=H2HResponse)
 def h2h(home: str = Query(...), away: str = Query(...)) -> H2HResponse:
     predictor = get_predictor()
+    home, away = predictor.norm_team(home), predictor.norm_team(away)
     if home == away:
         raise HTTPException(status_code=400, detail="Escolha duas selecoes diferentes.")
     if home not in predictor.teams() or away not in predictor.teams():
@@ -82,6 +84,9 @@ def h2h(home: str = Query(...), away: str = Query(...)) -> H2HResponse:
 @app.post("/predict")
 def predict(payload: PredictRequest) -> dict:
     predictor = get_predictor()
+    # canoniza nomes (jogos futuros podem vir como "Czechia", "Türkiye", etc.)
+    payload.home_team = predictor.norm_team(payload.home_team)
+    payload.away_team = predictor.norm_team(payload.away_team)
     if payload.home_team == payload.away_team:
         raise HTTPException(status_code=400, detail="Escolha duas selecoes diferentes.")
     if payload.home_team not in predictor.teams() or payload.away_team not in predictor.teams():
@@ -104,6 +109,11 @@ def team_ids() -> dict:
 @app.get("/api/fixtures/upcoming")
 def upcoming_fixtures() -> dict:
     return {"fixtures": get_upcoming_fixtures()}
+
+
+@app.get("/api/fixtures/past")
+def past_fixtures(limit: int = Query(1500)) -> dict:
+    return {"fixtures": get_past_fixtures()[:limit]}
 
 
 @app.get("/api/match-detail")

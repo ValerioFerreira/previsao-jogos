@@ -234,6 +234,7 @@ export const api = {
   referees: () => request<{ referees: string[] }>("/api/referees"),
   teamIds: () => request<Record<string, number>>("/api/team-ids"),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),
+  pastFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/past"),
   matchDetail: (home: string, away: string, date: string) =>
     request<MatchDetail>(`/api/match-detail?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&date=${encodeURIComponent(date)}`),
 };

@@ -2,6 +2,7 @@
 import React from 'react';
 import { MatchDetail as MD, teamLogoUrl, playerPhotoUrl } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
+import { competitionPt } from '@/lib/competitionNames';
 
 function dBR(s?: string | null): string {
   const d = (s || '').slice(0, 10).split('-');
@@ -64,7 +65,7 @@ export function MatchDetail({ data }: { data: MD }) {
       <div className="bg-card border border-border/50 rounded-xl p-6">
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-4">
           {info.league_logo && <img src={info.league_logo} alt="" className="w-4 h-4 object-contain" onError={hideOnError} />}
-          <span>{info.league}{info.round ? ` · ${info.round}` : ''} · {dBR(info.date)}</span>
+          <span>{competitionPt(info.league)}{info.round ? ` · ${info.round}` : ''} · {dBR(info.date)}</span>
         </div>
         <div className="flex items-center justify-center gap-4 sm:gap-8">
           <div className="text-center flex-1">

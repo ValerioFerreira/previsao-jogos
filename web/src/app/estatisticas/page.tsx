@@ -11,7 +11,9 @@ import { TeamSelect } from '@/components/platform/TeamSelect';
 import { teamPt } from '@/lib/teamNames';
 import { MatchDetail } from '@/components/platform/MatchDetail';
 import { MatchModePicker } from '@/components/platform/MatchModePicker';
-import { ArrowLeft } from 'lucide-react';
+import { MatchPickerModal } from '@/components/platform/MatchPickerModal';
+import { UpcomingFixture } from '@/lib/api';
+import { ArrowLeft, History } from 'lucide-react';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -23,20 +25,27 @@ export default function Estatisticas() {
   const [awayHistory, setAwayHistory] = useState<TeamHistoryResponse | null>(null);
   const [h2h, setH2h] = useState<H2HResponse | null>(null);
 
-  // Detalhe de uma partida específica (via ?home=&away=&date= ao clicar num jogo recente).
+  // Detalhe de uma partida específica (via ?home=&away=&date= ou seletor de passadas).
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
   const [matchData, setMatchData] = useState<MatchDetailT | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
+  const [pastOpen, setPastOpen] = useState(false);
+  const [pastFixtures, setPastFixtures] = useState<UpcomingFixture[]>([]);
+  const [teamIds, setTeamIds] = useState<Record<string, number>>({});
+
+  const openMatch = (home: string, away: string, date: string) => {
+    setMatchParams({ home, away, date });
+    setMatchLoading(true);
+    api.matchDetail(home, away, date).then(setMatchData).catch(() => setMatchData({ found: false })).finally(() => setMatchLoading(false));
+  };
 
   React.useEffect(() => {
     api.teams().then(res => setTeams(res.teams)).catch(console.error);
+    api.teamIds().then(setTeamIds).catch(() => {});
+    api.pastFixtures().then(r => setPastFixtures(r.fixtures)).catch(() => {});
     const sp = new URLSearchParams(window.location.search);
     const home = sp.get('home'), away = sp.get('away'), date = sp.get('date');
-    if (home && away && date) {
-      setMatchParams({ home, away, date });
-      setMatchLoading(true);
-      api.matchDetail(home, away, date).then(setMatchData).catch(() => setMatchData({ found: false })).finally(() => setMatchLoading(false));
-    }
+    if (home && away && date) openMatch(home, away, date);
   }, []);
 
   const clearMatch = () => {
@@ -141,6 +150,13 @@ export default function Estatisticas() {
           Dashboard Analítico
         </h2>
         <MatchModePicker />
+        <div className="mb-4">
+          <button onClick={() => setPastOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-foreground hover:bg-cyan-500/20 transition-colors">
+            <History className="w-4 h-4" /> Selecionar Partida Passada
+          </button>
+          <p className="text-[11px] text-muted-foreground mt-1.5">Veja as estatísticas completas de um jogo já disputado.</p>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
           <div>
             <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
@@ -200,7 +216,7 @@ export default function Estatisticas() {
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
                     labelStyle={{ color: 'hsl(var(--foreground))' }}
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />
                   <Line type="monotone" dataKey={homeTeamId} name={teamPt(homeTeamId)} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls />
                   <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} connectNulls />
                 </LineChart>
@@ -218,15 +234,15 @@ export default function Estatisticas() {
             <p className="text-xs text-muted-foreground mb-4">Ataque vs Defesa — Gols por partida nos últimos 20 jogos</p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart>
+                <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                  <XAxis type="number" dataKey="attack" name="Ataque" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Ataque (Gols/Jogo)', position: 'insideBottom', offset: -5, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' } }} />
-                  <YAxis type="number" dataKey="defense" name="Defesa" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Defesa (Gols Sofridos/Jogo)', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' } }} />
+                  <XAxis type="number" dataKey="attack" name="Ataque" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Ataque (gols/jogo)', position: 'insideBottom', offset: -8, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
+                  <YAxis type="number" dataKey="defense" name="Defesa" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Defesa (gols sofridos/jogo)', angle: -90, position: 'insideLeft', offset: 6, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                   <RTooltip
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
                     formatter={(value: any, name: any) => [Number(value).toFixed(2), name]}
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />
                   <Scatter name={teamPt(homeTeamId)} data={[{ attack: homeHistory.attack_avg || 0, defense: homeHistory.defense_avg || 0 }]} fill="#10b981" opacity={0.7} />
                   <Scatter name={teamPt(awayTeamId)} data={[{ attack: awayHistory.attack_avg || 0, defense: awayHistory.defense_avg || 0 }]} fill="#06b6d4" opacity={0.7} />
                 </ScatterChart>
@@ -319,6 +335,15 @@ export default function Estatisticas() {
           )}
         </motion.div>
       )}
+
+      <MatchPickerModal
+        open={pastOpen}
+        onOpenChange={setPastOpen}
+        fixtures={pastFixtures}
+        teamIds={teamIds}
+        onSelect={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))}
+        title="Selecionar Partida Passada"
+      />
     </div>
   );
 }

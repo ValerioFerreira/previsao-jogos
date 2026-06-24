@@ -15,10 +15,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "data" / "raw" / "fixtures"
 OUT = ROOT / "data" / "built" / "fixture_index.json"
+OUT_PAST = ROOT / "data" / "built" / "past_fixtures.json"
 
 
 def main():
     index: dict[str, str] = {}
+    past: list[dict] = []
     for f in FIX.glob("*/*/*.json.gz"):
         try:
             d = json.load(gzip.open(f))
@@ -26,14 +28,27 @@ def main():
             continue
         fx = d.get("fixture") or {}
         teams = d.get("teams") or {}
-        date = (fx.get("date") or "")[:10]
-        hn = (teams.get("home") or {}).get("name")
-        an = (teams.get("away") or {}).get("name")
+        lg = d.get("league") or {}
+        th, ta = teams.get("home") or {}, teams.get("away") or {}
+        date_full = fx.get("date") or ""
+        date = date_full[:10]
+        hn, an = th.get("name"), ta.get("name")
+        # só jogos já disputados (com placar) entram na lista de passadas
+        played = (d.get("goals") or {}).get("home") is not None
         if date and hn and an:
             index[f"{date}|{hn}|{an}"] = str(f.relative_to(ROOT)).replace("\\", "/")
+            if played:
+                past.append({
+                    "fixture_id": f"{date}|{hn}|{an}",
+                    "home": hn, "away": an, "date": date_full,
+                    "league_name": lg.get("name"),
+                })
+    past.sort(key=lambda x: x["date"], reverse=True)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+    OUT_PAST.write_text(json.dumps(past, ensure_ascii=False), encoding="utf-8")
     print(f"Índice de fixtures: {len(index)} jogos -> {OUT}")
+    print(f"Partidas passadas: {len(past)} -> {OUT_PAST}")
 
 
 if __name__ == "__main__":

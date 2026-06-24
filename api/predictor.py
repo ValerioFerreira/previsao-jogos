@@ -38,6 +38,34 @@ except ImportError:
 ART = "model_artifacts"
 HOME_ADV_ELO = 65.0
 
+# Aliases: nomes que a API-Football (e jogos futuros) podem trazer diferentes do
+# nome canônico usado na nossa base. Mapeia variante -> nosso nome.
+TEAM_ALIASES = {
+    "Czechia": "Czech Republic",
+    "Türkiye": "Turkey", "Turkiye": "Turkey",
+    "Côte d'Ivoire": "Ivory Coast", "Cote d'Ivoire": "Ivory Coast",
+    "Korea Republic": "South Korea", "South Korea Republic": "South Korea",
+    "Korea DPR": "North Korea", "DPR Korea": "North Korea",
+    "USA": "United States", "United States of America": "United States",
+    "IR Iran": "Iran", "Iran IR": "Iran",
+    "China PR": "China",
+    "Congo DR": "DR Congo", "Congo-Brazzaville": "Congo",
+    "Cape Verde Islands": "Cape Verde", "Cabo Verde": "Cape Verde",
+    "Ireland": "Republic of Ireland",
+    "The Gambia": "Gambia",
+    "St. Kitts and Nevis": "Saint Kitts and Nevis",
+    "St. Lucia": "Saint Lucia",
+    "St. Vincent and the Grenadines": "Saint Vincent and the Grenadines",
+    "Kyrgyz Republic": "Kyrgyzstan",
+    "Eswatini (Swaziland)": "Eswatini", "Swaziland": "Eswatini",
+    "Hong Kong, China": "Hong Kong",
+    "North Macedonia FYR": "North Macedonia", "Macedonia": "North Macedonia",
+    "Brunei Darussalam": "Brunei",
+    "Curacao": "Curaçao",
+    "Trinidad And Tobago": "Trinidad and Tobago",
+    "Chinese Taipei": "Taiwan",
+}
+
 # Linhas over/under expostas (mandante, visitante e total). Saem todas da CDF da
 # NB; a UI só escolhe qual exibir, sem recalcular nada. Cada mercado tem grade
 # própria conforme a magnitude da contagem (cartões baixa, chutes alta).
@@ -88,6 +116,13 @@ class Predictor:
         # historico de confrontos (h2h)
         self.results = pd.read_csv(f"{art_dir}/results_slim.csv", parse_dates=["date"])
         self.anchor_date = self.results["date"].max()
+
+    # ----------------------------------------------------------------- normalização de nome
+    def norm_team(self, name):
+        """Canoniza o nome da seleção: aplica alias e cai no nome conhecido se houver."""
+        if name in self.meta["snapshot"]:
+            return name
+        return TEAM_ALIASES.get(name, name)
 
     # ----------------------------------------------------------------- helpers de UI
     def teams(self): return self.meta["teams"]
@@ -246,6 +281,7 @@ class Predictor:
     # ----------------------------------------------------------------- previsao completa
     def predict(self, home_team, away_team, neutral=False, tournament="Amistoso",
                 home_vals=None, away_vals=None, context_overrides=None, h2h_overrides=None):
+        home_team, away_team = self.norm_team(home_team), self.norm_team(away_team)
         X, h2h = self.build_row(home_team, away_team, neutral, tournament,
                                 home_vals, away_vals, context_overrides, h2h_overrides)
         bf, ff = self.meta["base_feats"], self.meta["full_feats"]

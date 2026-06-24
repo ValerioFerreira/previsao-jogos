@@ -47,6 +47,18 @@ def get_team_ids() -> dict[str, int]:
 
 
 FIXTURE_INDEX_PATH = REPO_ROOT / "data" / "built" / "fixture_index.json"
+PAST_FIXTURES_PATH = REPO_ROOT / "data" / "built" / "past_fixtures.json"
+
+
+@lru_cache(maxsize=1)
+def get_past_fixtures() -> list[dict[str, Any]]:
+    """Lista de partidas já disputadas (para o seletor de Partidas Passadas)."""
+    if PAST_FIXTURES_PATH.exists():
+        try:
+            return json.loads(PAST_FIXTURES_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
 
 
 @lru_cache(maxsize=1)

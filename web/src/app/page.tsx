@@ -12,6 +12,8 @@ import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
 import { MarketCard } from '@/components/platform/MarketCard';
 import { teamPt } from '@/lib/teamNames';
+import { competitionPt } from '@/lib/competitionNames';
+import { MatchPickerModal } from '@/components/platform/MatchPickerModal';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -91,7 +93,7 @@ function RecentMatchCard({ match, onOpen }: { match: RecentMatch; onOpen?: () =>
         {match.is_home ? 'Mandante' : 'Fora'} vs {teamPt(match.opponent)}
       </p>
       {match.competition && (
-        <p className="text-[10px] text-muted-foreground truncate max-w-[130px]" title={match.competition}>{match.competition}</p>
+        <p className="text-[10px] text-muted-foreground truncate max-w-[130px]" title={competitionPt(match.competition)}>{competitionPt(match.competition)}</p>
       )}
       <p className="text-[11px] font-mono mt-1 text-muted-foreground">
         Placar: <span className="text-foreground">{match.is_home ? `${match.goals_scored}-${match.goals_conceded}` : `${match.goals_conceded}-${match.goals_scored}`}</span>
@@ -129,6 +131,7 @@ export default function Previsoes() {
   const [referees, setReferees] = useState<string[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
+  const [modalOpen, setModalOpen] = useState(false);
 
   React.useEffect(() => {
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
@@ -227,76 +230,60 @@ export default function Previsoes() {
         </div>
 
         {mode === 'futura' && (
-          <div className="mb-4">
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Partida Agendada</Label>
-            {upcoming.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">Nenhuma partida futura disponível no momento.</p>
-            ) : (
-              <Select onValueChange={selectFutureFixture}>
-                <SelectTrigger className="h-10 max-w-xl"><SelectValue placeholder="Escolha um jogo agendado..." /></SelectTrigger>
-                <SelectContent>
-                  {upcoming.map(fx => (
-                    <SelectItem key={fx.fixture_id} value={fx.fixture_id}>
-                      {formatDateBR(fx.date)} · {teamPt(fx.home)} x {teamPt(fx.away)} · {fx.league_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="mb-2">
+            <button onClick={() => setModalOpen(true)}
+              className="px-4 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-foreground hover:bg-cyan-500/20 transition-colors">
+              {homeTeamId && awayTeamId ? `${teamPt(homeTeamId)} x ${teamPt(awayTeamId)} — trocar partida` : 'Escolher partida agendada'}
+            </button>
+            {homeTeamId && awayTeamId && (
+              <p className="text-[11px] text-muted-foreground mt-2">Competição: {competition} · {neutralField ? 'Campo neutro' : 'Com mando'}</p>
             )}
-            <p className="text-[11px] text-muted-foreground mt-1.5">Selecionar um jogo pré-preenche as equipes, competição e mando abaixo.</p>
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
-            <TeamSelect 
-              value={homeTeamId} 
-              onValueChange={v => { setHomeTeamId(v); setProjection(null); }} 
-              teams={teams.filter(t => t !== awayTeamId)} 
-            />
-          </div>
-
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Time Visitante</Label>
-            <TeamSelect 
-              value={awayTeamId} 
-              onValueChange={v => { setAwayTeamId(v); setProjection(null); }} 
-              teams={teams.filter(t => t !== homeTeamId)} 
-            />
-          </div>
-
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Competição</Label>
-            <Select value={competition} onValueChange={setCompetition}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>{tournaments.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-end pb-2">
-            <div className="flex items-center gap-2">
-              <Switch id="neutral" checked={neutralField} onCheckedChange={setNeutralField} />
-              <Label htmlFor="neutral" className="text-sm cursor-pointer">Campo Neutro</Label>
-              <InfoTooltip text="Remove a vantagem de mando de campo do modelo preditivo." />
+        {mode === 'independente' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
+              <TeamSelect value={homeTeamId} onValueChange={v => { setHomeTeamId(v); setProjection(null); }} teams={teams.filter(t => t !== awayTeamId)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Time Visitante</Label>
+              <TeamSelect value={awayTeamId} onValueChange={v => { setAwayTeamId(v); setProjection(null); }} teams={teams.filter(t => t !== homeTeamId)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Competição</Label>
+              <Select value={competition} onValueChange={setCompetition}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>{tournaments.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1">
+                Árbitro (opcional)
+                <InfoTooltip text="Você pode informar o árbitro da partida. No momento não influencia os cálculos; ficará disponível para análises futuras." />
+              </Label>
+              <TeamSelect value={referee} onValueChange={setReferee} teams={referees} labelFn={(s) => s} placeholder="Buscar árbitro..." searchPlaceholder="Buscar árbitro..." />
+            </div>
+            <div className="flex items-end pb-2">
+              <div className="flex items-center gap-2">
+                <Switch id="neutral" checked={neutralField} onCheckedChange={setNeutralField} />
+                <Label htmlFor="neutral" className="text-sm cursor-pointer">Campo Neutro</Label>
+                <InfoTooltip text="Remove a vantagem de mando de campo do modelo preditivo." />
+              </div>
             </div>
           </div>
-
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1">
-              Árbitro (opcional)
-              <InfoTooltip text="Você pode informar o árbitro da partida. No momento não influencia os cálculos; ficará disponível para análises futuras." />
-            </Label>
-            <TeamSelect
-              value={referee}
-              onValueChange={setReferee}
-              teams={referees}
-              labelFn={(s) => s}
-              placeholder="Buscar árbitro..."
-            />
-          </div>
-        </div>
+        )}
       </motion.div>
+
+      <MatchPickerModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        fixtures={upcoming}
+        teamIds={teamIds}
+        onSelect={(fx) => selectFutureFixture(fx.fixture_id)}
+        title="Selecionar Partida Futura"
+      />
 
       <AnimatePresence>
         {(homeTeamId || awayTeamId) && (
@@ -306,10 +293,16 @@ export default function Previsoes() {
               { teamId: awayTeamId, form: awayForm, anomalies: awayAnomalies, label: 'Visitante' }
             ].map(({ teamId, form, anomalies, label }) => teamId && (
               <div key={teamId} className="bg-card border border-border/50 rounded-xl p-5 overflow-hidden">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold"><span className="text-muted-foreground">{label}: </span>{teamPt(teamId)}</h3>
+                <div className="relative mb-2">
+                  <div className="absolute right-0 top-0 z-10"><DataReliabilityBadge totalMatches={form.total} /></div>
+                  <div className="text-center">
+                    {teamLogoUrl(teamIds[teamId]) && (
+                      <img src={teamLogoUrl(teamIds[teamId])!} alt="" className="w-9 h-9 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    )}
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+                    <h3 className="text-sm font-semibold">{teamPt(teamId)}</h3>
+                  </div>
                 </div>
-                <DataReliabilityBadge totalMatches={form.total} />
 
                 <div className="mt-4 mb-4">
                   <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">Resultados dos últimos 5 jogos</p>
@@ -447,7 +440,7 @@ export default function Previsoes() {
               {/* Gols (mandante/total/visitante, com seletor de tempo) */}
               {projection.gols && (
                 <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                  <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Gols
                     <InfoTooltip text="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." />
                   </h4>
@@ -462,7 +455,7 @@ export default function Previsoes() {
               {/* Finalizações */}
               {projection.chutes && (
                 <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                  <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Finalizações
                     <InfoTooltip text="Conta qualquer tentativa de marcar gol, independentemente da direção. Inclui chutes no alvo, para fora, na trave e também os bloqueados pela defesa adversária." />
                   </h4>
@@ -481,7 +474,7 @@ export default function Previsoes() {
               {/* Chutes a Gol */}
               {projection.chutes_a_gol && projection.chutes_a_gol.total && (
                 <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                  <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Chutes a Gol
                     <InfoTooltip text="Considera apenas os chutes que vão na direção exata da baliza e que seriam gol se não houvesse intervenção do goleiro. Chutes na trave, para fora ou bloqueados não contam." />
                   </h4>
@@ -496,7 +489,7 @@ export default function Previsoes() {
               {/* Escanteios */}
               {projection.escanteios && projection.escanteios.total && (
                 <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                  <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Escanteios
                     <InfoTooltip text="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." />
                   </h4>
@@ -511,7 +504,7 @@ export default function Previsoes() {
               {/* Cartões (com seletor de tempo) */}
               {projection.cartoes && projection.cartoes.total && (
                 <div>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                  <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Cartões
                     <InfoTooltip text="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." />
                   </h4>
