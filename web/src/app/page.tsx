@@ -372,7 +372,7 @@ export default function Previsoes() {
               <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mb-4">
                 <div className="text-center w-full sm:w-1/4">
                   {teamLogoUrl(teamIds[homeTeamId]) && (
-                    <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" />
+                    <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e)=>{e.currentTarget.style.display='none'}} />
                   )}
                   <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
                   <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
@@ -385,7 +385,7 @@ export default function Previsoes() {
                 </div>
                 <div className="text-center w-full sm:w-1/4">
                   {teamLogoUrl(teamIds[awayTeamId]) && (
-                    <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" />
+                    <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e)=>{e.currentTarget.style.display='none'}} />
                   )}
                   <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
                   <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>

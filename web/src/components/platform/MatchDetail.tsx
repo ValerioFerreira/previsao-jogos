@@ -36,9 +36,11 @@ function eventIcon(type: string, detail: string): string {
   return '•';
 }
 
+const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none'; };
+
 const Logo = ({ id, size = 24 }: { id?: number | null; size?: number }) => {
   const url = teamLogoUrl(id ?? undefined);
-  return url ? <img src={url} alt="" width={size} height={size} className="object-contain inline-block" loading="lazy" /> : null;
+  return url ? <img src={url} alt="" width={size} height={size} className="object-contain inline-block" loading="lazy" onError={hideOnError} /> : null;
 };
 
 export function MatchDetail({ data }: { data: MD }) {
@@ -61,7 +63,7 @@ export function MatchDetail({ data }: { data: MD }) {
       {/* Cabeçalho */}
       <div className="bg-card border border-border/50 rounded-xl p-6">
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-4">
-          {info.league_logo && <img src={info.league_logo} alt="" className="w-4 h-4 object-contain" />}
+          {info.league_logo && <img src={info.league_logo} alt="" className="w-4 h-4 object-contain" onError={hideOnError} />}
           <span>{info.league}{info.round ? ` · ${info.round}` : ''} · {dBR(info.date)}</span>
         </div>
         <div className="flex items-center justify-center gap-4 sm:gap-8">
@@ -139,7 +141,7 @@ export function MatchDetail({ data }: { data: MD }) {
               <div className="grid grid-cols-2 gap-1.5 mb-3">
                 {lu.startXI.map((p, i) => (
                   <div key={i} className="flex items-center gap-1.5 text-xs">
-                    {playerPhotoUrl(p.id) && <img src={playerPhotoUrl(p.id)!} alt="" className="w-6 h-6 rounded-full object-cover bg-muted" loading="lazy" />}
+                    {playerPhotoUrl(p.id) && <img src={playerPhotoUrl(p.id)!} alt="" className="w-6 h-6 rounded-full object-cover bg-muted" loading="lazy" onError={hideOnError} />}
                     <span className="truncate">{p.number ? `${p.number}. ` : ''}{p.name}</span>
                   </div>
                 ))}
