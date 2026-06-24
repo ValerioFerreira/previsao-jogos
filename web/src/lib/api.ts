@@ -234,7 +234,36 @@ export const api = {
   referees: () => request<{ referees: string[] }>("/api/referees"),
   teamIds: () => request<Record<string, number>>("/api/team-ids"),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),
+  matchDetail: (home: string, away: string, date: string) =>
+    request<MatchDetail>(`/api/match-detail?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&date=${encodeURIComponent(date)}`),
 };
+
+export type LineupPlayer = { id: number | null; name: string; number: number | null; pos: string | null; grid: string | null };
+export type MatchPlayer = {
+  id: number | null; name: string; pos: string | null; number: number | null;
+  rating: string | null; minutes: number | null; goals: number | null; assists: number | null;
+  shots_total: number | null; shots_on: number | null; passes: number | null; key_passes: number | null;
+  tackles: number | null; yellow: number | null; red: number | null;
+};
+export type MatchDetail = {
+  found: boolean;
+  info?: {
+    date: string; status: string | null; referee: string | null; venue: string | null; city: string | null;
+    league: string | null; league_logo: string | null; country: string | null; season: number | null; round: string | null;
+    home: string | null; home_id: number | null; away: string | null; away_id: number | null;
+  };
+  goals?: { home: number | null; away: number | null };
+  score?: { halftime?: { home: number | null; away: number | null }; fulltime?: any; extratime?: any; penalty?: any };
+  statistics?: { team: string; team_id: number; stats: Record<string, string | number | null> }[];
+  events?: { minute: number | null; extra: number | null; type: string; detail: string; team: string; player: string; assist: string | null }[];
+  lineups?: { team: string; team_id: number; formation: string | null; coach: { id: number | null; name: string | null }; startXI: LineupPlayer[]; substitutes: LineupPlayer[] }[];
+  players?: { team: string; team_id: number; players: MatchPlayer[] }[];
+};
+
+// Foto do jogador (api-football media; não conta cota).
+export function playerPhotoUrl(playerId?: number | null): string | null {
+  return playerId ? `https://media.api-sports.io/football/players/${playerId}.png` : null;
+}
 
 export type UpcomingFixture = {
   fixture_id: string;

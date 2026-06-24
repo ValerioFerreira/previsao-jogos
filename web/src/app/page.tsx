@@ -314,7 +314,11 @@ export default function Previsoes() {
                 <div className="mt-4 mb-4">
                   <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">Resultados dos últimos 5 jogos</p>
                   <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                    {form.matches.map((m, i) => <RecentMatchCard key={i} match={m} onOpen={() => router.push('/estatisticas')} />)}
+                    {form.matches.map((m, i) => {
+                      const mh = m.is_home ? teamId : m.opponent;
+                      const ma = m.is_home ? m.opponent : teamId;
+                      return <RecentMatchCard key={i} match={m} onOpen={() => router.push(`/estatisticas?home=${encodeURIComponent(mh)}&away=${encodeURIComponent(ma)}&date=${encodeURIComponent(m.date.slice(0, 10))}`)} />;
+                    })}
                   </div>
                 </div>
 

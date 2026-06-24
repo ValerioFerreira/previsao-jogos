@@ -14,6 +14,7 @@ import { api, PredictionResponse } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
+import { MatchModePicker } from '@/components/platform/MatchModePicker';
 
 const MARKET_OPTIONS = [
   { value: 'gols', label: 'Gols Totais' },
@@ -61,6 +62,7 @@ export default function ConstruirAposta() {
           <Wrench className="w-5 h-5 text-purple-500" />
           Laboratório de Apostas
         </h2>
+        <MatchModePicker />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
           <div>
             <Label className="text-xs text-muted-foreground mb-1.5 block">Mandante</Label>

@@ -25,6 +25,7 @@ from app.services.predictor_service import (
     get_referees,
     get_team_ids,
     get_upcoming_fixtures,
+    get_match_detail,
 )
 
 
@@ -103,6 +104,11 @@ def team_ids() -> dict:
 @app.get("/api/fixtures/upcoming")
 def upcoming_fixtures() -> dict:
     return {"fixtures": get_upcoming_fixtures()}
+
+
+@app.get("/api/match-detail")
+def match_detail(home: str = Query(...), away: str = Query(...), date: str = Query(...)) -> dict:
+    return get_match_detail(home, away, date)
 
 
 @app.get("/api/system/status", response_model=SystemStatusResponse)

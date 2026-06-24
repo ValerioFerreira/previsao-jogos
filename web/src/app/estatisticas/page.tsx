@@ -4,11 +4,14 @@ import { motion } from 'framer-motion';
 import { Label } from '@/components/ui/label';
 import { BarChart3, TrendingUp, Target, Users } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer } from 'recharts';
-import { api, TeamHistoryResponse, H2HResponse } from '@/lib/api';
+import { api, TeamHistoryResponse, H2HResponse, MatchDetail as MatchDetailT } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
 import { teamPt } from '@/lib/teamNames';
+import { MatchDetail } from '@/components/platform/MatchDetail';
+import { MatchModePicker } from '@/components/platform/MatchModePicker';
+import { ArrowLeft } from 'lucide-react';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -20,9 +23,27 @@ export default function Estatisticas() {
   const [awayHistory, setAwayHistory] = useState<TeamHistoryResponse | null>(null);
   const [h2h, setH2h] = useState<H2HResponse | null>(null);
 
+  // Detalhe de uma partida específica (via ?home=&away=&date= ao clicar num jogo recente).
+  const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
+  const [matchData, setMatchData] = useState<MatchDetailT | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+
   React.useEffect(() => {
     api.teams().then(res => setTeams(res.teams)).catch(console.error);
+    const sp = new URLSearchParams(window.location.search);
+    const home = sp.get('home'), away = sp.get('away'), date = sp.get('date');
+    if (home && away && date) {
+      setMatchParams({ home, away, date });
+      setMatchLoading(true);
+      api.matchDetail(home, away, date).then(setMatchData).catch(() => setMatchData({ found: false })).finally(() => setMatchLoading(false));
+    }
   }, []);
+
+  const clearMatch = () => {
+    setMatchParams(null);
+    setMatchData(null);
+    window.history.replaceState(null, '', '/estatisticas');
+  };
 
   const bothSelected = homeTeamId && awayTeamId && homeTeamId !== awayTeamId;
 
@@ -88,6 +109,26 @@ export default function Estatisticas() {
     }
   }, [homeHistory, awayHistory, homeTeamId, awayTeamId]);
 
+  // Modo "detalhe de partida": acionado ao clicar num jogo recente (Previsões).
+  if (matchParams) {
+    return (
+      <div className="space-y-6">
+        <button onClick={clearMatch} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Voltar ao painel comparativo
+        </button>
+        <h2 className="text-lg font-heading font-bold flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-cyan-500" />
+          Detalhe da Partida
+        </h2>
+        {matchLoading ? (
+          <div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-slate-200 border-t-cyan-500 rounded-full animate-spin" /></div>
+        ) : matchData ? (
+          <MatchDetail data={matchData} />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <motion.div
@@ -99,6 +140,7 @@ export default function Estatisticas() {
           <BarChart3 className="w-5 h-5 text-cyan-500" />
           Dashboard Analítico
         </h2>
+        <MatchModePicker />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
           <div>
             <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>

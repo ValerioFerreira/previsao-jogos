@@ -46,6 +46,118 @@ def get_team_ids() -> dict[str, int]:
     return {}
 
 
+FIXTURE_INDEX_PATH = REPO_ROOT / "data" / "built" / "fixture_index.json"
+
+
+@lru_cache(maxsize=1)
+def _fixture_index() -> dict[str, str]:
+    if FIXTURE_INDEX_PATH.exists():
+        try:
+            return json.loads(FIXTURE_INDEX_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def get_match_detail(home: str, away: str, date: str) -> dict[str, Any]:
+    """Detalhe completo de uma partida JÁ DISPUTADA, a partir do cache local de
+    fixtures brutos (sem cota). Robusto a dados ausentes (jogos antigos/ligas menores).
+    """
+    import gzip
+    rel = _fixture_index().get(f"{date[:10]}|{home}|{away}")
+    if not rel:
+        return {"found": False}
+    try:
+        d = json.load(gzip.open(REPO_ROOT / rel))
+    except Exception:
+        return {"found": False}
+
+    fx = d.get("fixture") or {}
+    lg = d.get("league") or {}
+    teams = d.get("teams") or {}
+    th, ta = teams.get("home") or {}, teams.get("away") or {}
+    venue = fx.get("venue") or {}
+
+    def _stats_block(entry):
+        return {
+            "team": (entry.get("team") or {}).get("name"),
+            "team_id": (entry.get("team") or {}).get("id"),
+            "stats": {s.get("type"): s.get("value") for s in (entry.get("statistics") or [])},
+        }
+
+    def _lineup_block(entry):
+        def _pl(p):
+            pl = (p or {}).get("player") or {}
+            return {"id": pl.get("id"), "name": pl.get("name"),
+                    "number": pl.get("number"), "pos": pl.get("pos"), "grid": pl.get("grid")}
+        coach = entry.get("coach") or {}
+        return {
+            "team": (entry.get("team") or {}).get("name"),
+            "team_id": (entry.get("team") or {}).get("id"),
+            "formation": entry.get("formation"),
+            "coach": {"id": coach.get("id"), "name": coach.get("name")},
+            "startXI": [_pl(p) for p in (entry.get("startXI") or [])],
+            "substitutes": [_pl(p) for p in (entry.get("substitutes") or [])],
+        }
+
+    def _player_block(entry):
+        out = []
+        for p in (entry.get("players") or []):
+            pl = p.get("player") or {}
+            st = (p.get("statistics") or [{}])[0]
+            g = st.get("games") or {}
+            out.append({
+                "id": pl.get("id"), "name": pl.get("name"),
+                "pos": g.get("position"), "number": g.get("number"),
+                "rating": g.get("rating"), "minutes": g.get("minutes"),
+                "goals": (st.get("goals") or {}).get("total"),
+                "assists": (st.get("goals") or {}).get("assists"),
+                "shots_total": (st.get("shots") or {}).get("total"),
+                "shots_on": (st.get("shots") or {}).get("on"),
+                "passes": (st.get("passes") or {}).get("total"),
+                "key_passes": (st.get("passes") or {}).get("key"),
+                "tackles": (st.get("tackles") or {}).get("total"),
+                "yellow": (st.get("cards") or {}).get("yellow"),
+                "red": (st.get("cards") or {}).get("red"),
+            })
+        return {"team": (entry.get("team") or {}).get("name"),
+                "team_id": (entry.get("team") or {}).get("id"), "players": out}
+
+    events = []
+    for e in (d.get("events") or []):
+        t = e.get("time") or {}
+        events.append({
+            "minute": t.get("elapsed"), "extra": t.get("extra"),
+            "type": e.get("type"), "detail": e.get("detail"),
+            "team": (e.get("team") or {}).get("name"),
+            "player": (e.get("player") or {}).get("name"),
+            "assist": (e.get("assist") or {}).get("name"),
+        })
+    events.sort(key=lambda x: (x["minute"] or 0, x["extra"] or 0))
+
+    score = d.get("score") or {}
+    return {
+        "found": True,
+        "info": {
+            "date": fx.get("date"),
+            "status": (fx.get("status") or {}).get("long"),
+            "referee": fx.get("referee"),
+            "venue": venue.get("name"), "city": venue.get("city"),
+            "league": lg.get("name"), "league_logo": lg.get("logo"),
+            "country": lg.get("country"), "season": lg.get("season"), "round": lg.get("round"),
+            "home": th.get("name"), "home_id": th.get("id"),
+            "away": ta.get("name"), "away_id": ta.get("id"),
+        },
+        "goals": d.get("goals") or {},
+        "score": {"halftime": score.get("halftime"), "fulltime": score.get("fulltime"),
+                  "extratime": score.get("extratime"), "penalty": score.get("penalty")},
+        "statistics": [_stats_block(s) for s in (d.get("statistics") or [])],
+        "events": events,
+        "lineups": [_lineup_block(l) for l in (d.get("lineups") or [])],
+        "players": [_player_block(p) for p in (d.get("players") or [])],
+    }
+
+
 def get_upcoming_fixtures() -> list[dict[str, Any]]:
     """Partidas futuras a partir do registry do coletor de odds (sem cota nova).
     Já traz tournament/neutral mapeados para o nosso sistema."""
