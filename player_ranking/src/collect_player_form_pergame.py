@@ -8,13 +8,18 @@ a hipótese ortogonal ao Elo que ficou em aberto (ver player_ranking/RELATORIO.m
 
 Para cada jogo-alvo (data D) e cada jogador do elenco-base leakage-safe, resolve o
 clube (via /players, tentando a temporada europeia de D e a anterior — robusto a ligas
-de ano-calendário), pega os fixtures de clube em [D-120d, D), e extrai rating+minutos
-das últimas K partidas. Agrega por seleção: forma média recente, carga de minutos
-(fadiga), jogos nos últimos 30d, tendência de rating, e cobertura.
+de ano-calendário), pega os fixtures de clube em [D-120d, D), e extrai por jogo:
+  - rating + minutos do jogador (forma e carga),
+  - xG/xGA do TIME do jogador naquele jogo de clube (momento ofensivo/defensivo).
+Agrega por seleção: forma média recente, carga (fadiga), jogos em 30d, tendência,
+xG a favor/contra do bloco de clubes, e cobertura.
+Além disso mede DISPONIBILIDADE: quantos do elenco-base estavam afastados (lesão/
+suspensão) na data D, via /sidelined (histórico com início/fim — point-in-time safe).
 
 Tudo via ApiClient (cache em disco, rate-limit, RETOMADA, teto de cota). RESUMÁVEL:
 re-rodar continua de onde parou (pula jogos já feitos e chamadas já cacheadas). Ao
 atingir o teto de cota, salva o progresso e sai — basta re-rodar no dia seguinte.
+Ordem de processamento: dos jogos MAIS RECENTES aos mais antigos.
 
 NÃO toca produção. Saída: player_ranking/data/processed/pergame_form.parquet
 (uma linha por jogo-alvo, pronta para o gate Elo vs Elo+forma).
@@ -82,11 +87,33 @@ def club_fixtures_before(cli, club_id, seasons, D):
     return out[-K_RECENT:]
 
 
-def player_form(cli, pid, club_fixtures):
-    """Extrai (rating, minutos) de pid nas partidas de clube dadas (cache por fixture)."""
-    ratings, minutes, dates = [], [], []
+def club_match_xg(cli, fid, club_id):
+    """xG (a favor, contra) do time club_id no fixture fid. (None,None) se ausente."""
+    st = cli.get("/fixtures/statistics", f"fxst/{fid}", fixture=fid)
+    xg_for = xg_against = None
+    for team in st:
+        is_self = (team.get("team", {}) or {}).get("id") == club_id
+        for s in (team.get("statistics") or []):
+            if "xpected" in str(s.get("type", "")):
+                v = s.get("value")
+                if v not in (None, ""):
+                    try:
+                        fv = float(v)
+                    except (TypeError, ValueError):
+                        continue
+                    if is_self:
+                        xg_for = fv
+                    else:
+                        xg_against = fv
+    return xg_for, xg_against
+
+
+def player_form(cli, pid, club_id, club_fixtures):
+    """Extrai (rating, minutos, datas) de pid e xG/xGA do clube nas partidas dadas."""
+    ratings, minutes, dates, xgf, xga = [], [], [], [], []
     for fid, dt in club_fixtures:
         fp = cli.get("/fixtures/players", f"fxpl/{fid}", fixture=fid)
+        appeared = False
         for team in fp:
             for pl in team.get("players", []):
                 if pl.get("player", {}).get("id") == pid:
@@ -97,22 +124,44 @@ def player_form(cli, pid, club_fixtures):
                         ratings.append(float(r))
                     minutes.append(int(m) if m else 0)
                     dates.append(dt)
-    return ratings, minutes, dates
+                    appeared = True
+        if appeared:
+            xf, xa = club_match_xg(cli, fid, club_id)
+            if xf is not None:
+                xgf.append(xf)
+            if xa is not None:
+                xga.append(xa)
+    return ratings, minutes, dates, xgf, xga
+
+
+def player_sidelined_at(cli, pid, D_iso):
+    """True se pid tinha um período de afastamento (lesão/suspensão) cobrindo D."""
+    sl = cli.get("/sidelined", f"sdl/{pid}", player=pid)
+    for period in sl or []:
+        s, e = period.get("start"), period.get("end")
+        if s and e and s <= D_iso <= e:
+            return True
+    return False
 
 
 def squad_features(cli, pids, D, seasons):
-    """Agrega forma da seleção a partir do elenco-base."""
-    rats, mins_load, games30, trends, n_cov = [], [], [], [], 0
-    D_iso = D.isoformat()
+    """Agrega forma da seleção (forma/carga/xG) + disponibilidade a partir do elenco-base."""
+    rats, mins_load, games30, trends = [], [], [], []
+    xgf_team, xga_team = [], []
+    n_cov = n_xg_cov = unavail = 0
     cutoff30 = (D - timedelta(days=30)).isoformat()
+    D_iso = D.isoformat()
     for pid in pids:
+        # disponibilidade (1 chamada por jogador, cacheada entre jogos)
+        if player_sidelined_at(cli, pid, D_iso):
+            unavail += 1
         club_id, s_used = resolve_club(cli, pid, seasons)
         if not club_id:
             continue
         cf = club_fixtures_before(cli, club_id, seasons, D)
         if not cf:
             continue
-        ratings, minutes, dates = player_form(cli, pid, cf)
+        ratings, minutes, dates, xgf, xga = player_form(cli, pid, club_id, cf)
         if not ratings:
             continue
         n_cov += 1
@@ -120,15 +169,26 @@ def squad_features(cli, pids, D, seasons):
         mins_load.append(np.mean(minutes) if minutes else 0)
         games30.append(sum(1 for d in dates if d >= cutoff30))
         trends.append(ratings[-1] - np.mean(ratings[:-1]) if len(ratings) > 1 else 0.0)
+        if xgf:
+            xgf_team.append(np.mean(xgf))
+        if xga:
+            xga_team.append(np.mean(xga))
+            n_xg_cov += 1
     if n_cov == 0:
         return None
-    return {
+    out = {
         "form_rating": float(np.mean(rats)),
         "form_minutes": float(np.mean(mins_load)),
         "form_games30": float(np.mean(games30)),
         "form_trend": float(np.mean(trends)),
         "coverage": n_cov / max(1, len(pids)),
+        "unavail_count": float(unavail),
+        "unavail_rate": unavail / max(1, len(pids)),
+        "xg_coverage": n_xg_cov / max(1, len(pids)),
+        "form_xg_for": float(np.mean(xgf_team)) if xgf_team else np.nan,
+        "form_xg_against": float(np.mean(xga_team)) if xga_team else np.nan,
     }
+    return out
 
 
 def main():
@@ -144,8 +204,11 @@ def main():
     rows = [] if not OUT.exists() else pd.read_parquet(OUT).to_dict("records")
 
     cli = ApiClient(max_requests=MAX_REQUESTS)
-    t = t.sort_values("date")
+    # MAIS RECENTES primeiro (preferência do usuário: garantir os jogos atuais)
+    t = t.sort_values("date", ascending=False)
     processed = 0
+    diff_keys = ("form_rating", "form_minutes", "form_games30", "form_trend",
+                 "form_xg_for", "form_xg_against", "unavail_rate")
     try:
         for _, r in t.iterrows():
             if r["match_id"] in done_ids:
@@ -162,8 +225,9 @@ def main():
                     for k, v in f.items():
                         row[f"{side}_{k}"] = v
             if hf and af:
-                for k in ("form_rating", "form_minutes", "form_games30", "form_trend"):
-                    row[f"diff_{k}"] = hf[k] - af[k]
+                for k in diff_keys:
+                    if k in hf and k in af and pd.notna(hf[k]) and pd.notna(af[k]):
+                        row[f"diff_{k}"] = hf[k] - af[k]
             rows.append(row)
             processed += 1
             if processed % 25 == 0:

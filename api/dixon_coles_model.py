@@ -50,29 +50,34 @@ class DixonColesNBRegressor(BaseEstimator, RegressorMixin):
             ))
         ])
 
-    def fit(self, X, y_home, y_away):
+    def fit(self, X, y_home, y_away, sample_weight=None):
         """
         Treina o modelo:
           1. Ajusta os regressores base para obter lambdas e mus esperados.
           2. Estima r_H, r_A e rho maximizando a verossimilhança no treino.
+
+        sample_weight (opcional): peso por amostra (ex.: time decay, peso por
+        competição). Default None = sem peso (comportamento inalterado). O peso
+        entra tanto nos regressores de expectativa quanto na verossimilhança (MLE).
         """
         # Garantir conversão para numpy
         X_df = pd.DataFrame(X)
         y_h = np.array(y_home, dtype=float)
         y_a = np.array(y_away, dtype=float)
-        
+
         # Filtrar amostras válidas (sem NaNs)
         valid = ~np.isnan(y_h) & ~np.isnan(y_a)
         X_clean = X_df.iloc[valid]
         y_h_clean = y_h[valid]
         y_a_clean = y_a[valid]
-        
+        sw = np.asarray(sample_weight, dtype=float)[valid] if sample_weight is not None else None
+
         print(f"Treinando regressores de expectativa de gols (N={len(X_clean)})...")
         self.model_home_ = self._create_base_regressor()
         self.model_away_ = self._create_base_regressor()
-        
-        self.model_home_.fit(X_clean, y_h_clean)
-        self.model_away_.fit(X_clean, y_a_clean)
+
+        self.model_home_.fit(X_clean, y_h_clean, reg__sample_weight=sw)
+        self.model_away_.fit(X_clean, y_a_clean, reg__sample_weight=sw)
         
         # Predições de lambdas e mus no conjunto de treino
         lambdas = self.model_home_.predict(X_clean)
@@ -88,12 +93,12 @@ class DixonColesNBRegressor(BaseEstimator, RegressorMixin):
         # Função objetivo: Negative Log-Likelihood
         def objective(params):
             r_H, r_A, rho = params
-            
+
             # Restrições de borda explícitas no cálculo do NLL
             if r_H <= 0.01 or r_A <= 0.01:
                 return 1e10
-                
-            nll = self._calculate_nll(y_h_clean, y_a_clean, lambdas, mus, r_H, r_A, rho)
+
+            nll = self._calculate_nll(y_h_clean, y_a_clean, lambdas, mus, r_H, r_A, rho, w=sw)
             return nll
 
         # Chute inicial e limites
@@ -115,9 +120,10 @@ class DixonColesNBRegressor(BaseEstimator, RegressorMixin):
             
         return self
 
-    def _calculate_nll(self, y_h, y_a, lambdas, mus, r_H, r_A, rho):
+    def _calculate_nll(self, y_h, y_a, lambdas, mus, r_H, r_A, rho, w=None):
         """
         Calcula o NLL em lote vetorizado para todos os jogos.
+        w (opcional): peso por amostra para a verossimilhança ponderada.
         """
         N = len(y_h)
         M = self.max_goals
@@ -156,9 +162,10 @@ class DixonColesNBRegressor(BaseEstimator, RegressorMixin):
         y_a_clipped = np.clip(y_a, 0, M).astype(int)
         
         prob_obs = P_joint_norm[np.arange(N), y_h_clipped, y_a_clipped]
-        
-        # NLL
-        nll = -np.log(prob_obs + 1e-15).sum()
+
+        # NLL (ponderado se w fornecido)
+        ll = np.log(prob_obs + 1e-15)
+        nll = -(w * ll).sum() if w is not None else -ll.sum()
         return nll
 
     def predict_joint_distribution(self, X):
