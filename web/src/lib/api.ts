@@ -53,6 +53,9 @@ export type PredictionResponse = {
   chutes_a_gol?: Record<string, CountPrediction>;
   escanteios: Record<string, CountPrediction>;
   cartoes: Record<string, CountPrediction>;
+  // Mercados por tempo (1º/2º) — populado quando o backend dos tempos estiver pronto.
+  // Chaves esperadas: gols_1t, gols_2t, cartoes_1t, cartoes_2t.
+  tempos?: Record<string, CountPrediction>;
   // Tier de confiabilidade do jogo pela cobertura de dados refinados (box-score).
   confiabilidade?: {
     tier: string;                 // "Alta" | "Média" | "Baixa"

@@ -11,6 +11,31 @@ import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
 import { MarketCard } from '@/components/platform/MarketCard';
 
+// Labels amigáveis para os mercados por tempo (renderizados quando o backend enviar `tempos`).
+const TEMPO_LABELS: Record<string, string> = {
+  gols_1t: 'Gols — 1º Tempo',
+  gols_2t: 'Gols — 2º Tempo',
+  cartoes_1t: 'Cartões — 1º Tempo',
+  cartoes_2t: 'Cartões — 2º Tempo',
+};
+
+// Badge de confiabilidade do JOGO pela cobertura de dados refinados (box-score).
+function MatchReliabilityBadge({ confiabilidade }: { confiabilidade: PredictionResponse['confiabilidade'] }) {
+  if (!confiabilidade) return null;
+  const tier = confiabilidade.tier;
+  const styles =
+    tier === 'Alta' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
+    : tier === 'Média' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+    : 'bg-red-500/10 border-red-500/30 text-red-500';
+  return (
+    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border ${styles}`}>
+      {tier === 'Alta' ? <ShieldCheck className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+      Confiabilidade dos dados: {tier}
+      <InfoTooltip text={confiabilidade._resumo} />
+    </div>
+  );
+}
+
 function DataReliabilityBadge({ totalMatches }: { totalMatches: number }) {
   const isLow = totalMatches < 10;
   return (
@@ -227,7 +252,14 @@ export default function Previsoes() {
       <AnimatePresence>
         {projection && !loading && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-            
+
+            {/* Badge de confiabilidade do jogo (cobertura de dados refinados) */}
+            {projection.confiabilidade && (
+              <div className="flex justify-center">
+                <MatchReliabilityBadge confiabilidade={projection.confiabilidade} />
+              </div>
+            )}
+
             {/* Vitória Matrix */}
             <div className="bg-card border border-border/50 rounded-xl p-6 text-center shadow-sm">
               <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">Probabilidades de Vitória (Dixon-Coles)</p>
@@ -308,10 +340,31 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
                     Finalizações
-                    <InfoTooltip text="Linhas exatas calculadas para o mercado de finalizações da partida." />
+                    <InfoTooltip text="Linhas exatas calculadas para o mercado de finalizações da partida (totais e por equipe)." />
                   </h4>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <MarketCard title="Finalizações Totais" prediction={projection.chutes as any} />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {projection.chutes_equipe && projection.chutes_equipe[homeTeamId] && (
+                      <MarketCard title="Finalizações" subtitle={`Mandante (${homeTeamId})`} prediction={projection.chutes_equipe[homeTeamId]} />
+                    )}
+                    <MarketCard title="Finalizações" subtitle="Totais (Partida)" prediction={projection.chutes as any} />
+                    {projection.chutes_equipe && projection.chutes_equipe[awayTeamId] && (
+                      <MarketCard title="Finalizações" subtitle={`Visitante (${awayTeamId})`} prediction={projection.chutes_equipe[awayTeamId]} />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Chutes a gol (Shots on target) */}
+              {projection.chutes_a_gol && projection.chutes_a_gol.total && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    Chutes a Gol
+                    <InfoTooltip text="Finalizações no alvo (shots on target), totais e por equipe." />
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <MarketCard title="Chutes a Gol" subtitle={`Mandante (${homeTeamId})`} prediction={projection.chutes_a_gol[homeTeamId]} />
+                    <MarketCard title="Chutes a Gol" subtitle="Totais (Partida)" prediction={projection.chutes_a_gol.total} />
+                    <MarketCard title="Chutes a Gol" subtitle={`Visitante (${awayTeamId})`} prediction={projection.chutes_a_gol[awayTeamId]} />
                   </div>
                 </div>
               )}
@@ -336,6 +389,21 @@ export default function Previsoes() {
                     <MarketCard title="Cartões" subtitle={`Mandante (${homeTeamId})`} prediction={projection.cartoes[homeTeamId]} />
                     <MarketCard title="Cartões" subtitle="Totais (Partida)" prediction={projection.cartoes.total} />
                     <MarketCard title="Cartões" subtitle={`Visitante (${awayTeamId})`} prediction={projection.cartoes[awayTeamId]} />
+                  </div>
+                </div>
+              )}
+
+              {/* Mercados por Tempo (1º / 2º) — renderiza automaticamente quando o backend enviar `tempos` */}
+              {projection.tempos && Object.keys(projection.tempos).length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    Mercados por Tempo (1º / 2º)
+                    <InfoTooltip text="Linhas de gols e cartões por tempo de jogo." />
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Object.entries(projection.tempos).map(([key, pred]) => (
+                      <MarketCard key={key} title={TEMPO_LABELS[key] ?? key} prediction={pred} />
+                    ))}
                   </div>
                 </div>
               )}
