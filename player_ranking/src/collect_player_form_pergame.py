@@ -192,6 +192,7 @@ def squad_features(cli, pids, D, seasons):
 
 
 def main():
+    PROC.mkdir(parents=True, exist_ok=True)   # garante o diretório antes do 1º checkpoint
     t = pd.read_parquet(TARGETS)
     df = pd.read_csv(CSV, parse_dates=["date"])
     elo = df.set_index("match_id")["elo_diff"].to_dict()
