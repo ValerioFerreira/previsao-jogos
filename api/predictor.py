@@ -47,6 +47,8 @@ SHOTS_LINES = [18.5, 20.5, 22.5, 24.5, 26.5]
 SHOTS_TEAM_LINES = [6.5, 8.5, 10.5, 12.5, 14.5]   # chutes por equipe (contagem menor)
 SOT_LINES = [5.5, 6.5, 7.5, 8.5, 9.5, 10.5]       # chutes a gol (total)
 SOT_TEAM_LINES = [2.5, 3.5, 4.5, 5.5, 6.5]        # chutes a gol por equipe
+GOALS_HALF_LINES = [0.5, 1.5, 2.5, 3.5]           # gols por tempo (total)
+CARDS_HALF_LINES = [1.5, 2.5, 3.5, 4.5]           # cartões por tempo (total)
 
 
 def _clamp_p(p):
@@ -70,6 +72,11 @@ class Predictor:
         self.cards = CardsGP.load(f"{art_dir}/cards_gp.joblib")
         self.shots = ShotsNB.load(f"{art_dir}/shots_nb.joblib")
         self.shots_on_target = ShotsNB.load(f"{art_dir}/shots_on_target_nb.joblib")
+        # Mercados por tempo (1º/2º) — gols e cartões (CornersNB sobre base_feats).
+        self.gols_1t = CornersNB.load(f"{art_dir}/gols_1t_nb.joblib")
+        self.gols_2t = CornersNB.load(f"{art_dir}/gols_2t_nb.joblib")
+        self.cartoes_1t = CornersNB.load(f"{art_dir}/cartoes_1t_nb.joblib")
+        self.cartoes_2t = CornersNB.load(f"{art_dir}/cartoes_2t_nb.joblib")
         self.ortho_weights = joblib.load(f"{art_dir}/style_ortho_weights.joblib")
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
@@ -304,6 +311,14 @@ class Predictor:
         # 5. Chutes a gol (shots on target) — mesma cascata/estilo
         sot = self.shots_on_target.predict_distributions(X_resid)
 
+        # 6. Mercados por tempo (1º/2º) — gols e cartões (sobre base_feats)
+        tempos = {
+            "gols_1t": self._corners_market(self.gols_1t.predict_distributions(X[bf])["total"][0], GOALS_HALF_LINES),
+            "gols_2t": self._corners_market(self.gols_2t.predict_distributions(X[bf])["total"][0], GOALS_HALF_LINES),
+            "cartoes_1t": self._corners_market(self.cartoes_1t.predict_distributions(X[bf])["total"][0], CARDS_HALF_LINES),
+            "cartoes_2t": self._corners_market(self.cartoes_2t.predict_distributions(X[bf])["total"][0], CARDS_HALF_LINES),
+        }
+
         return {
             "vencedor": winner,
             "gols": gols_res,
@@ -321,6 +336,7 @@ class Predictor:
                         "total": self._corners_market(cc["total"][0], CARDS_LINES)},
             "ambas_marcam": btts_res,
             "over_2_5": over_res,
+            "tempos": tempos,
             "confronto_direto": h2h["_resumo"],
             "confiabilidade": confiabilidade,
         }
