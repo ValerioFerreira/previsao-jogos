@@ -882,6 +882,18 @@ def main():
     df_out = df[df["year"] >= CUTOFF_YEAR].copy().reset_index(drop=True)
     print(f"   {len(df_out)} linhas apos filtro ({len(df)} total)")
 
+    # Features de PACE (ambiente de gols) — somas leakage-safe das rates l10 já
+    # calculadas. Edge pequeno mas estável no BTTS (8/9 janelas walk-forward) e
+    # ajuda gols totais; ver reports/btts_relatorio.md §7.
+    if {"home_gf_l10", "away_gf_l10"}.issubset(df_out.columns):
+        df_out["pace_gf"] = df_out["home_gf_l10"] + df_out["away_gf_l10"]
+    if {"home_ga_l10", "away_ga_l10"}.issubset(df_out.columns):
+        df_out["pace_ga"] = df_out["home_ga_l10"] + df_out["away_ga_l10"]
+    if {"pace_gf", "pace_ga"}.issubset(df_out.columns):
+        df_out["pace_total"] = df_out["pace_gf"] + df_out["pace_ga"]
+    if {"home_bttsrate_l10", "away_bttsrate_l10"}.issubset(df_out.columns):
+        df_out["btts_sum"] = df_out["home_bttsrate_l10"] + df_out["away_bttsrate_l10"]
+
     # Salvar no Banco de Dados
     try:
         from app.db.connection import engine, truncate_and_append

@@ -240,6 +240,19 @@ class Predictor:
             if k in row: row[k] = v
         for k, v in (context_overrides or {}).items():
             if k in row: row[k] = v
+
+        # Features de PACE (ambiente de gols) — somas das rates l10 já preenchidas.
+        # Só computa as que existem no modelo (full_feats); modelo antigo ignora.
+        def _sum2(a, b):
+            va, vb = row.get(a, np.nan), row.get(b, np.nan)
+            return (va + vb) if (pd.notna(va) and pd.notna(vb)) else np.nan
+        if "pace_gf" in row: row["pace_gf"] = _sum2("home_gf_l10", "away_gf_l10")
+        if "pace_ga" in row: row["pace_ga"] = _sum2("home_ga_l10", "away_ga_l10")
+        if "pace_total" in row:
+            pg, pa = row.get("pace_gf", np.nan), row.get("pace_ga", np.nan)
+            row["pace_total"] = (pg + pa) if (pd.notna(pg) and pd.notna(pa)) else np.nan
+        if "btts_sum" in row: row["btts_sum"] = _sum2("home_bttsrate_l10", "away_bttsrate_l10")
+
         return pd.DataFrame([row]), h2h
 
     # ----------------------------------------------------------------- confiabilidade (cobertura de dados)

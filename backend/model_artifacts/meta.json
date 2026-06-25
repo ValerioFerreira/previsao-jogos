@@ -171,7 +171,11 @@
     "diff_style_ppda_l5",
     "diff_style_ppda_l10",
     "diff_style_fouls_suff_ratio_l5",
-    "diff_style_fouls_suff_ratio_l10"
+    "diff_style_fouls_suff_ratio_l10",
+    "pace_gf",
+    "pace_ga",
+    "pace_total",
+    "btts_sum"
   ],
   "full_feats": [
     "neutral",
@@ -467,7 +471,11 @@
     "diff_resid_style_fouls_suff_ratio_l5",
     "diff_resid_style_fouls_suff_ratio_l10",
     "pred_home_shots",
-    "pred_away_shots"
+    "pred_away_shots",
+    "pace_gf",
+    "pace_ga",
+    "pace_total",
+    "btts_sum"
   ],
   "bases": [
     "bttsrate_l10",
