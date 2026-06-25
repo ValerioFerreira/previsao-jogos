@@ -11,9 +11,7 @@ import { TeamSelect } from '@/components/platform/TeamSelect';
 import { teamPt } from '@/lib/teamNames';
 import { MatchDetail } from '@/components/platform/MatchDetail';
 import { MatchModePicker } from '@/components/platform/MatchModePicker';
-import { MatchPickerModal } from '@/components/platform/MatchPickerModal';
-import { UpcomingFixture } from '@/lib/api';
-import { ArrowLeft, History } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -29,9 +27,6 @@ export default function Estatisticas() {
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
   const [matchData, setMatchData] = useState<MatchDetailT | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
-  const [pastOpen, setPastOpen] = useState(false);
-  const [pastFixtures, setPastFixtures] = useState<UpcomingFixture[]>([]);
-  const [teamIds, setTeamIds] = useState<Record<string, number>>({});
 
   const openMatch = (home: string, away: string, date: string) => {
     setMatchParams({ home, away, date });
@@ -41,8 +36,6 @@ export default function Estatisticas() {
 
   React.useEffect(() => {
     api.teams().then(res => setTeams(res.teams)).catch(console.error);
-    api.teamIds().then(setTeamIds).catch(() => {});
-    api.pastFixtures().then(r => setPastFixtures(r.fixtures)).catch(() => {});
     const sp = new URLSearchParams(window.location.search);
     const home = sp.get('home'), away = sp.get('away'), date = sp.get('date');
     if (home && away && date) openMatch(home, away, date);
@@ -149,14 +142,7 @@ export default function Estatisticas() {
           <BarChart3 className="w-5 h-5 text-cyan-500" />
           Dashboard Analítico
         </h2>
-        <MatchModePicker />
-        <div className="mb-4">
-          <button onClick={() => setPastOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-foreground hover:bg-cyan-500/20 transition-colors">
-            <History className="w-4 h-4" /> Selecionar Partida Passada
-          </button>
-          <p className="text-[11px] text-muted-foreground mt-1.5">Veja as estatísticas completas de um jogo já disputado.</p>
-        </div>
+        <MatchModePicker showReferee={false} onSelectPast={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))} />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
           <div>
             <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
@@ -335,15 +321,6 @@ export default function Estatisticas() {
           )}
         </motion.div>
       )}
-
-      <MatchPickerModal
-        open={pastOpen}
-        onOpenChange={setPastOpen}
-        fixtures={pastFixtures}
-        teamIds={teamIds}
-        onSelect={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))}
-        title="Selecionar Partida Passada"
-      />
     </div>
   );
 }

@@ -1,76 +1,80 @@
 "use client";
 import React, { useState } from 'react';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TeamSelect } from '@/components/platform/TeamSelect';
+import { MatchPickerModal, PickerFixture } from '@/components/platform/MatchPickerModal';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { api, UpcomingFixture } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
 
-function dBR(s: string): string {
-  const d = (s || '').slice(0, 10).split('-');
-  return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : s;
-}
+type Mode = 'futura' | 'passada' | 'independente';
 
-// Seletor de modo reutilizável (Partida Futura x Análise Independente) + árbitro.
-// Escreve no contexto compartilhado (times/competição/mando), usado por todas as páginas.
-export function MatchModePicker({ showReferee = true }: { showReferee?: boolean }) {
+// Seletor de modo reutilizável. Futura/Passada usam o MESMO modal (MatchPickerModal),
+// igual à aba Previsões. "Passada" só aparece se onSelectPast for fornecido.
+export function MatchModePicker({
+  showReferee = true,
+  onSelectPast,
+}: {
+  showReferee?: boolean;
+  onSelectPast?: (fx: PickerFixture) => void;
+}) {
   const { setHomeTeamId, setAwayTeamId, setCompetition, setNeutralField } = usePrediction();
-  const [mode, setMode] = useState<'independente' | 'futura'>('independente');
+  const [mode, setMode] = useState<Mode>('independente');
   const [referee, setReferee] = useState('');
   const [referees, setReferees] = useState<string[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
+  const [past, setPast] = useState<UpcomingFixture[]>([]);
+  const [teamIds, setTeamIds] = useState<Record<string, number>>({});
+  const [futureOpen, setFutureOpen] = useState(false);
+  const [pastOpen, setPastOpen] = useState(false);
 
   React.useEffect(() => {
     api.upcomingFixtures().then(r => setUpcoming(r.fixtures)).catch(() => {});
+    api.teamIds().then(setTeamIds).catch(() => {});
     if (showReferee) api.referees().then(r => setReferees(r.referees)).catch(() => {});
-  }, [showReferee]);
+    if (onSelectPast) api.pastFixtures().then(r => setPast(r.fixtures)).catch(() => {});
+  }, [showReferee, onSelectPast]);
 
-  const pick = (fid: string) => {
-    const fx = upcoming.find(f => f.fixture_id === fid);
-    if (!fx) return;
+  const pickFuture = (fx: PickerFixture) => {
     setHomeTeamId(fx.home);
     setAwayTeamId(fx.away);
-    setCompetition(fx.tournament);
-    setNeutralField(fx.neutral);
+    if (fx.tournament) setCompetition(fx.tournament);
+    setNeutralField(!!fx.neutral);
   };
+
+  const tabCls = (m: Mode) =>
+    `px-3 py-1.5 rounded-md transition-colors ${mode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`;
 
   return (
     <div className="mb-2">
-      <div className="inline-flex p-1 mb-3 rounded-lg bg-muted text-xs font-medium">
-        <button onClick={() => setMode('futura')}
-          className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'futura' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-          Selecionar Partida Futura
-        </button>
-        <button onClick={() => setMode('independente')}
-          className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'independente' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-          Análise Independente
-        </button>
+      <div className="inline-flex p-1 mb-3 rounded-lg bg-muted text-xs font-medium flex-wrap">
+        <button onClick={() => setMode('futura')} className={tabCls('futura')}>Selecionar Partida Futura</button>
+        {onSelectPast && <button onClick={() => setMode('passada')} className={tabCls('passada')}>Selecionar Partida Passada</button>}
+        <button onClick={() => setMode('independente')} className={tabCls('independente')}>Análise Independente</button>
       </div>
 
       {mode === 'futura' && (
         <div className="mb-3">
-          <Label className="text-xs text-muted-foreground mb-1.5 block">Partida Agendada</Label>
-          {upcoming.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">Nenhuma partida futura disponível no momento.</p>
-          ) : (
-            <Select onValueChange={pick}>
-              <SelectTrigger className="h-10 max-w-xl"><SelectValue placeholder="Escolha um jogo agendado..." /></SelectTrigger>
-              <SelectContent>
-                {upcoming.map(fx => (
-                  <SelectItem key={fx.fixture_id} value={fx.fixture_id}>
-                    {dBR(fx.date)} · {teamPt(fx.home)} x {teamPt(fx.away)} · {fx.league_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <button onClick={() => setFutureOpen(true)}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-foreground hover:bg-cyan-500/20 transition-colors">
+            Escolher partida agendada
+          </button>
           <p className="text-[11px] text-muted-foreground mt-1.5">Pré-preenche as equipes (e competição/mando) abaixo.</p>
         </div>
       )}
 
-      {showReferee && (
+      {mode === 'passada' && onSelectPast && (
+        <div className="mb-3">
+          <button onClick={() => setPastOpen(true)}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-foreground hover:bg-cyan-500/20 transition-colors">
+            Escolher partida passada
+          </button>
+          <p className="text-[11px] text-muted-foreground mt-1.5">Abre as estatísticas completas de um jogo já disputado.</p>
+        </div>
+      )}
+
+      {showReferee && mode === 'independente' && (
         <div className="max-w-xs">
           <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1">
             Árbitro (opcional)
@@ -78,6 +82,11 @@ export function MatchModePicker({ showReferee = true }: { showReferee?: boolean 
           </Label>
           <TeamSelect value={referee} onValueChange={setReferee} teams={referees} labelFn={(s) => s} placeholder="Buscar árbitro..." searchPlaceholder="Buscar árbitro..." />
         </div>
+      )}
+
+      <MatchPickerModal open={futureOpen} onOpenChange={setFutureOpen} fixtures={upcoming} teamIds={teamIds} onSelect={pickFuture} title="Selecionar Partida Futura" />
+      {onSelectPast && (
+        <MatchPickerModal open={pastOpen} onOpenChange={setPastOpen} fixtures={past} teamIds={teamIds} onSelect={onSelectPast} title="Selecionar Partida Passada" />
       )}
     </div>
   );
