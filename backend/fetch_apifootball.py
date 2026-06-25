@@ -330,6 +330,16 @@ def main():
             df_combined = df_new.sort_values(["date", "team"]).reset_index(drop=True)
 
         df_combined.to_csv(OUTPUT_CSV, index=False)
+        
+        # Salvar no Banco de Dados
+        try:
+            from app.db.connection import engine, truncate_and_append
+            print(f"\n>> Salvando na tabela 'apifootball_match_team_stats' no banco de dados...")
+            truncate_and_append(df_combined, "apifootball_match_team_stats", engine)
+            print(f"   Salvo com sucesso: {len(df_combined)} linhas")
+        except Exception as e:
+            print(f"\n[ERRO] Falha ao salvar no banco de dados: {e}")
+
         n_matches = len(df_combined) // 2
         print(f"\n>> CSV salvo: {OUTPUT_CSV}")
         print(f"   {len(df_combined)} linhas (~{n_matches} partidas)")

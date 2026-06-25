@@ -194,23 +194,22 @@ def main():
         except Exception as e:
             print(f"   [ERRO] Falha ao ler {path}: {e}")
             
-    # 1. Salvar JSON Consolidado
-    print(f"\n>> Gravando {OUTPUT_JSON}...")
-    with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
-        json.dump(complete_history, f, ensure_ascii=False)
-    print(f"   Salvo: {len(complete_history)} partidas consolidadas no histórico completo.")
-    
-    # 2. Salvar Parquet Tabular
+    # 1. Salvar JSON Consolidado (Opcional agora com o Neon, vamos deixar como backup se a db falhar)
+    # 2. Salvar no Banco de Dados via SQLAlchemy
     if tabular_rows:
         df = pd.DataFrame(tabular_rows)
-        print(f">> Gravando {OUTPUT_PARQUET} ({len(df)} linhas, {len(df.columns)} colunas)...")
+        print(f">> Gravando {len(df)} linhas na tabela 'matches' do banco de dados...")
+        
         try:
-            df.to_parquet(OUTPUT_PARQUET, index=False, engine="pyarrow")
-            print("   Salvo com sucesso!")
-        except ImportError:
-            print("\n[ERRO] Pacote 'pyarrow' não instalado. Não foi possível gerar o arquivo matches.parquet.")
-            print("       Instale o pyarrow rodando:")
-            print("       api\\.venv\\Scripts\\pip.exe install pyarrow")
+            from app.db.connection import engine, truncate_and_append
+            
+            # Usamos truncate_and_append porque o histórico é reconstruído completamente
+            # Isso evita dropar a tabela e perder índices
+            truncate_and_append(df, "matches", engine)
+            print("   Tabela 'matches' atualizada com sucesso no banco de dados!")
+            
+        except Exception as e:
+            print(f"\n[ERRO] Falha ao salvar no banco de dados: {e}")
             print("\n       Salvando fallback temporário em data/built/matches.csv...")
             df.to_csv(BUILT_DIR / "matches.csv", index=False)
             print("       Salvo em data/built/matches.csv")

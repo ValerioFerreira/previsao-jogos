@@ -29,25 +29,23 @@ def get_competition_weight(comp: str) -> float:
     return 0.40  # Default
 
 
-def detect_anomalies(parquet_path: Path, team_name: str, target_competition: str = "World Cup") -> list[dict]:
+def detect_anomalies(team_name: str, target_competition: str = "World Cup") -> list[dict]:
     """
-    Carrega as partidas de matches.parquet, filtra pelos últimos ~20 jogos de nível similar
+    Carrega as partidas da tabela matches do PostgreSQL, filtra pelos últimos ~20 jogos de nível similar
     (Amistoso vs Competitivo), calcula Z-Scores para janelas de 1 a 5 jogos e retorna
     até 3 anomalias estatisticamente significativas (|Z| > 1.96).
     """
-    if not parquet_path.exists():
+    from app.db.connection import engine
+    try:
+        # 1. Carregar base da tabela matches filtrando pelo time para economizar RAM
+        query = f"SELECT * FROM matches WHERE team = '{team_name}' ORDER BY date DESC"
+        df_team = pd.read_sql(query, con=engine)
+    except Exception as e:
+        print(f"[ERRO DB] {e}")
         return []
-
-    # 1. Carregar base matches.parquet
-    df = pd.read_parquet(parquet_path)
     
-    # Filtrar jogos do time
-    df_team = df[df["team"] == team_name].copy()
     if len(df_team) == 0:
         return []
-        
-    # Ordenar por data decrescente
-    df_team = df_team.sort_values(by="date", ascending=False).reset_index(drop=True)
     
     # 2. Mapear nível de relevância do torneio atual
     target_weight = get_competition_weight(target_competition)

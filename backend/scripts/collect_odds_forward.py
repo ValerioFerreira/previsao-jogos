@@ -44,7 +44,6 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "api"))
 
 from scripts.fetch_odds import BASE, BET_MAP, load_key, parse_fixture_odds  # noqa: E402
 
@@ -97,7 +96,7 @@ def get_predictor():
     """Carrega o Predictor de producao (mesmos artefatos da API)."""
     from predictor import Predictor
 
-    return Predictor(art_dir=str(ROOT / "api" / "model_artifacts"))
+    return Predictor(art_dir=str(ROOT / "model_artifacts"))
 
 
 def model_snapshot(predictor, home: str, away: str, tournament: str, neutral: bool):

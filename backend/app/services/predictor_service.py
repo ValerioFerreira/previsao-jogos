@@ -31,26 +31,28 @@ ODDS_REGISTRY_PATH = REPO_ROOT / "data" / "odds" / "registry.json"
 
 @lru_cache(maxsize=1)
 def get_referees() -> list[str]:
-    """Lista de árbitros (autocomplete). Offline, extraída dos fixtures brutos."""
-    if REFEREES_PATH.exists():
-        try:
-            return json.loads(REFEREES_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return []
+    """Lista de árbitros (autocomplete). Extraída da base de dados."""
+    from app.db.connection import engine
+    try:
+        df = pd.read_sql("SELECT name FROM referees ORDER BY name ASC", con=engine)
+        return df["name"].tolist()
+    except Exception as e:
+        print(f"[ERRO DB] referees: {e}")
+        return []
 
 
 @lru_cache(maxsize=1)
 def get_team_ids() -> dict[str, int]:
-    """Mapa nome_da_seleção -> team_id (para montar URL do logo). Offline.
-    Inclui as chaves canonizadas (alias) para que o lookup pelo nome exibido
-    (ex.: 'Czech Republic') funcione mesmo quando o id veio sob 'Czechia'."""
-    if not TEAM_IDS_PATH.exists():
-        return {}
+    """Mapa nome_da_seleção -> team_id (para montar URL do logo).
+    Inclui as chaves canonizadas (alias)."""
+    from app.db.connection import engine
     try:
-        raw = json.loads(TEAM_IDS_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+        df = pd.read_sql("SELECT team_name, team_id FROM team_ids", con=engine)
+        raw = dict(zip(df["team_name"], df["team_id"]))
+    except Exception as e:
+        print(f"[ERRO DB] team_ids: {e}")
+        raw = {}
+        
     out = dict(raw)
     for name, tid in raw.items():
         out.setdefault(_norm(name), tid)
@@ -63,15 +65,16 @@ PAST_FIXTURES_PATH = REPO_ROOT / "data" / "built" / "past_fixtures.json"
 
 @lru_cache(maxsize=1)
 def get_past_fixtures() -> list[dict[str, Any]]:
-    """Lista de partidas já disputadas (para o seletor de Partidas Passadas).
-    O fixture_id preserva o nome cru (chave do índice); home/away exibidos são
-    canonizados (alias) para casar com a base/tradução PT-BR."""
-    if not PAST_FIXTURES_PATH.exists():
-        return []
+    """Lista de partidas já disputadas (para o seletor de Partidas Passadas)."""
+    from app.db.connection import engine
     try:
-        raw = json.loads(PAST_FIXTURES_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        return []
+        query = "SELECT * FROM past_fixtures ORDER BY date DESC"
+        df = pd.read_sql(query, con=engine)
+        raw = df.to_dict(orient="records")
+    except Exception as e:
+        print(f"[ERRO DB] past_fixtures: {e}")
+        raw = []
+        
     for f in raw:
         f["home"] = _norm(f.get("home"))
         f["away"] = _norm(f.get("away"))
@@ -80,18 +83,18 @@ def get_past_fixtures() -> list[dict[str, Any]]:
 
 @lru_cache(maxsize=1)
 def _fixture_index() -> dict[str, str]:
-    if FIXTURE_INDEX_PATH.exists():
-        try:
-            return json.loads(FIXTURE_INDEX_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {}
+    from app.db.connection import engine
+    try:
+        df = pd.read_sql("SELECT key, path FROM fixture_index", con=engine)
+        return dict(zip(df["key"], df["path"]))
+    except Exception as e:
+        print(f"[ERRO DB] fixture_index: {e}")
+        return {}
 
 
 @lru_cache(maxsize=1)
 def _fixture_index_norm() -> dict[str, str]:
-    """Índice com chaves canonizadas (date|norm(home)|norm(away)) -> caminho, para
-    resolver lookups feitos com nomes já normalizados (ex.: 'Czech Republic')."""
+    """Índice com chaves canonizadas (date|norm(home)|norm(away)) -> caminho."""
     idx = {}
     for k, path in _fixture_index().items():
         parts = k.split("|")
@@ -292,23 +295,22 @@ def get_system_status() -> dict[str, str]:
 
 
 def get_recent_matches(team_name: str) -> dict[str, Any]:
-    """Carrega matches.parquet e extrai as últimas 5 partidas reais da equipe."""
-    if not PARQUET_PATH.exists():
-        return {"matches": [], "total_matches": 0}
-    
-    df = pd.read_parquet(PARQUET_PATH)
-    
-    # Filtrar jogos do time correspondente
-    df_team = df[df["team"] == team_name].copy()
-    total_matches = len(df_team)
-    if total_matches == 0:
+    """Consulta PostgreSQL e extrai as últimas 5 partidas reais da equipe."""
+    from app.db.connection import engine
+    try:
+        query = f"SELECT * FROM matches WHERE team = '{team_name}' ORDER BY date DESC LIMIT 5"
+        df_recent = pd.read_sql(query, con=engine)
+        
+        # Get total matches count efficiently
+        total_query = f"SELECT COUNT(*) as count FROM matches WHERE team = '{team_name}'"
+        total_df = pd.read_sql(total_query, con=engine)
+        total_matches = int(total_df.iloc[0]["count"]) if not total_df.empty else 0
+    except Exception as e:
+        print(f"[ERRO DB] {e}")
         return {"matches": [], "total_matches": 0}
         
-    # Ordenar por data decrescente
-    df_team = df_team.sort_values(by="date", ascending=False).reset_index(drop=True)
-    
-    # Obter os últimos 5 jogos
-    df_recent = df_team.head(5)
+    if total_matches == 0:
+        return {"matches": [], "total_matches": 0}
     
     matches = []
     for _, row in df_recent.iterrows():
@@ -330,16 +332,17 @@ def get_recent_matches(team_name: str) -> dict[str, Any]:
 
 def get_team_history(team_name: str) -> dict[str, Any]:
     """Extrai histórico do time para os gráficos da página de Estatísticas."""
-    if not PARQUET_PATH.exists():
+    from app.db.connection import engine
+    try:
+        # Pega as últimas 20 partidas para calcular tendências de ataque/defesa
+        query = f"SELECT * FROM matches WHERE team = '{team_name}' ORDER BY date ASC"
+        df_team = pd.read_sql(query, con=engine)
+    except Exception as e:
+        print(f"[ERRO DB] {e}")
         return {"team": team_name, "elo_history": [], "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
 
-    df = pd.read_parquet(PARQUET_PATH)
-    df_team = df[df["team"] == team_name].copy()
-    
     if df_team.empty:
         return {"team": team_name, "elo_history": [], "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
-
-    df_team = df_team.sort_values(by="date", ascending=True).reset_index(drop=True)
     
     # 1. Histórico de Elo Rating (pegando um ponto por ano para simplificar ou todos)
     elo_history = []
@@ -408,7 +411,7 @@ def get_team_history(team_name: str) -> dict[str, Any]:
 def get_team_anomalies(team_name: str) -> list[dict[str, Any]]:
     """Detecta anomalias estatísticas recentes baseadas no Z-Score da equipe."""
     # Obter o torneio padrão para determinar a classe competitivo/amistoso
-    return detect_anomalies(PARQUET_PATH, team_name, target_competition="World Cup")
+    return detect_anomalies(team_name, target_competition="World Cup")
 
 
 def allowed_origins() -> list[str]:

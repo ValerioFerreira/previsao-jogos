@@ -47,9 +47,26 @@ def main():
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
     OUT_PAST.write_text(json.dumps(past, ensure_ascii=False), encoding="utf-8")
-    print(f"Índice de fixtures: {len(index)} jogos -> {OUT}")
-    print(f"Partidas passadas: {len(past)} -> {OUT_PAST}")
+    print(f"Índice de fixtures (Local Fallback): {len(index)} jogos -> {OUT}")
+    print(f"Partidas passadas (Local Fallback): {len(past)} -> {OUT_PAST}")
 
+    # Salvar no Banco de Dados
+    try:
+        import pandas as pd
+        from app.db.connection import engine, truncate_and_append
+        
+        if index:
+            df_index = pd.DataFrame(list(index.items()), columns=["key", "path"])
+            truncate_and_append(df_index, "fixture_index", engine)
+            print("   Tabela 'fixture_index' salva no banco com sucesso.")
+            
+        if past:
+            df_past = pd.DataFrame(past)
+            truncate_and_append(df_past, "past_fixtures", engine)
+            print("   Tabela 'past_fixtures' salva no banco com sucesso.")
+            
+    except Exception as e:
+        print(f"[ERRO] Falha ao salvar no banco de dados: {e}")
 
 if __name__ == "__main__":
     main()

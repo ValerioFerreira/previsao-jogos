@@ -41,8 +41,26 @@ def main():
     OUT_REF.parent.mkdir(parents=True, exist_ok=True)
     OUT_REF.write_text(json.dumps(ref_list, ensure_ascii=False), encoding="utf-8")
     OUT_IDS.write_text(json.dumps(team_ids, ensure_ascii=False), encoding="utf-8")
-    print(f"Árbitros distintos: {len(ref_list)} -> {OUT_REF}")
-    print(f"Times com id: {len(team_ids)} -> {OUT_IDS}")
+    print(f"Árbitros distintos (Fallback Local): {len(ref_list)} -> {OUT_REF}")
+    print(f"Times com id (Fallback Local): {len(team_ids)} -> {OUT_IDS}")
+    
+    # Salvar no Banco de Dados
+    try:
+        import pandas as pd
+        from app.db.connection import engine, truncate_and_append
+        
+        if ref_list:
+            df_ref = pd.DataFrame(ref_list, columns=["name"])
+            truncate_and_append(df_ref, "referees", engine)
+            print("   Tabela 'referees' salva no banco com sucesso.")
+            
+        if team_ids:
+            df_ids = pd.DataFrame(list(team_ids.items()), columns=["team_name", "team_id"])
+            truncate_and_append(df_ids, "team_ids", engine)
+            print("   Tabela 'team_ids' salva no banco com sucesso.")
+            
+    except Exception as e:
+        print(f"[ERRO] Falha ao salvar no banco de dados: {e}")
 
 
 if __name__ == "__main__":

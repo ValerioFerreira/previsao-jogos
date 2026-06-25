@@ -882,10 +882,17 @@ def main():
     df_out = df[df["year"] >= CUTOFF_YEAR].copy().reset_index(drop=True)
     print(f"   {len(df_out)} linhas apos filtro ({len(df)} total)")
 
-    # Salvar
-    df_out.to_csv(OUTPUT_CSV, index=False)
-    print(f"\n>> CSV salvo: {OUTPUT_CSV}")
-    print(f"   {len(df_out)} linhas | {len(df_out.columns)} colunas")
+    # Salvar no Banco de Dados
+    try:
+        from app.db.connection import engine, truncate_and_append
+        print(f"\n>> Salvando na tabela 'features_enriched' no banco de dados...")
+        truncate_and_append(df_out, "features_enriched", engine)
+        print(f"   Salvo com sucesso: {len(df_out)} linhas | {len(df_out.columns)} colunas")
+    except Exception as e:
+        print(f"\n[ERRO] Falha ao salvar no banco de dados: {e}")
+        df_out.to_csv(OUTPUT_CSV, index=False)
+        print(f"\n>> Fallback local CSV salvo: {OUTPUT_CSV}")
+        print(f"   {len(df_out)} linhas | {len(df_out.columns)} colunas")
 
     # Comparar com original
     compare_with_original(df_out.copy(), ORIGINAL_CSV)

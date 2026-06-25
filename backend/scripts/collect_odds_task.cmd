@@ -7,7 +7,7 @@ set "REPO=%~dp0.."
 cd /d "%REPO%"
 if not exist "data\odds" mkdir "data\odds"
 echo ===== %DATE% %TIME% ===== >> "data\odds\collect.log"
-"api\.venv\Scripts\python.exe" "scripts\collect_odds_forward.py" --days 12 >> "data\odds\collect.log" 2>&1
+".venv\Scripts\python.exe" "scripts\collect_odds_forward.py" --days 12 >> "data\odds\collect.log" 2>&1
 REM fecha o loop: resolve os jogos que ja terminaram (barato ate haver jogos resolvidos)
-"api\.venv\Scripts\python.exe" "scripts\resolve_results.py" >> "data\odds\collect.log" 2>&1
+".venv\Scripts\python.exe" "scripts\resolve_results.py" >> "data\odds\collect.log" 2>&1
 endlocal
