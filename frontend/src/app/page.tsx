@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowLeft, ArrowRight, CheckCircle2, Target } from 'lucide-react';
 import { api, PredictionResponse, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
@@ -44,6 +44,61 @@ function cardPeriods(p: PredictionResponse, side: string) {
     '1º tempo': p.tempos?.cartoes_1t?.[side],
     '2º tempo': p.tempos?.cartoes_2t?.[side],
   };
+}
+
+// Placar Exato: 3 placares mais prováveis + alerta de potencial de desvio (placar
+// fora do padrão), no mesmo estilo do Radar de Anomalias.
+function PlacarExatoCard({ data, home, away }: {
+  data: NonNullable<PredictionResponse['placar_exato']>;
+  home: string;
+  away: string;
+}) {
+  const alerta = data.alerta;
+  const isAlert = alerta.nivel !== 'normal';
+  const alertStyles =
+    alerta.nivel === 'alto' ? 'bg-amber-500/10 border-amber-500/30'
+    : alerta.nivel === 'moderado' ? 'bg-amber-500/5 border-amber-500/20'
+    : 'bg-muted/50 border-border/50';
+  return (
+    <div className="bg-card border border-border/50 rounded-xl p-5">
+      <h4 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
+        <Target className="w-4 h-4 text-purple-500" />
+        Placar Exato
+        <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." />
+      </h4>
+      <p className="text-[10px] text-muted-foreground mb-3">
+        {teamPt(home)} <span className="opacity-60">(mandante)</span> × {teamPt(away)} <span className="opacity-60">(visitante)</span>
+      </p>
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {data.top.map((s, i) => (
+          <div key={i} className={`text-center rounded-lg p-2 border ${i === 0 ? 'bg-purple-500/10 border-purple-500/30' : 'bg-muted/30 border-border/30'}`}>
+            <p className="text-xl font-mono font-bold text-foreground">{s.mandante}<span className="text-muted-foreground mx-0.5">–</span>{s.visitante}</p>
+            <p className="text-[11px] font-mono text-cyan-400 mt-0.5">{s.prob.toFixed(1)}%</p>
+            <p className="text-[9px] text-muted-foreground mt-0.5">odd {oddRangeStr(s.prob)}</p>
+          </div>
+        ))}
+      </div>
+      <div className={`rounded-lg p-3 border ${alertStyles}`}>
+        <p className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+          <AlertTriangle className={`w-3.5 h-3.5 ${isAlert ? 'text-amber-400' : 'text-muted-foreground'}`} />
+          {isAlert ? `Alerta de desvio: potencial ${alerta.nivel}` : 'Padrão de placar normal'}
+        </p>
+        {isAlert ? (
+          <ul className="space-y-1">
+            {alerta.motivos.map((m, i) => (
+              <li key={i} className="text-xs text-amber-500/80 flex items-start gap-1.5">
+                <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0" /><span>{m}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">
+            Gols esperados equilibrados ({alerta.exp_mandante} x {alerta.exp_visitante}); sem indícios de placar fora do padrão.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // Badge de confiabilidade do JOGO pela cobertura de dados refinados (box-score).
@@ -448,23 +503,28 @@ export default function Previsoes() {
                       </div>
                     </div>
 
-                    {/* Ambas Marcam */}
+                    {/* Placar Exato (esquerda) + Ambas Marcam (direita), na mesma linha */}
                     {projection.ambas_marcam && (
-                      <div className="bg-card border border-border/50 rounded-xl p-5">
-                        <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                          Ambas Marcam
-                          <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
-                        </h4>
-                        <div className="flex flex-wrap items-center justify-around gap-4 text-center">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
-                            <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
-                            <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
+                      <div className={projection.placar_exato ? 'grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch' : ''}>
+                        {projection.placar_exato && (
+                          <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} />
+                        )}
+                        <div className="bg-card border border-border/50 rounded-xl p-5">
+                          <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                            Ambas Marcam
+                            <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
+                          </h4>
+                          <div className="flex flex-wrap items-center justify-around gap-4 text-center">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
+                              <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
+                              <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
+                              <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
+                              <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
+                            </div>
                           </div>
                         </div>
                       </div>

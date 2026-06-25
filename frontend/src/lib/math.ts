@@ -8,6 +8,15 @@ export function getProbFromOdd(odd: number): number {
   return parseFloat((1 / odd).toFixed(4));
 }
 
+// Faixa de "odd justa": da odd com 7% de margem para menos até a odd prevista (1/p).
+// Mesmo critério usado nos cards de Mercados ("Ver Todas as Linhas").
+export function fairOddRange(prob: number): string {
+  if (!prob || prob <= 0) return "—";
+  const odd = 1 / prob;
+  if (odd > 50) return "50+";
+  return `${(odd * 0.93).toFixed(2)}–${odd.toFixed(2)}`;
+}
+
 export function cdfFromDistribution(distribution: number[], threshold: number): number {
   let cumulative = 0;
   // distribution array contains probabilities for [0, 1, 2, ...]

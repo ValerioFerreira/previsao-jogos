@@ -76,6 +76,19 @@ export type PredictionResponse = {
     confianca: number;
     prob_sim: number;
   };
+  // Placar exato: 3 placares mais prováveis (top-3 da matriz conjunta DC) + alerta
+  // de potencial de desvio (placar fora do padrão).
+  placar_exato?: {
+    top: { mandante: number; visitante: number; prob: number }[];
+    alerta: {
+      nivel: "normal" | "moderado" | "alto";
+      supremacia_gols: number;
+      prob_4_mais: number;
+      exp_mandante: number;
+      exp_visitante: number;
+      motivos: string[];
+    };
+  };
   confronto_direto: string;
   odds: OddsBlock;
 };

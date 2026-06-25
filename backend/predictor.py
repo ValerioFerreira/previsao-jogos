@@ -380,6 +380,57 @@ class Predictor:
         gols_equipe = {home_team: self._corners_market(home_goals_pmf, GOALS_LINES),
                        away_team: self._corners_market(away_goals_pmf, GOALS_LINES)}
 
+        # Placar exato: 3 placares mais prováveis (top-3 da matriz conjunta) + um
+        # alerta de POTENCIAL DE DESVIO (placar fora do padrão). O sinal é tirado do
+        # próprio modelo: a "supremacia" (diferença de gols esperados entre as equipes)
+        # já sintetiza Elo, forma recente e ataque-vs-defesa — tudo que alimenta os
+        # lambdas do Dixon-Coles; somada à massa de cauda alta (P(4+ gols)), indica
+        # quando o jogo tende a placares elásticos.
+        J = np.asarray(P_joint_single, dtype=float)
+        Jn = J / J.sum() if J.sum() > 0 else J
+        cells = sorted(
+            ((i, j, float(Jn[i, j])) for i in range(Jn.shape[0]) for j in range(Jn.shape[1])),
+            key=lambda t: t[2], reverse=True,
+        )
+        top_placares = [{"mandante": int(i), "visitante": int(j), "prob": round(100 * p, 1)}
+                        for i, j, p in cells[:3]]
+
+        exp_home = float((np.arange(len(home_goals_pmf)) * home_goals_pmf).sum())
+        exp_away = float((np.arange(len(away_goals_pmf)) * away_goals_pmf).sum())
+        supremacia = abs(exp_home - exp_away)
+        p4 = float(prob_total_goals[4:].sum()) if len(prob_total_goals) > 4 else 0.0
+        p5 = float(prob_total_goals[5:].sum()) if len(prob_total_goals) > 5 else 0.0
+
+        motivos = []
+        if supremacia >= 1.3:
+            favorito = home_team if exp_home >= exp_away else away_team
+            motivos.append(
+                f"Forte favoritismo do {favorito}: {max(exp_home, exp_away):.1f} x "
+                f"{min(exp_home, exp_away):.1f} gols projetados (Elo, forma e ataque/defesa embutidos)."
+            )
+        if p4 >= 0.38:
+            motivos.append(
+                f"Placar alto projetado: {expected_goals:.1f} gols esperados, P(4+ gols) = {100 * p4:.0f}%."
+            )
+        if supremacia >= 1.8 or p5 >= 0.22 or (supremacia >= 1.3 and p4 >= 0.40):
+            nivel = "alto"
+        elif motivos:
+            nivel = "moderado"
+        else:
+            nivel = "normal"
+
+        placar_exato = {
+            "top": top_placares,
+            "alerta": {
+                "nivel": nivel,
+                "supremacia_gols": round(supremacia, 2),
+                "prob_4_mais": round(100 * p4, 1),
+                "exp_mandante": round(exp_home, 1),
+                "exp_visitante": round(exp_away, 1),
+                "motivos": motivos,
+            },
+        }
+
         # 1. Ortogonalizacao de estilo
         X_resid = apply_ortho_residuals(X, self.ortho_weights)
         
@@ -429,6 +480,7 @@ class Predictor:
                         "total": self._corners_market(cc["total"][0], CARDS_LINES)},
             "ambas_marcam": btts_res,
             "over_2_5": over_res,
+            "placar_exato": placar_exato,
             "tempos": tempos,
             "confronto_direto": h2h["_resumo"],
             "confiabilidade": confiabilidade,
