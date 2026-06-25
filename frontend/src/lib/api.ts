@@ -40,6 +40,12 @@ export type CountPrediction = NumericPrediction & {
   linhas: Record<string, OverUnderLine>;
 };
 
+// Motivo estruturado do alerta de desvio do Placar Exato (texto montado no front
+// em PT-BR; o lado favorito vira teamPt(home)/teamPt(away)).
+export type PlacarMotivo =
+  | { tipo: "favoritismo"; favorito_lado: "mandante" | "visitante"; exp_alto: number; exp_baixo: number }
+  | { tipo: "placar_alto"; exp_total: number; prob_4_mais: number };
+
 export type PredictionResponse = {
   vencedor: {
     vencedor: string;
@@ -77,7 +83,8 @@ export type PredictionResponse = {
     prob_sim: number;
   };
   // Placar exato: 3 placares mais prováveis (top-3 da matriz conjunta DC) + alerta
-  // de potencial de desvio (placar fora do padrão).
+  // de potencial de desvio (placar fora do padrão). Os motivos vêm estruturados
+  // (sem nome cru do time) para o front montar o texto em PT-BR com teamPt.
   placar_exato?: {
     top: { mandante: number; visitante: number; prob: number }[];
     alerta: {
@@ -86,7 +93,7 @@ export type PredictionResponse = {
       prob_4_mais: number;
       exp_mandante: number;
       exp_visitante: number;
-      motivos: string[];
+      motivos: PlacarMotivo[];
     };
   };
   confronto_direto: string;

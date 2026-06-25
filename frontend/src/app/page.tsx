@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowLeft, ArrowRight, CheckCircle2, Target } from 'lucide-react';
-import { api, PredictionResponse, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
+import { api, PredictionResponse, PlacarMotivo, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
@@ -59,6 +59,14 @@ function PlacarExatoCard({ data, home, away }: {
     alerta.nivel === 'alto' ? 'bg-amber-500/10 border-amber-500/30'
     : alerta.nivel === 'moderado' ? 'bg-amber-500/5 border-amber-500/20'
     : 'bg-muted/50 border-border/50';
+  // Texto do motivo em PT-BR: o lado favorito vira o nome traduzido (teamPt).
+  const motivoTexto = (m: PlacarMotivo): string => {
+    if (m.tipo === 'favoritismo') {
+      const fav = m.favorito_lado === 'mandante' ? teamPt(home) : teamPt(away);
+      return `${fav} é forte favorito: ${m.exp_alto} × ${m.exp_baixo} gols projetados (Elo, forma e ataque/defesa embutidos).`;
+    }
+    return `Placar alto projetado: ${m.exp_total} gols esperados, P(4+ gols) = ${m.prob_4_mais}%.`;
+  };
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5">
       <h4 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
@@ -87,7 +95,7 @@ function PlacarExatoCard({ data, home, away }: {
           <ul className="space-y-1">
             {alerta.motivos.map((m, i) => (
               <li key={i} className="text-xs text-amber-500/80 flex items-start gap-1.5">
-                <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0" /><span>{m}</span>
+                <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0" /><span>{motivoTexto(m)}</span>
               </li>
             ))}
           </ul>
@@ -432,9 +440,9 @@ export default function Previsoes() {
             {(() => {
               const hasH2H = h2hData && (h2hData.h2h_played ?? 0) > 0;
               return (
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
                   {hasH2H && (
-                    <div className="lg:col-span-2 bg-card border border-border/50 rounded-xl p-5 shadow-sm text-center">
+                    <div className="lg:col-span-2 bg-card border border-border/50 rounded-xl p-5 shadow-sm text-center flex flex-col justify-center">
                       <h3 className="text-sm font-bold uppercase mb-1">Resumo do Confronto Direto</h3>
                       <p className="text-[10px] text-muted-foreground mb-4">
                         {h2hData.h2h_played} {h2hData.h2h_played === 1 ? 'jogo' : 'jogos'}
@@ -509,12 +517,12 @@ export default function Previsoes() {
                         {projection.placar_exato && (
                           <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} />
                         )}
-                        <div className="bg-card border border-border/50 rounded-xl p-5">
+                        <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col">
                           <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
                             Ambas Marcam
                             <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
                           </h4>
-                          <div className="flex flex-wrap items-center justify-around gap-4 text-center">
+                          <div className="flex-1 flex flex-wrap items-center justify-center gap-8 text-center">
                             <div>
                               <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
                               <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>

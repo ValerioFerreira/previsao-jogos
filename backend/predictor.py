@@ -401,17 +401,22 @@ class Predictor:
         p4 = float(prob_total_goals[4:].sum()) if len(prob_total_goals) > 4 else 0.0
         p5 = float(prob_total_goals[5:].sum()) if len(prob_total_goals) > 5 else 0.0
 
+        # Motivos estruturados (sem o nome cru do time): o front monta o texto em
+        # PT-BR aplicando teamPt ao lado favorito (mandante/visitante).
         motivos = []
         if supremacia >= 1.3:
-            favorito = home_team if exp_home >= exp_away else away_team
-            motivos.append(
-                f"Forte favoritismo do {favorito}: {max(exp_home, exp_away):.1f} x "
-                f"{min(exp_home, exp_away):.1f} gols projetados (Elo, forma e ataque/defesa embutidos)."
-            )
+            motivos.append({
+                "tipo": "favoritismo",
+                "favorito_lado": "mandante" if exp_home >= exp_away else "visitante",
+                "exp_alto": round(max(exp_home, exp_away), 1),
+                "exp_baixo": round(min(exp_home, exp_away), 1),
+            })
         if p4 >= 0.38:
-            motivos.append(
-                f"Placar alto projetado: {expected_goals:.1f} gols esperados, P(4+ gols) = {100 * p4:.0f}%."
-            )
+            motivos.append({
+                "tipo": "placar_alto",
+                "exp_total": round(expected_goals, 1),
+                "prob_4_mais": round(100 * p4),
+            })
         if supremacia >= 1.8 or p5 >= 0.22 or (supremacia >= 1.3 and p4 >= 0.40):
             nivel = "alto"
         elif motivos:
