@@ -8,9 +8,14 @@ from pathlib import Path
 from typing import Any
 import pandas as pd
 
-from predictor import Predictor
+from predictor import Predictor, TEAM_ALIASES
 from app.services.odds import enrich_with_odds
 from anomaly_detector import detect_anomalies
+
+
+def _norm(name: str) -> str:
+    """Canoniza nome de seleção (alias) — leve, para listas e lookups."""
+    return TEAM_ALIASES.get(name, name) if name else name
 
 
 API_ROOT = Path(__file__).resolve().parents[2]
@@ -52,13 +57,19 @@ PAST_FIXTURES_PATH = REPO_ROOT / "data" / "built" / "past_fixtures.json"
 
 @lru_cache(maxsize=1)
 def get_past_fixtures() -> list[dict[str, Any]]:
-    """Lista de partidas já disputadas (para o seletor de Partidas Passadas)."""
-    if PAST_FIXTURES_PATH.exists():
-        try:
-            return json.loads(PAST_FIXTURES_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return []
+    """Lista de partidas já disputadas (para o seletor de Partidas Passadas).
+    O fixture_id preserva o nome cru (chave do índice); home/away exibidos são
+    canonizados (alias) para casar com a base/tradução PT-BR."""
+    if not PAST_FIXTURES_PATH.exists():
+        return []
+    try:
+        raw = json.loads(PAST_FIXTURES_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    for f in raw:
+        f["home"] = _norm(f.get("home"))
+        f["away"] = _norm(f.get("away"))
+    return raw
 
 
 @lru_cache(maxsize=1)
@@ -71,12 +82,26 @@ def _fixture_index() -> dict[str, str]:
     return {}
 
 
+@lru_cache(maxsize=1)
+def _fixture_index_norm() -> dict[str, str]:
+    """Índice com chaves canonizadas (date|norm(home)|norm(away)) -> caminho, para
+    resolver lookups feitos com nomes já normalizados (ex.: 'Czech Republic')."""
+    idx = {}
+    for k, path in _fixture_index().items():
+        parts = k.split("|")
+        if len(parts) == 3:
+            idx[f"{parts[0]}|{_norm(parts[1])}|{_norm(parts[2])}"] = path
+    return idx
+
+
 def get_match_detail(home: str, away: str, date: str) -> dict[str, Any]:
     """Detalhe completo de uma partida JÁ DISPUTADA, a partir do cache local de
     fixtures brutos (sem cota). Robusto a dados ausentes (jogos antigos/ligas menores).
     """
     import gzip
-    rel = _fixture_index().get(f"{date[:10]}|{home}|{away}")
+    d10 = date[:10]
+    rel = (_fixture_index().get(f"{d10}|{home}|{away}")
+           or _fixture_index_norm().get(f"{d10}|{_norm(home)}|{_norm(away)}"))
     if not rel:
         return {"found": False}
     try:
@@ -157,8 +182,8 @@ def get_match_detail(home: str, away: str, date: str) -> dict[str, Any]:
             "venue": venue.get("name"), "city": venue.get("city"),
             "league": lg.get("name"), "league_logo": lg.get("logo"),
             "country": lg.get("country"), "season": lg.get("season"), "round": lg.get("round"),
-            "home": th.get("name"), "home_id": th.get("id"),
-            "away": ta.get("name"), "away_id": ta.get("id"),
+            "home": _norm(th.get("name")), "home_id": th.get("id"),
+            "away": _norm(ta.get("name")), "away_id": ta.get("id"),
         },
         "goals": d.get("goals") or {},
         "score": {"halftime": score.get("halftime"), "fulltime": score.get("fulltime"),
@@ -187,8 +212,8 @@ def get_upcoming_fixtures() -> list[dict[str, Any]]:
             continue  # já ocorreu
         out.append({
             "fixture_id": fid,
-            "home": info.get("home"),
-            "away": info.get("away"),
+            "home": _norm(info.get("home")),
+            "away": _norm(info.get("away")),
             "tournament": info.get("tournament", "Amistoso"),
             "neutral": bool(info.get("neutral", False)),
             "date": date,

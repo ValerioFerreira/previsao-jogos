@@ -15,6 +15,8 @@ import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
 import { MatchModePicker } from '@/components/platform/MatchModePicker';
+import { MatchHeader } from '@/components/platform/MatchHeader';
+import { teamPt } from '@/lib/teamNames';
 
 const MARKET_OPTIONS = [
   { value: 'gols', label: 'Gols Totais' },
@@ -29,9 +31,13 @@ export default function ConstruirAposta() {
   const [loading, setLoading] = useState(false);
   const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
   const [pickerMode, setPickerMode] = useState<'futura' | 'passada' | 'independente'>('independente');
+  const [teamIds, setTeamIds] = useState<Record<string, number>>({});
+  const [matchDate, setMatchDate] = useState<string | undefined>(undefined);
+  const [referee, setReferee] = useState('');
 
   React.useEffect(() => {
     api.teams().then(res => setTeams(res.teams)).catch(console.error);
+    api.teamIds().then(setTeamIds).catch(() => {});
   }, []);
 
   const bothSelected = homeTeamId && awayTeamId && homeTeamId !== awayTeamId;
@@ -53,6 +59,9 @@ export default function ConstruirAposta() {
 
   return (
     <div className="space-y-6">
+      {bothSelected && (
+        <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} />
+      )}
       {/* Team Selection */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -63,7 +72,11 @@ export default function ConstruirAposta() {
           <Wrench className="w-5 h-5 text-purple-500" />
           Laboratório de Apostas
         </h2>
-        <MatchModePicker onModeChange={setPickerMode} />
+        <MatchModePicker
+          onModeChange={(m) => { setPickerMode(m); if (m !== 'futura') setMatchDate(undefined); }}
+          onSelectFuture={(fx) => setMatchDate(fx.date)}
+          onRefereeChange={setReferee}
+        />
         {pickerMode === 'independente' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
             <div>
@@ -379,9 +392,9 @@ function ParlayBuilder({ prediction, homeTeam, awayTeam }: { prediction: Predict
   const parlayOptions = useMemo(() => {
     const options = [];
     // Result lines
-    options.push({ id: 'home_win', label: `Vitória ${homeTeam}`, prob: (prediction.vencedor.probabilidades[homeTeam] || 0) / 100 });
+    options.push({ id: 'home_win', label: `Vitória ${teamPt(homeTeam)}`, prob: (prediction.vencedor.probabilidades[homeTeam] || 0) / 100 });
     options.push({ id: 'draw', label: 'Empate', prob: (prediction.vencedor.probabilidades['Empate'] || 0) / 100 });
-    options.push({ id: 'away_win', label: `Vitória ${awayTeam}`, prob: (prediction.vencedor.probabilidades[awayTeam] || 0) / 100 });
+    options.push({ id: 'away_win', label: `Vitória ${teamPt(awayTeam)}`, prob: (prediction.vencedor.probabilidades[awayTeam] || 0) / 100 });
 
     // Market lines
     MARKET_OPTIONS.forEach(marketInfo => {
@@ -415,7 +428,7 @@ function ParlayBuilder({ prediction, homeTeam, awayTeam }: { prediction: Predict
     >
       <h3 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
         <Layers className="w-4 h-4 text-amber-500" />
-        Calculadora de Combinadas (Same Game Parlay)
+        Calculadora de Combinadas
         <InfoTooltip text="Selecione múltiplas linhas de projeção do mesmo confronto para calcular a probabilidade combinada. Lembre-se: eventos do mesmo jogo possuem correlações que o cálculo independente não captura." />
       </h3>
 

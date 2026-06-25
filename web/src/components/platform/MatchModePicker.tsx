@@ -15,11 +15,15 @@ type Mode = 'futura' | 'passada' | 'independente';
 export function MatchModePicker({
   showReferee = true,
   onSelectPast,
+  onSelectFuture,
   onModeChange,
+  onRefereeChange,
 }: {
   showReferee?: boolean;
   onSelectPast?: (fx: PickerFixture) => void;
+  onSelectFuture?: (fx: PickerFixture) => void;
   onModeChange?: (m: Mode) => void;
+  onRefereeChange?: (r: string) => void;
 }) {
   const { setHomeTeamId, setAwayTeamId, setCompetition, setNeutralField } = usePrediction();
   const [mode, setModeState] = useState<Mode>('independente');
@@ -44,7 +48,10 @@ export function MatchModePicker({
     setAwayTeamId(fx.away);
     if (fx.tournament) setCompetition(fx.tournament);
     setNeutralField(!!fx.neutral);
+    onSelectFuture?.(fx);
   };
+
+  const changeReferee = (r: string) => { setReferee(r); onRefereeChange?.(r); };
 
   const tabCls = (m: Mode) =>
     `px-3 py-1.5 rounded-md transition-colors ${mode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`;
@@ -83,7 +90,7 @@ export function MatchModePicker({
             Árbitro (opcional)
             <InfoTooltip text="Você pode informar o árbitro. No momento não influencia os cálculos; ficará disponível para análises futuras." />
           </Label>
-          <TeamSelect value={referee} onValueChange={setReferee} teams={referees} labelFn={(s) => s} placeholder="Buscar árbitro..." searchPlaceholder="Buscar árbitro..." />
+          <TeamSelect value={referee} onValueChange={changeReferee} teams={referees} labelFn={(s) => s} placeholder="Buscar árbitro..." searchPlaceholder="Buscar árbitro..." />
         </div>
       )}
 

@@ -11,6 +11,7 @@ import { TeamSelect } from '@/components/platform/TeamSelect';
 import { teamPt } from '@/lib/teamNames';
 import { MatchDetail } from '@/components/platform/MatchDetail';
 import { MatchModePicker } from '@/components/platform/MatchModePicker';
+import { MatchHeader } from '@/components/platform/MatchHeader';
 import { ArrowLeft } from 'lucide-react';
 
 export default function Estatisticas() {
@@ -28,6 +29,8 @@ export default function Estatisticas() {
   const [matchData, setMatchData] = useState<MatchDetailT | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
   const [pickerMode, setPickerMode] = useState<'futura' | 'passada' | 'independente'>('independente');
+  const [teamIds, setTeamIds] = useState<Record<string, number>>({});
+  const [matchDate, setMatchDate] = useState<string | undefined>(undefined);
 
   const openMatch = (home: string, away: string, date: string) => {
     setMatchParams({ home, away, date });
@@ -37,6 +40,7 @@ export default function Estatisticas() {
 
   React.useEffect(() => {
     api.teams().then(res => setTeams(res.teams)).catch(console.error);
+    api.teamIds().then(setTeamIds).catch(() => {});
     const sp = new URLSearchParams(window.location.search);
     const home = sp.get('home'), away = sp.get('away'), date = sp.get('date');
     if (home && away && date) openMatch(home, away, date);
@@ -134,6 +138,9 @@ export default function Estatisticas() {
 
   return (
     <div className="space-y-6">
+      {bothSelected && (
+        <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} date={matchDate} />
+      )}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -143,7 +150,12 @@ export default function Estatisticas() {
           <BarChart3 className="w-5 h-5 text-cyan-500" />
           Dashboard Analítico
         </h2>
-        <MatchModePicker showReferee={false} onModeChange={setPickerMode} onSelectPast={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))} />
+        <MatchModePicker
+          showReferee={false}
+          onModeChange={(m) => { setPickerMode(m); if (m !== 'futura') setMatchDate(undefined); }}
+          onSelectFuture={(fx) => setMatchDate(fx.date)}
+          onSelectPast={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))}
+        />
         {pickerMode === 'independente' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
             <div>

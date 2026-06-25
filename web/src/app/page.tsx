@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowLeft, ArrowRight } from 'lucide-react';
 import { api, PredictionResponse, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
@@ -14,6 +14,7 @@ import { MarketCard } from '@/components/platform/MarketCard';
 import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 import { MatchPickerModal } from '@/components/platform/MatchPickerModal';
+import { MatchHeader } from '@/components/platform/MatchHeader';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -65,7 +66,7 @@ function MatchReliabilityBadge({ confiabilidade }: { confiabilidade: PredictionR
 function DataReliabilityBadge({ totalMatches }: { totalMatches: number }) {
   const isLow = totalMatches < 10;
   return (
-    <div className={`mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border ${isLow ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'}`}>
+    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border ${isLow ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'}`}>
       {isLow ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
       {isLow ? `Confiabilidade Baixa (${totalMatches} jogos no BD)` : `Confiabilidade Adequada (${totalMatches} jogos)`}
     </div>
@@ -132,6 +133,7 @@ export default function Previsoes() {
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
   const [modalOpen, setModalOpen] = useState(false);
+  const [matchDate, setMatchDate] = useState<string | undefined>(undefined);
 
   React.useEffect(() => {
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
@@ -146,6 +148,7 @@ export default function Previsoes() {
     setAwayTeamId(fx.away);
     setCompetition(fx.tournament);
     setNeutralField(fx.neutral);
+    setMatchDate(fx.date);
     setProjection(null);
   };
 
@@ -212,6 +215,9 @@ export default function Previsoes() {
 
   return (
     <div className="space-y-6">
+      {homeTeamId && awayTeamId && (
+        <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} />
+      )}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border/50 rounded-xl p-5">
         <h2 className="text-lg font-heading font-bold mb-4 flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-emerald-500" /> Configuração do Confronto
@@ -224,7 +230,7 @@ export default function Previsoes() {
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'futura' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Selecionar Partida Futura</button>
           <button
-            onClick={() => setMode('independente')}
+            onClick={() => { setMode('independente'); setMatchDate(undefined); }}
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'independente' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Análise Independente</button>
         </div>
@@ -293,19 +299,23 @@ export default function Previsoes() {
               { teamId: awayTeamId, form: awayForm, anomalies: awayAnomalies, label: 'Visitante' }
             ].map(({ teamId, form, anomalies, label }) => teamId && (
               <div key={teamId} className="bg-card border border-border/50 rounded-xl p-5 overflow-hidden">
-                <div className="relative mb-2">
-                  <div className="absolute right-0 top-0 z-10"><DataReliabilityBadge totalMatches={form.total} /></div>
-                  <div className="text-center">
-                    {teamLogoUrl(teamIds[teamId]) && (
-                      <img src={teamLogoUrl(teamIds[teamId])!} alt="" className="w-9 h-9 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    )}
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-                    <h3 className="text-sm font-semibold">{teamPt(teamId)}</h3>
-                  </div>
+                <div className="mb-2 text-center">
+                  {teamLogoUrl(teamIds[teamId]) && (
+                    <img src={teamLogoUrl(teamIds[teamId])!} alt="" className="w-9 h-9 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  )}
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+                  <h3 className="text-sm font-semibold">{teamPt(teamId)}</h3>
                 </div>
 
                 <div className="mt-4 mb-4">
-                  <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">Resultados dos últimos 5 jogos</p>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <p className="text-xs text-muted-foreground">Resultados dos últimos 5 jogos</p>
+                    <DataReliabilityBadge totalMatches={form.total} />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1.5 px-0.5">
+                    <span className="flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Mais Recentes</span>
+                    <span className="flex items-center gap-1">Mais Antigos <ArrowRight className="w-3 h-3" /></span>
+                  </div>
                   <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
                     {form.matches.map((m, i) => {
                       const mh = m.is_home ? teamId : m.opponent;
