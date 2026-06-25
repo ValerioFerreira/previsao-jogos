@@ -108,14 +108,22 @@ def get_match_detail(home: str, away: str, date: str) -> dict[str, Any]:
     fixtures brutos (sem cota). Robusto a dados ausentes (jogos antigos/ligas menores).
     """
     import gzip
+    from app.services.fixture_fetch import cache_get, get_or_fetch_detail
     d10 = date[:10]
-    rel = (_fixture_index().get(f"{d10}|{home}|{away}")
-           or _fixture_index_norm().get(f"{d10}|{_norm(home)}|{_norm(away)}"))
-    if not rel:
-        return {"found": False}
-    try:
-        d = json.load(gzip.open(REPO_ROOT / rel))
-    except Exception:
+    key = f"{d10}|{_norm(home)}|{_norm(away)}"
+
+    d = cache_get(key)  # 1) cache no Neon (preenchido pela API/precache)
+    if d is None:       # 2) .gz local (dev)
+        rel = (_fixture_index().get(f"{d10}|{home}|{away}")
+               or _fixture_index_norm().get(key))
+        if rel:
+            try:
+                d = json.load(gzip.open(REPO_ROOT / rel))
+            except Exception:
+                d = None
+    if d is None:       # 3) API ao vivo (e cacheia no Neon para a próxima)
+        d = get_or_fetch_detail(_norm(home), _norm(away), d10, key, get_team_ids())
+    if d is None:
         return {"found": False}
 
     fx = d.get("fixture") or {}
