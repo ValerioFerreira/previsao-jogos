@@ -28,6 +28,11 @@ Testados como grupos e reprovados pelo gate de **estabilidade** (o dataset já t
 - **Gate de adoção:** melhora em **≥ 7/9 janelas de walk-forward** E não regride gols/resultado. Estabilidade > magnitude. (Neste mercado quase-moeda, edge pequeno e estável vale; ganho de corte único isolado **não** vale — ver o blend de §5 do relatório: 3/6, reprovado.)
 - Cuidado com multiple-testing: ao varrer muitos grupos, exigir estabilidade em 2 esquemas de janela antes de adotar.
 
+## 3b. Resultados das rodadas já executadas
+- **Rodada #1 — SoS ajustado por gols (grupo `S2_sosadj`)** — `scripts/experiment_btts_features_round3.py`. Ajusta ataque/defesa pelo nível dos adversários enfrentados (schdef/schatt = média de `opp_ga_l10`/`opp_gf_l10` nas últimas 10, point-in-time) + resíduos `*_att_adj`/`*_def_adj`. Resultado por cima de base+pace:
+  - BTTS: positivo na média em 3 esquemas de janela (−0,0021 / −0,0011 / −0,0002) mas consistência só ~70% (5/6, 7/9, **4/8**); melhora **resultado 7/9**; gols neutro; resíduos sozinhos pioram.
+  - **Decisão: NÃO subir** — edge pequeno e ruidoso (abaixo da barra do pace ~92%), e exigiria features novas por seleção no `snapshot` (wiring mais pesado). Candidato a refinar (ex.: só recente, mínimo de histórico) numa próxima passada.
+
 ## 4. Próximas rodadas — ideias priorizadas (do mais promissor ao menos)
 1. **Ratings ofensivo/defensivo ajustados por adversário (SoS iterativo de verdade)** — não o proxy de Elo que falhou. Estilo Poisson/Massey: resolver ataque/defesa por seleção ajustando pela força de quem enfrentou, point-in-time (janela móvel). É o sinal que rates cruas **não** têm.
 2. **Pace assimétrico / λ̂ empírico** — produto Poisson por lado: `lam_home ≈ home_gf_l10 * away_ga_l10 / media_liga`, `lam_away ≈ away_gf_l10 * home_ga_l10 / media_liga`, e `btts_poisson = (1-e^-lam_home)(1-e^-lam_away)`. Variante direta do vencedor; testar como features.

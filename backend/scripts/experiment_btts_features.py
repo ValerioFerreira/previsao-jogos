@@ -63,10 +63,14 @@ def build_features(df):
     df = df.copy()
     if "match_id" not in df.columns or df["match_id"].duplicated().any():
         df["match_id"] = (df["date"].astype(str)+"|"+df["home_team"].astype(str)+"|"+df["away_team"].astype(str))
-    need = ["match_id","date","home_team","away_team","home_score","away_score","home_elo_pre","away_elo_pre"]
-    h = df[need].rename(columns={"home_team":"team","away_team":"opp","home_score":"gf","away_score":"ga","away_elo_pre":"opp_elo"}); h["is_home"]=1
-    a = df[need].rename(columns={"away_team":"team","home_team":"opp","away_score":"gf","home_score":"ga","home_elo_pre":"opp_elo"}); a["is_home"]=0
-    h=h[["match_id","team","date","gf","ga","opp_elo","is_home"]]; a=a[["match_id","team","date","gf","ga","opp_elo","is_home"]]
+    need = ["match_id","date","home_team","away_team","home_score","away_score","home_elo_pre","away_elo_pre",
+            "home_gf_l10","away_gf_l10","home_ga_l10","away_ga_l10"]
+    h = df[need].rename(columns={"home_team":"team","home_score":"gf","away_score":"ga","away_elo_pre":"opp_elo",
+                                 "away_ga_l10":"opp_ga","away_gf_l10":"opp_gf"}); h["is_home"]=1
+    a = df[need].rename(columns={"away_team":"team","away_score":"gf","home_score":"ga","home_elo_pre":"opp_elo",
+                                 "home_ga_l10":"opp_ga","home_gf_l10":"opp_gf"}); a["is_home"]=0
+    keep=["match_id","team","date","gf","ga","opp_elo","opp_ga","opp_gf","is_home"]
+    h=h[keep]; a=a[keep]
     gl = pd.concat([h,a],ignore_index=True).sort_values(["team","date","match_id"]).reset_index(drop=True)
     gl["scored"]=(gl["gf"]>=1).astype(float); gl["cs"]=(gl["ga"]==0).astype(float)
     groups = {}
@@ -93,6 +97,24 @@ def build_features(df):
             columns={"oppelo_5":f"{pre}_oppelo_5","oppelo_10":f"{pre}_oppelo_10"})
         df=df.merge(sub,on="match_id",how="left"); scols+=[f"{pre}_oppelo_5",f"{pre}_oppelo_10"]
     groups["S_sos"]=scols
+
+    # S2 — SoS ajustado por GOLS (força ofensiva/defensiva dos adversários enfrentados)
+    # schdef = leakiness média (ga_l10) das defesas que a seleção enfrentou nas últimas
+    # K partidas; schatt = potência média (gf_l10) dos ataques que enfrentou. Os resíduos
+    # ajustam o gf/ga próprio pelo nível do adversário (ataque/defesa "de verdade").
+    gl["schdef_10"]=roll(gl,"opp_ga",10)
+    gl["schatt_10"]=roll(gl,"opp_gf",10)
+    s2cols=[]
+    for is_home, pre in [(1,"home"),(0,"away")]:
+        sub=gl[gl.is_home==is_home][["match_id","schdef_10","schatt_10"]].rename(
+            columns={"schdef_10":f"{pre}_schdef_10","schatt_10":f"{pre}_schatt_10"})
+        df=df.merge(sub,on="match_id",how="left"); s2cols+=[f"{pre}_schdef_10",f"{pre}_schatt_10"]
+    df["home_att_adj"]=df["home_gf_l10"]-df["home_schdef_10"]   # marca acima/abaixo do nível das defesas que pegou
+    df["away_att_adj"]=df["away_gf_l10"]-df["away_schdef_10"]
+    df["home_def_adj"]=df["home_ga_l10"]-df["home_schatt_10"]   # sofre acima/abaixo do nível dos ataques que pegou
+    df["away_def_adj"]=df["away_ga_l10"]-df["away_schatt_10"]
+    s2cols+=["home_att_adj","away_att_adj","home_def_adj","away_def_adj"]
+    groups["S2_sosadj"]=s2cols
 
     # E — EWMA (span 5)
     gl["ewg"]=gl.groupby("team",sort=False)["gf"].transform(lambda s: s.shift(1).ewm(span=5,min_periods=1).mean())
