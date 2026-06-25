@@ -121,6 +121,11 @@ class Predictor:
             self.h2h_stats = pd.read_csv(f"{art_dir}/h2h_stats.csv", parse_dates=["date"])
         except Exception:
             self.h2h_stats = None
+        # base profunda de resultados (martj42 pré-2016 + api 2016+) só para o card H2H
+        try:
+            self.h2h_results = pd.read_csv(f"{art_dir}/h2h_results.csv", parse_dates=["date"])
+        except Exception:
+            self.h2h_results = None
 
     # ----------------------------------------------------------------- normalização de nome
     def norm_team(self, name):
@@ -136,7 +141,8 @@ class Predictor:
 
     # ----------------------------------------------------------------- confronto direto
     def head_to_head(self, home_team, away_team):
-        r = self.results
+        # usa a base profunda (martj42+api) p/ o card de confronto direto, se disponível
+        r = self.h2h_results if self.h2h_results is not None else self.results
         m = r[((r.home_team == home_team) & (r.away_team == away_team)) |
               ((r.home_team == away_team) & (r.away_team == home_team))]
         if len(m) == 0:
