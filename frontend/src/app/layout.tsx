@@ -10,8 +10,12 @@ import { PredictionProvider } from "@/lib/PredictionContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Honestidade Probabilística | Previsões",
+  title: "ApostAI - Tips and Stats",
   description: "Análise quantitativa e previsão probabilística para partidas de futebol de seleções.",
+  icons: {
+    icon: "/images/favicon-32x32.ico",
+    shortcut: "/images/favicon-32x32.ico",
+  },
 };
 
 export default function RootLayout({

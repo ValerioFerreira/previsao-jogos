@@ -34,6 +34,7 @@ export default function Header() {
             <span className="font-heading font-bold text-base sm:text-lg tracking-tight flex items-center gap-0.5">
               Apost
               <span className="font-mono font-extrabold bg-gradient-to-br from-emerald-500 to-cyan-500 text-white px-1.5 py-0.5 rounded-md leading-none">AI</span>
+              <span className="hidden sm:inline ml-1.5 text-xs font-normal text-muted-foreground tracking-normal">Tips and Stats</span>
             </span>
           </Link>
 
