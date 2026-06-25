@@ -42,13 +42,19 @@ def get_referees() -> list[str]:
 
 @lru_cache(maxsize=1)
 def get_team_ids() -> dict[str, int]:
-    """Mapa nome_da_seleção -> team_id (para montar URL do logo). Offline."""
-    if TEAM_IDS_PATH.exists():
-        try:
-            return json.loads(TEAM_IDS_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {}
+    """Mapa nome_da_seleção -> team_id (para montar URL do logo). Offline.
+    Inclui as chaves canonizadas (alias) para que o lookup pelo nome exibido
+    (ex.: 'Czech Republic') funcione mesmo quando o id veio sob 'Czechia'."""
+    if not TEAM_IDS_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(TEAM_IDS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    out = dict(raw)
+    for name, tid in raw.items():
+        out.setdefault(_norm(name), tid)
+    return out
 
 
 FIXTURE_INDEX_PATH = REPO_ROOT / "data" / "built" / "fixture_index.json"

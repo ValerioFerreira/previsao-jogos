@@ -17,7 +17,7 @@ import { ArrowLeft } from 'lucide-react';
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
   
-  const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId } = usePrediction();
+  const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, neutralField } = usePrediction();
   const [loading, setLoading] = useState(false);
   
   const [homeHistory, setHomeHistory] = useState<TeamHistoryResponse | null>(null);
@@ -139,7 +139,7 @@ export default function Estatisticas() {
   return (
     <div className="space-y-6">
       {bothSelected && (
-        <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} date={matchDate} />
+        <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} neutral={neutralField} />
       )}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
