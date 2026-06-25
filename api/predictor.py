@@ -191,6 +191,7 @@ class Predictor:
                 "btts_percentage": btts_percentage,
                 "avg_total_goals": avg_total_goals,
                 "home_wins": h, "draws": d, "away_wins": a,
+                "last_date": str(pd.to_datetime(last).date()),
                 "home_avgs": _avgs(home_team), "away_avgs": _avgs(away_team),
                 "_resumo": f"{n} jogos · {home_team} {h}V · {d}E · {away_team} {a}V"}
 

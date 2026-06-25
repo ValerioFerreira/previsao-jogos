@@ -373,93 +373,106 @@ export default function Previsoes() {
               </div>
             )}
 
-            {/* Probabilidades de Resultados */}
-            <div className="bg-card border border-border/50 rounded-xl p-6 text-center shadow-sm">
-              <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">PROBABILIDADES DE RESULTADOS</p>
-              <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mb-4">
-                <div className="text-center w-full sm:w-1/4">
-                  {teamLogoUrl(teamIds[homeTeamId]) && (
-                    <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e)=>{e.currentTarget.style.display='none'}} />
-                  )}
-                  <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
-                  <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[homeTeamId])}</p>
-                </div>
-                <div className="text-center w-full sm:w-1/4 border-y sm:border-y-0 sm:border-x border-border/50 py-4 sm:py-0">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Empate</p>
-                  <p className="text-2xl font-bold font-mono text-muted-foreground">{projection.vencedor.probabilidades["Empate"]}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades["Empate"])}</p>
-                </div>
-                <div className="text-center w-full sm:w-1/4">
-                  {teamLogoUrl(teamIds[awayTeamId]) && (
-                    <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e)=>{e.currentTarget.style.display='none'}} />
-                  )}
-                  <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
-                  <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[awayTeamId])}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Ambas Marcam (BTTS) — logo abaixo das probabilidades de resultado */}
-            {projection.ambas_marcam && (
-              <div className="bg-card border border-border/50 rounded-xl p-5">
-                <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                  Ambas Marcam (BTTS)
-                  <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
-                </h4>
-                <div className="flex flex-wrap items-center justify-around gap-4 text-center">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
-                    <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
-                    <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Resumo do Confronto Direto — só quando há ao menos um confronto */}
-            {h2hData && (h2hData.h2h_played ?? 0) > 0 && (
-              <div className="bg-card border border-border/50 rounded-xl p-5 shadow-sm text-center">
-                <h3 className="text-sm font-bold uppercase mb-4">Resumo do Confronto Direto</h3>
-                <div className="flex items-start justify-center gap-6 sm:gap-12 mb-5">
-                  {[{ id: homeTeamId, w: h2hData.home_wins }, null, { id: awayTeamId, w: h2hData.away_wins }].map((side, i) =>
-                    side === null ? (
-                      <div key="draw" className="flex flex-col items-center justify-center pt-7">
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Empates</span>
-                        <span className="text-2xl font-mono font-bold text-muted-foreground">{h2hData.draws}</span>
-                      </div>
-                    ) : (
-                      <div key={side.id} className="flex flex-col items-center w-28">
-                        {teamLogoUrl(teamIds[side.id]) && (
-                          <img src={teamLogoUrl(teamIds[side.id])!} alt="" className="w-10 h-10 object-contain mb-1" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            {/* Confronto Direto (esquerda, estreito) + Resultados/Ambas Marcam (direita) */}
+            {(() => {
+              const hasH2H = h2hData && (h2hData.h2h_played ?? 0) > 0;
+              return (
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+                  {hasH2H && (
+                    <div className="lg:col-span-2 bg-card border border-border/50 rounded-xl p-5 shadow-sm text-center">
+                      <h3 className="text-sm font-bold uppercase mb-1">Resumo do Confronto Direto</h3>
+                      <p className="text-[10px] text-muted-foreground mb-4">
+                        {h2hData.h2h_played} {h2hData.h2h_played === 1 ? 'jogo' : 'jogos'}
+                        {h2hData.last_date ? ` · último em ${formatDateBR(h2hData.last_date)}` : ''}
+                      </p>
+                      <div className="flex items-start justify-center gap-4 sm:gap-6 mb-5">
+                        {[{ id: homeTeamId, w: h2hData.home_wins }, null, { id: awayTeamId, w: h2hData.away_wins }].map((side) =>
+                          side === null ? (
+                            <div key="draw" className="flex flex-col items-center justify-center pt-7">
+                              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Empates</span>
+                              <span className="text-2xl font-mono font-bold text-muted-foreground">{h2hData.draws}</span>
+                            </div>
+                          ) : (
+                            <div key={side.id} className="flex flex-col items-center w-24">
+                              {teamLogoUrl(teamIds[side.id]) && (
+                                <img src={teamLogoUrl(teamIds[side.id])!} alt="" className="w-9 h-9 object-contain mb-1" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                              )}
+                              <span className="text-xs font-semibold leading-tight">{teamPt(side.id)}</span>
+                              <span className="text-[10px] uppercase tracking-wide text-muted-foreground mt-1">Vitórias</span>
+                              <span className="flex items-center gap-1 text-lg font-mono font-bold">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {side.w}
+                              </span>
+                            </div>
+                          )
                         )}
-                        <span className="text-sm font-semibold leading-tight">{teamPt(side.id)}</span>
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground mt-1">Vitórias</span>
-                        <span className="flex items-center gap-1 text-xl font-mono font-bold">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {side.w}
-                        </span>
                       </div>
-                    )
-                  )}
-                </div>
-                <div className="max-w-md mx-auto">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Médias no confronto direto</p>
-                  {[['Gols', 'goals'], ['Chutes', 'shots'], ['Chutes a gol', 'shots_on_target'], ['Escanteios', 'corners'], ['Cartões', 'cards']].map(([label, key]) => (
-                    <div key={key} className="grid grid-cols-3 items-center text-xs py-1 border-t border-border/20">
-                      <span className="font-mono font-semibold text-emerald-400">{h2hData.home_avgs?.[key] ?? '—'}</span>
-                      <span className="text-muted-foreground">{label}</span>
-                      <span className="font-mono font-semibold text-cyan-400">{h2hData.away_avgs?.[key] ?? '—'}</span>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Médias no confronto direto</p>
+                        {[['Gols', 'goals'], ['Chutes', 'shots'], ['Chutes a gol', 'shots_on_target'], ['Escanteios', 'corners'], ['Cartões', 'cards']].map(([label, key]) => (
+                          <div key={key} className="grid grid-cols-3 items-center text-xs py-1 border-t border-border/20">
+                            <span className="font-mono font-semibold text-emerald-400">{h2hData.home_avgs?.[key] ?? '—'}</span>
+                            <span className="text-muted-foreground">{label}</span>
+                            <span className="font-mono font-semibold text-cyan-400">{h2hData.away_avgs?.[key] ?? '—'}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  <div className={`${hasH2H ? 'lg:col-span-3' : 'lg:col-span-5'} space-y-4`}>
+                    {/* RESULTADOS */}
+                    <div className="bg-card border border-border/50 rounded-xl p-6 text-center shadow-sm">
+                      <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">RESULTADOS</p>
+                      <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8">
+                        <div className="text-center w-full sm:w-1/4">
+                          {teamLogoUrl(teamIds[homeTeamId]) && (
+                            <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          )}
+                          <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
+                          <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[homeTeamId])}</p>
+                        </div>
+                        <div className="text-center w-full sm:w-1/4 border-y sm:border-y-0 sm:border-x border-border/50 py-4 sm:py-0">
+                          <p className="text-sm font-medium text-muted-foreground mb-1">Empate</p>
+                          <p className="text-2xl font-bold font-mono text-muted-foreground">{projection.vencedor.probabilidades["Empate"]}%</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades["Empate"])}</p>
+                        </div>
+                        <div className="text-center w-full sm:w-1/4">
+                          {teamLogoUrl(teamIds[awayTeamId]) && (
+                            <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          )}
+                          <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
+                          <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[awayTeamId])}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ambas Marcam */}
+                    {projection.ambas_marcam && (
+                      <div className="bg-card border border-border/50 rounded-xl p-5">
+                        <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                          Ambas Marcam
+                          <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
+                        </h4>
+                        <div className="flex flex-wrap items-center justify-around gap-4 text-center">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
+                            <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
+                            <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* MERCADOS */}
             <h3 className="text-lg font-heading font-bold mt-8 mb-4 border-b border-border/50 pb-2">MERCADOS</h3>
