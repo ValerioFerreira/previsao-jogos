@@ -27,6 +27,7 @@ export default function Estatisticas() {
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
   const [matchData, setMatchData] = useState<MatchDetailT | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
+  const [pickerMode, setPickerMode] = useState<'futura' | 'passada' | 'independente'>('independente');
 
   const openMatch = (home: string, away: string, date: string) => {
     setMatchParams({ home, away, date });
@@ -142,25 +143,19 @@ export default function Estatisticas() {
           <BarChart3 className="w-5 h-5 text-cyan-500" />
           Dashboard Analítico
         </h2>
-        <MatchModePicker showReferee={false} onSelectPast={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))} />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
-            <TeamSelect 
-              value={homeTeamId} 
-              onValueChange={setHomeTeamId} 
-              teams={teams.filter(t => t !== awayTeamId)} 
-            />
+        <MatchModePicker showReferee={false} onModeChange={setPickerMode} onSelectPast={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))} />
+        {pickerMode === 'independente' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
+              <TeamSelect value={homeTeamId} onValueChange={setHomeTeamId} teams={teams.filter(t => t !== awayTeamId)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Time Visitante</Label>
+              <TeamSelect value={awayTeamId} onValueChange={setAwayTeamId} teams={teams.filter(t => t !== homeTeamId)} />
+            </div>
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Time Visitante</Label>
-            <TeamSelect 
-              value={awayTeamId} 
-              onValueChange={setAwayTeamId} 
-              teams={teams.filter(t => t !== homeTeamId)} 
-            />
-          </div>
-        </div>
+        )}
       </motion.div>
 
       {!bothSelected && (

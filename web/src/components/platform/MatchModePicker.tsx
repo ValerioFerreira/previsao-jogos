@@ -15,12 +15,15 @@ type Mode = 'futura' | 'passada' | 'independente';
 export function MatchModePicker({
   showReferee = true,
   onSelectPast,
+  onModeChange,
 }: {
   showReferee?: boolean;
   onSelectPast?: (fx: PickerFixture) => void;
+  onModeChange?: (m: Mode) => void;
 }) {
   const { setHomeTeamId, setAwayTeamId, setCompetition, setNeutralField } = usePrediction();
-  const [mode, setMode] = useState<Mode>('independente');
+  const [mode, setModeState] = useState<Mode>('independente');
+  const setMode = (m: Mode) => { setModeState(m); onModeChange?.(m); };
   const [referee, setReferee] = useState('');
   const [referees, setReferees] = useState<string[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);

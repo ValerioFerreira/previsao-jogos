@@ -28,6 +28,7 @@ export default function ConstruirAposta() {
   const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, neutralField } = usePrediction();
   const [loading, setLoading] = useState(false);
   const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
+  const [pickerMode, setPickerMode] = useState<'futura' | 'passada' | 'independente'>('independente');
 
   React.useEffect(() => {
     api.teams().then(res => setTeams(res.teams)).catch(console.error);
@@ -62,25 +63,19 @@ export default function ConstruirAposta() {
           <Wrench className="w-5 h-5 text-purple-500" />
           Laboratório de Apostas
         </h2>
-        <MatchModePicker />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Mandante</Label>
-            <TeamSelect 
-              value={homeTeamId} 
-              onValueChange={setHomeTeamId} 
-              teams={teams.filter(t => t !== awayTeamId)} 
-            />
+        <MatchModePicker onModeChange={setPickerMode} />
+        {pickerMode === 'independente' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Mandante</Label>
+              <TeamSelect value={homeTeamId} onValueChange={setHomeTeamId} teams={teams.filter(t => t !== awayTeamId)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Visitante</Label>
+              <TeamSelect value={awayTeamId} onValueChange={setAwayTeamId} teams={teams.filter(t => t !== homeTeamId)} />
+            </div>
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Visitante</Label>
-            <TeamSelect 
-              value={awayTeamId} 
-              onValueChange={setAwayTeamId} 
-              teams={teams.filter(t => t !== homeTeamId)} 
-            />
-          </div>
-        </div>
+        )}
       </motion.div>
 
       {!bothSelected && (
