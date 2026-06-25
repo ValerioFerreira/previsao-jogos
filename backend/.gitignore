@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Data & Caches (Ephemeral/Heavy)
+data/
+cache_apifootball/
+reports/
+*.parquet
+*.log
+*.jsonl
+
+# Prevent ignoring essential files in model_artifacts
+!model_artifacts/
+!model_artifacts/*
+
+# Ignore root level heavy CSV and JSON
+/*.csv
+/*.json
+!railway.json
+
+# Model Checkpoints & Backups
+model_artifacts_backup/
+model_artifacts_apifootball/
+model_artifacts_pre_unificacao/
+modelo_statsbomb_backup/
+player_ranking/
+previsao-jogos-base44/

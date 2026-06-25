@@ -1,3 +1,31 @@
+# Previsão de Jogos - Monorepo (Next.js + FastAPI)
+
+Bem-vindo ao repositório unificado. O projeto agora conta com a seguinte estrutura:
+- `/frontend`: Aplicação Next.js (pronta para deploy na Vercel).
+- `/backend`: API em FastAPI (pronta para deploy no Railway).
+
+## Como Rodar Localmente
+
+A raiz do projeto foi configurada com um script `concurrently` para subir simultaneamente o frontend e o backend no mesmo terminal.
+
+1. Instale as dependências raiz (que inclui o `concurrently`):
+   ```bash
+   npm install
+   ```
+2. Caso ainda não tenha feito, instale as dependências de cada projeto (use o comando raiz que facilita isso):
+   ```bash
+   npm run install:all
+   ```
+3. Inicie os dois ambientes ao mesmo tempo:
+   ```bash
+   npm run dev
+   ```
+
+O frontend estará em `http://localhost:3000` e o backend em `http://localhost:8000`.
+
+---
+
+
 # Previsao de Jogos
 
 Aplicacao web para previsao de partidas de selecoes. O projeto foi dividido em duas partes:
