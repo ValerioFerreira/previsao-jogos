@@ -116,6 +116,11 @@ class Predictor:
         # historico de confrontos (h2h)
         self.results = pd.read_csv(f"{art_dir}/results_slim.csv", parse_dates=["date"])
         self.anchor_date = self.results["date"].max()
+        # estatísticas por jogo (placar+box-score) p/ médias do confronto direto
+        try:
+            self.h2h_stats = pd.read_csv(f"{art_dir}/h2h_stats.csv", parse_dates=["date"])
+        except Exception:
+            self.h2h_stats = None
 
     # ----------------------------------------------------------------- normalização de nome
     def norm_team(self, name):
@@ -157,11 +162,36 @@ class Predictor:
         btts_percentage = (btts_count / n * 100) if n > 0 else 0
         avg_total_goals = (total_goals / n) if n > 0 else 0
         
+        # médias DO CONFRONTO DIRETO por equipe: gols pelo histórico completo (m);
+        # chutes/chutes a gol/escanteios/cartões pelos jogos do confronto com box-score.
+        hs = self.h2h_stats
+        sub = None
+        if hs is not None:
+            sub = hs[((hs.home_team == home_team) & (hs.away_team == away_team)) |
+                     ((hs.home_team == away_team) & (hs.away_team == home_team))]
+
+        def _avgs(team):
+            goals_vals = [(x.home_score if x.home_team == team else x.away_score) for _, x in m.iterrows()]
+            out = {"goals": round(float(np.mean(goals_vals)), 1) if goals_vals else None,
+                   "shots": None, "shots_on_target": None, "corners": None, "cards": None}
+            if sub is not None and len(sub):
+                for key, stat in [("shots", "shots"), ("shots_on_target", "sot"),
+                                  ("corners", "corners"), ("cards", "cards")]:
+                    vals = []
+                    for _, x in sub.iterrows():
+                        v = x[f"home_{stat}"] if x.home_team == team else x[f"away_{stat}"]
+                        if pd.notna(v):
+                            vals.append(float(v))
+                    out[key] = round(float(np.mean(vals)), 1) if vals else None
+            return out
+
         return {"h2h_played": n, "h2h_home_winrate": wins / n,
                 "h2h_home_gd_mean": gds / n,
                 "days_since_last_h2h": float((self.anchor_date - last).days),
                 "btts_percentage": btts_percentage,
                 "avg_total_goals": avg_total_goals,
+                "home_wins": h, "draws": d, "away_wins": a,
+                "home_avgs": _avgs(home_team), "away_avgs": _avgs(away_team),
                 "_resumo": f"{n} jogos · {home_team} {h}V · {d}E · {away_team} {a}V"}
 
     # ----------------------------------------------------------------- montagem da linha

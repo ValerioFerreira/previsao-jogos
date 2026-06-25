@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowLeft, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { api, PredictionResponse, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
@@ -125,6 +125,7 @@ export default function Previsoes() {
   
   const [h2hBtts, setH2hBtts] = useState<number | null>(null);
   const [h2hGoals, setH2hGoals] = useState<number | null>(null);
+  const [h2hData, setH2hData] = useState<any>(null);
 
   // Modo de análise: partida futura (pré-preenche de um jogo agendado) ou independente.
   const [mode, setMode] = useState<'independente' | 'futura'>('independente');
@@ -187,16 +188,19 @@ export default function Previsoes() {
     setProjection(null);
     setH2hBtts(null);
     setH2hGoals(null);
-    
+    setH2hData(null);
+
     // Fetch H2H explicitly to get extra metrics if needed, although prediction might not have it.
     api.h2h(homeTeamId, awayTeamId).then(h2h => {
       const btts = h2h?.metrics?.btts_percentage;
       const goals = h2h?.metrics?.avg_total_goals;
       setH2hBtts(typeof btts === 'number' ? btts : null);
       setH2hGoals(typeof goals === 'number' ? goals : null);
+      setH2hData(h2h?.metrics ?? null);
     }).catch(() => {
       setH2hBtts(null);
       setH2hGoals(null);
+      setH2hData(null);
     });
 
     api.predict({
@@ -419,26 +423,40 @@ export default function Previsoes() {
               </div>
             )}
 
-            {/* H2H — só quando há histórico de confronto direto */}
-            {projection.confronto_direto && !projection.confronto_direto.includes('Sem confrontos') && (
-              <div className="bg-card border border-border/50 rounded-xl p-4 text-sm text-muted-foreground shadow-sm">
-                <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-                  <div>
-                    <span className="font-semibold text-foreground block mb-1">Resumo do Confronto Direto (H2H):</span>
-                    <span className="italic">{projection.confronto_direto}</span>
-                  </div>
-                  {typeof h2hBtts === 'number' && typeof h2hGoals === 'number' && (
-                    <div className="flex gap-4 sm:border-l border-border/50 sm:pl-4 shrink-0">
-                       <div>
-                         <span className="block text-[10px] uppercase tracking-wide">Média Gols H2H</span>
-                         <span className="font-mono font-bold text-foreground">{h2hGoals.toFixed(2)}</span>
-                       </div>
-                       <div>
-                         <span className="block text-[10px] uppercase tracking-wide">Ambas Marcam H2H</span>
-                         <span className="font-mono font-bold text-foreground">{h2hBtts.toFixed(1)}%</span>
-                       </div>
-                    </div>
+            {/* Resumo do Confronto Direto — só quando há ao menos um confronto */}
+            {h2hData && (h2hData.h2h_played ?? 0) > 0 && (
+              <div className="bg-card border border-border/50 rounded-xl p-5 shadow-sm text-center">
+                <h3 className="text-sm font-bold uppercase mb-4">Resumo do Confronto Direto</h3>
+                <div className="flex items-start justify-center gap-6 sm:gap-12 mb-5">
+                  {[{ id: homeTeamId, w: h2hData.home_wins }, null, { id: awayTeamId, w: h2hData.away_wins }].map((side, i) =>
+                    side === null ? (
+                      <div key="draw" className="flex flex-col items-center justify-center pt-7">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Empates</span>
+                        <span className="text-2xl font-mono font-bold text-muted-foreground">{h2hData.draws}</span>
+                      </div>
+                    ) : (
+                      <div key={side.id} className="flex flex-col items-center w-28">
+                        {teamLogoUrl(teamIds[side.id]) && (
+                          <img src={teamLogoUrl(teamIds[side.id])!} alt="" className="w-10 h-10 object-contain mb-1" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        )}
+                        <span className="text-sm font-semibold leading-tight">{teamPt(side.id)}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground mt-1">Vitórias</span>
+                        <span className="flex items-center gap-1 text-xl font-mono font-bold">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {side.w}
+                        </span>
+                      </div>
+                    )
                   )}
+                </div>
+                <div className="max-w-md mx-auto">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Médias no confronto direto</p>
+                  {[['Gols', 'goals'], ['Chutes', 'shots'], ['Chutes a gol', 'shots_on_target'], ['Escanteios', 'corners'], ['Cartões', 'cards']].map(([label, key]) => (
+                    <div key={key} className="grid grid-cols-3 items-center text-xs py-1 border-t border-border/20">
+                      <span className="font-mono font-semibold text-emerald-400">{h2hData.home_avgs?.[key] ?? '—'}</span>
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="font-mono font-semibold text-cyan-400">{h2hData.away_avgs?.[key] ?? '—'}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
