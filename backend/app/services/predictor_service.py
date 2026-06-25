@@ -204,14 +204,30 @@ def get_match_detail(home: str, away: str, date: str) -> dict[str, Any]:
     }
 
 
+def _load_registry() -> dict[str, dict]:
+    """Registry de jogos futuros. Fonte primária: tabela odds_registry no Neon
+    (produção, mantida fresca pelo coletor local). Fallback: arquivo local do
+    coletor (dev). Assim o Render serve partidas futuras sem disco local."""
+    from app.db.connection import engine
+    try:
+        df = pd.read_sql("SELECT * FROM odds_registry", con=engine)
+        if not df.empty:
+            return {str(r["fixture_id"]): r for r in df.to_dict(orient="records")}
+    except Exception as e:
+        print(f"[ERRO DB] odds_registry: {e}")
+    if ODDS_REGISTRY_PATH.exists():
+        try:
+            return json.loads(ODDS_REGISTRY_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
 def get_upcoming_fixtures() -> list[dict[str, Any]]:
     """Partidas futuras a partir do registry do coletor de odds (sem cota nova).
     Já traz tournament/neutral mapeados para o nosso sistema."""
-    if not ODDS_REGISTRY_PATH.exists():
-        return []
-    try:
-        reg = json.loads(ODDS_REGISTRY_PATH.read_text(encoding="utf-8"))
-    except Exception:
+    reg = _load_registry()
+    if not reg:
         return []
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     out = []

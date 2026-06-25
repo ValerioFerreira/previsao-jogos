@@ -131,6 +131,35 @@ def load_registry() -> dict:
     return {}
 
 
+def sync_registry_to_db(registry: dict) -> None:
+    """Espelha o registry de jogos futuros no Neon (tabela odds_registry) para a API
+    de produção (Render) servir 'partidas futuras' sem depender do disco local —
+    que é efêmero e não recebe os arquivos do coletor. Falha aqui não interrompe a
+    coleta local (o snapshot em arquivo é a fonte primária)."""
+    if not registry:
+        return
+    try:
+        import pandas as pd
+        from app.db.connection import engine, upsert_df
+
+        rows = [{
+            "fixture_id": str(fid),
+            "home": info.get("home"),
+            "away": info.get("away"),
+            "league_id": info.get("league_id"),
+            "league_name": info.get("league_name"),
+            "tournament": info.get("tournament"),
+            "neutral": bool(info.get("neutral", False)),
+            "fixture_date": info.get("fixture_date"),
+            "last_collected": info.get("last_collected"),
+            "n_snapshots": info.get("n_snapshots", 0),
+        } for fid, info in registry.items()]
+        upsert_df(pd.DataFrame(rows), "odds_registry", engine, unique_keys=["fixture_id"])
+        print(f">> odds_registry sincronizada no Neon: {len(rows)} jogos")
+    except Exception as exc:  # pragma: no cover - robustez de coleta
+        print(f"[AVISO] Falha ao sincronizar odds_registry no Neon: {exc}")
+
+
 def collect(days: int, dry_run: bool) -> dict:
     key = load_key()
     targets = target_league_ids()
@@ -210,6 +239,7 @@ def collect(days: int, dry_run: bool) -> dict:
     if not dry_run and seen_fixtures:
         ODDS_DIR.mkdir(parents=True, exist_ok=True)
         REGISTRY.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+        sync_registry_to_db(registry)
 
     return {
         "dias": days,
