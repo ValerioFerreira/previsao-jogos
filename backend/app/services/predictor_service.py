@@ -18,6 +18,26 @@ def _norm(name: str) -> str:
     return TEAM_ALIASES.get(name, name) if name else name
 
 
+import functools as _functools
+_READER_MEMO: dict = {}
+
+
+def _cache_nonempty(fn):
+    """Como lru_cache(maxsize=1) para funções sem args, MAS só memoriza resultado
+    não-vazio. Evita 'envenenar' o cache com [] / {} de uma falha transitória de
+    cold-start do Neon (que deixava árbitros/times vazios até reiniciar o processo)."""
+    @_functools.wraps(fn)
+    def wrapper():
+        name = fn.__name__
+        if name in _READER_MEMO:
+            return _READER_MEMO[name]
+        v = fn()
+        if v:
+            _READER_MEMO[name] = v
+        return v
+    return wrapper
+
+
 API_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = API_ROOT
 ARTIFACT_DIR = API_ROOT / "model_artifacts"
@@ -29,7 +49,7 @@ TEAM_IDS_PATH = REPO_ROOT / "data" / "built" / "team_ids.json"
 ODDS_REGISTRY_PATH = REPO_ROOT / "data" / "odds" / "registry.json"
 
 
-@lru_cache(maxsize=1)
+@_cache_nonempty
 def get_referees() -> list[str]:
     """Lista de árbitros (autocomplete). Extraída da base de dados."""
     from app.db.connection import engine
@@ -41,7 +61,7 @@ def get_referees() -> list[str]:
         return []
 
 
-@lru_cache(maxsize=1)
+@_cache_nonempty
 def get_team_ids() -> dict[str, int]:
     """Mapa nome_da_seleção -> team_id (para montar URL do logo).
     Inclui as chaves canonizadas (alias)."""
@@ -63,7 +83,7 @@ FIXTURE_INDEX_PATH = REPO_ROOT / "data" / "built" / "fixture_index.json"
 PAST_FIXTURES_PATH = REPO_ROOT / "data" / "built" / "past_fixtures.json"
 
 
-@lru_cache(maxsize=1)
+@_cache_nonempty
 def get_past_fixtures() -> list[dict[str, Any]]:
     """Lista de partidas já disputadas (para o seletor de Partidas Passadas)."""
     from app.db.connection import engine
@@ -81,7 +101,7 @@ def get_past_fixtures() -> list[dict[str, Any]]:
     return raw
 
 
-@lru_cache(maxsize=1)
+@_cache_nonempty
 def _fixture_index() -> dict[str, str]:
     from app.db.connection import engine
     try:
@@ -92,7 +112,7 @@ def _fixture_index() -> dict[str, str]:
         return {}
 
 
-@lru_cache(maxsize=1)
+@_cache_nonempty
 def _fixture_index_norm() -> dict[str, str]:
     """Índice com chaves canonizadas (date|norm(home)|norm(away)) -> caminho."""
     idx = {}

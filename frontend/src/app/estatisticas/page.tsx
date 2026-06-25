@@ -128,7 +128,10 @@ export default function Estatisticas() {
           Detalhe da Partida
         </h2>
         {matchLoading ? (
-          <div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-slate-200 border-t-cyan-500 rounded-full animate-spin" /></div>
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <div className="w-8 h-8 border-4 border-slate-200 border-t-cyan-500 rounded-full animate-spin" />
+            <p className="text-sm text-muted-foreground animate-pulse">Consultando base de dados...</p>
+          </div>
         ) : matchData ? (
           <MatchDetail data={matchData} />
         ) : null}
