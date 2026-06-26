@@ -177,13 +177,13 @@ function LineExplorer({ prediction }: { prediction: PredictionResponse }) {
           <div className="flex gap-1">
             <button
               onClick={() => setSide('over')}
-              className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${side === 'over' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}
+              className={`flex-1 py-2 sm:py-2 text-xs font-medium rounded-md transition-colors min-h-[40px] sm:min-h-0 flex items-center justify-center ${side === 'over' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}
             >
               Over
             </button>
             <button
               onClick={() => setSide('under')}
-              className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${side === 'under' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-muted text-muted-foreground'}`}
+              className={`flex-1 py-2 sm:py-2 text-xs font-medium rounded-md transition-colors min-h-[40px] sm:min-h-0 flex items-center justify-center ${side === 'under' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-muted text-muted-foreground'}`}
             >
               Under
             </button>
@@ -296,14 +296,14 @@ function ValueBetting({ prediction }: { prediction: PredictionResponse }) {
           <div className="flex gap-1">
             <button
               onClick={() => setSide(s => s === 'over' ? 'under' : 'over')}
-              className="px-3 py-2 text-xs font-medium rounded-md bg-muted text-foreground shrink-0"
+              className="px-4 py-2 sm:px-3 sm:py-2 text-xs font-medium rounded-md bg-muted text-foreground shrink-0 min-h-[44px] sm:min-h-0 flex items-center justify-center"
             >
               {side === 'over' ? 'Over' : 'Under'}
             </button>
             <Input
               type="number" step="0.5" value={line}
               onChange={e => setLine(parseFloat(e.target.value) || 0)}
-              className="h-9 text-sm font-mono"
+              className="h-11 sm:h-9 text-sm font-mono"
             />
           </div>
         </div>
@@ -452,7 +452,7 @@ function ParlayBuilder({ prediction, homeTeam, awayTeam }: { prediction: Predict
           <button
             key={m.value}
             onClick={() => setActiveMarket(m.value)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+            className={`px-3.5 py-2 sm:px-3 sm:py-1.5 rounded-md text-xs font-medium border transition-colors min-h-[38px] sm:min-h-0 flex items-center justify-center ${
               activeMarket === m.value ? 'bg-purple-500/10 border-purple-500/40 text-foreground' : 'border-border/50 text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -496,9 +496,9 @@ function ParlayBuilder({ prediction, homeTeam, awayTeam }: { prediction: Predict
             <button
               key={o.id}
               onClick={() => toggleSelection(o.id)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] bg-purple-500/10 border border-purple-500/30 text-foreground hover:bg-purple-500/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 rounded-md text-xs sm:text-[11px] bg-purple-500/10 border border-purple-500/30 text-foreground hover:bg-purple-500/20 transition-colors min-h-[36px] sm:min-h-0"
             >
-              {o.label} <XCircle className="w-3 h-3 opacity-60" />
+              {o.label} <XCircle className="w-3.5 h-3.5 opacity-60" />
             </button>
           ))}
         </div>

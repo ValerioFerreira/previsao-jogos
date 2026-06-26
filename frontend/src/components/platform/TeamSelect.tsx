@@ -37,13 +37,13 @@ export function TeamSelect({ value, onValueChange, teams, placeholder = "Selecio
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between h-10 font-normal"
+          className="w-full justify-between h-11 sm:h-10 font-normal min-h-[44px]"
         >
           {value ? labelFn(value) : <span className="text-muted-foreground">{placeholder}</span>}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent className="w-[calc(100vw-32px)] sm:w-[300px] p-0" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} className="h-9" />
           <CommandList>

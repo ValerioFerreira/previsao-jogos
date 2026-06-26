@@ -89,22 +89,22 @@ export function MatchPickerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="w-[calc(100vw-24px)] md:w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
         {/* Menu superior de competições + busca */}
         <div className="border-b border-border/40 pb-3">
-          <Input value={compQuery} onChange={e => setCompQuery(e.target.value)} placeholder="Filtrar competição..." className="h-8 mb-2 max-w-xs" />
-          <div className="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto">
+          <Input value={compQuery} onChange={e => setCompQuery(e.target.value)} placeholder="Filtrar competição..." className="h-9 mb-2 max-w-xs" />
+          <div className="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto py-1">
             <button onClick={() => setComp('')}
-              className={`px-2.5 py-1 rounded-md text-[11px] border transition-colors ${comp === '' ? 'bg-primary/10 border-primary/40 text-foreground' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}>
+              className={`px-3.5 py-2 sm:px-2.5 sm:py-1 rounded-md text-xs sm:text-[11px] border transition-colors flex items-center justify-center min-h-[36px] sm:min-h-0 ${comp === '' ? 'bg-primary/10 border-primary/40 text-foreground' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}>
               Todas
             </button>
             {compShown.map(c => (
               <button key={c} onClick={() => setComp(c)}
-                className={`px-2.5 py-1 rounded-md text-[11px] border transition-colors ${comp === c ? 'bg-primary/10 border-primary/40 text-foreground' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}>
+                className={`px-3.5 py-2 sm:px-2.5 sm:py-1 rounded-md text-xs sm:text-[11px] border transition-colors flex items-center justify-center min-h-[36px] sm:min-h-0 ${comp === c ? 'bg-primary/10 border-primary/40 text-foreground' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}>
                 {c}
               </button>
             ))}
@@ -112,9 +112,9 @@ export function MatchPickerModal({
         </div>
 
         {/* Filtros de equipe e data */}
-        <div className="flex gap-2 flex-wrap">
-          <Input value={teamQuery} onChange={e => setTeamQuery(e.target.value)} placeholder="Filtrar por equipe..." className="h-8 max-w-xs" />
-          <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="h-8 max-w-[160px]" />
+        <div className="flex gap-2 flex-wrap items-center">
+          <Input value={teamQuery} onChange={e => setTeamQuery(e.target.value)} placeholder="Filtrar por equipe..." className="h-9 w-full sm:max-w-xs" />
+          <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="h-9 w-full sm:max-w-[160px]" />
         </div>
 
         {/* Cards de partidas */}

@@ -247,7 +247,7 @@ export default function Estatisticas() {
           </div>
 
           {/* Frequency Distributions */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Corners */}
             <div className="bg-card border border-border/50 rounded-xl p-5">
               <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">

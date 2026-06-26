@@ -79,11 +79,11 @@ export function MarketCard({ title, subtitle, prediction, periods, icon }: Marke
         <div className="bg-muted p-1 rounded-md flex text-[10px] font-medium shrink-0">
           <button
             onClick={() => setViewMode('prob')}
-            className={`px-2 py-1 rounded transition-colors ${viewMode === 'prob' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`px-3 py-1.5 sm:px-2 sm:py-1 rounded transition-colors text-xs sm:text-[10px] min-h-[28px] sm:min-h-0 ${viewMode === 'prob' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Prob.</button>
           <button
             onClick={() => setViewMode('odd')}
-            className={`px-2 py-1 rounded transition-colors ${viewMode === 'odd' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`px-3 py-1.5 sm:px-2 sm:py-1 rounded transition-colors text-xs sm:text-[10px] min-h-[28px] sm:min-h-0 ${viewMode === 'odd' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Odd</button>
         </div>
       </div>
@@ -95,7 +95,7 @@ export function MarketCard({ title, subtitle, prediction, periods, icon }: Marke
             <button
               key={k}
               onClick={() => setPeriod(k)}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${period === k ? 'bg-primary/10 border-primary/40 text-foreground' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}
+              className={`px-3 py-1.5 sm:px-2.5 sm:py-1 rounded-md text-xs sm:text-[10px] font-medium border transition-colors min-h-[32px] sm:min-h-0 ${period === k ? 'bg-primary/10 border-primary/40 text-foreground font-semibold' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}
             >{k}</button>
           ))}
         </div>

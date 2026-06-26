@@ -43,7 +43,7 @@ export function MatchHeader({
 
   return (
     <div className="sticky top-14 z-30">
-      <div className="relative mx-auto w-full sm:w-1/3 bg-card/80 backdrop-blur-md border border-border/50 rounded-xl px-4 py-2.5 shadow-sm">
+      <div className="relative mx-auto w-full sm:max-w-md md:max-w-lg lg:max-w-xl bg-card/80 backdrop-blur-md border border-border/50 rounded-xl px-4 py-2.5 shadow-sm">
         <div className="flex items-center justify-center gap-4 sm:gap-8">
           <div className="flex-1 flex justify-end"><Side name={home} id={teamIds[home]} role="Mandante" align="right" /></div>
           <span className="text-[0.9rem] text-muted-foreground shrink-0">x</span>

@@ -159,7 +159,7 @@ export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallba
 
       {/* Escalações */}
       {(data.lineups || []).length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.lineups!.map((lu, idx) => (
             <div key={idx} className="bg-card border border-border/50 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-1">
@@ -190,32 +190,32 @@ export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallba
 
       {/* Estatísticas por jogador */}
       {(data.players || []).length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.players!.map((blk, idx) => (
             <div key={idx} className="bg-card border border-border/50 rounded-xl p-5 overflow-hidden">
               <div className="flex items-center gap-2 mb-3">
                 <Logo id={blk.team_id} size={22} />
                 <h3 className="text-base font-semibold">{teamPt(blk.team || '')}</h3>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overscroll-x-contain">
                 <table className="w-full text-[12px]">
                   <thead className="text-muted-foreground">
                     <tr className="text-left">
-                      <th className="py-1 font-medium">Jogador</th>
-                      <th className="py-1 font-medium text-center">Nota</th>
-                      <th className="py-1 font-medium text-center">Min</th>
-                      <th className="py-1 font-medium text-center">G/A</th>
-                      <th className="py-1 font-medium text-center">Fin.</th>
+                      <th className="py-2 sm:py-1 font-medium">Jogador</th>
+                      <th className="py-2 sm:py-1 text-center font-medium">Nota</th>
+                      <th className="py-2 sm:py-1 text-center font-medium">Min</th>
+                      <th className="py-2 sm:py-1 text-center font-medium">G/A</th>
+                      <th className="py-2 sm:py-1 text-center font-medium">Fin.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {blk.players.map((p, i) => (
                       <tr key={i} className="border-t border-border/20">
-                        <td className="py-1 truncate max-w-[120px]">{p.name}</td>
-                        <td className="py-1 text-center font-mono">{p.rating ?? '-'}</td>
-                        <td className="py-1 text-center font-mono">{p.minutes ?? '-'}</td>
-                        <td className="py-1 text-center font-mono">{p.goals ?? 0}/{p.assists ?? 0}</td>
-                        <td className="py-1 text-center font-mono">{p.shots_total ?? '-'}</td>
+                        <td className="py-2 sm:py-1 truncate max-w-[120px]">{p.name}</td>
+                        <td className="py-2 sm:py-1 text-center font-mono">{p.rating ?? '-'}</td>
+                        <td className="py-2 sm:py-1 text-center font-mono">{p.minutes ?? '-'}</td>
+                        <td className="py-2 sm:py-1 text-center font-mono">{p.goals ?? 0}/{p.assists ?? 0}</td>
+                        <td className="py-2 sm:py-1 text-center font-mono">{p.shots_total ?? '-'}</td>
                       </tr>
                     ))}
                   </tbody>

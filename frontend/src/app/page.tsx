@@ -360,7 +360,7 @@ export default function Previsoes() {
 
       <AnimatePresence>
         {(homeTeamId || awayTeamId) && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
               { teamId: homeTeamId, form: homeForm, anomalies: homeAnomalies, label: 'Mandante' },
               { teamId: awayTeamId, form: awayForm, anomalies: awayAnomalies, label: 'Visitante' }
@@ -383,7 +383,7 @@ export default function Previsoes() {
                     <span className="flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Mais Recentes</span>
                     <span className="flex items-center gap-1">Mais Antigos <ArrowRight className="w-3 h-3" /></span>
                   </div>
-                  <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                  <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-2 custom-scrollbar">
                     {form.matches.map((m, i) => {
                       const mh = m.is_home ? teamId : m.opponent;
                       const ma = m.is_home ? m.opponent : teamId;
@@ -553,7 +553,7 @@ export default function Previsoes() {
                     Gols
                     <InfoTooltip text="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." />
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <MarketCard title="Gols" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={goalPeriods(projection, homeTeamId)} />
                     <MarketCard title="Gols" subtitle="Totais (Partida)" periods={goalPeriods(projection, 'total')} />
                     <MarketCard title="Gols" subtitle={`Visitante (${teamPt(awayTeamId)})`} periods={goalPeriods(projection, awayTeamId)} />
@@ -568,7 +568,7 @@ export default function Previsoes() {
                     Finalizações
                     <InfoTooltip text="Conta qualquer tentativa de marcar gol, independentemente da direção. Inclui chutes no alvo, para fora, na trave e também os bloqueados pela defesa adversária." />
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {projection.chutes_equipe && projection.chutes_equipe[homeTeamId] && (
                       <MarketCard title="Finalizações" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.chutes_equipe[homeTeamId]} />
                     )}
@@ -587,7 +587,7 @@ export default function Previsoes() {
                     Chutes a Gol
                     <InfoTooltip text="Considera apenas os chutes que vão na direção exata da baliza e que seriam gol se não houvesse intervenção do goleiro. Chutes na trave, para fora ou bloqueados não contam." />
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <MarketCard title="Chutes a Gol" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.chutes_a_gol[homeTeamId]} />
                     <MarketCard title="Chutes a Gol" subtitle="Totais (Partida)" prediction={projection.chutes_a_gol.total} />
                     <MarketCard title="Chutes a Gol" subtitle={`Visitante (${teamPt(awayTeamId)})`} prediction={projection.chutes_a_gol[awayTeamId]} />
@@ -602,7 +602,7 @@ export default function Previsoes() {
                     Escanteios
                     <InfoTooltip text="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." />
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <MarketCard title="Escanteios" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.escanteios[homeTeamId]} />
                     <MarketCard title="Escanteios" subtitle="Totais (Partida)" prediction={projection.escanteios.total} />
                     <MarketCard title="Escanteios" subtitle={`Visitante (${teamPt(awayTeamId)})`} prediction={projection.escanteios[awayTeamId]} />
@@ -617,7 +617,7 @@ export default function Previsoes() {
                     Cartões
                     <InfoTooltip text="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." />
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <MarketCard title="Cartões" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={cardPeriods(projection, homeTeamId)} />
                     <MarketCard title="Cartões" subtitle="Totais (Partida)" periods={cardPeriods(projection, 'total')} />
                     <MarketCard title="Cartões" subtitle={`Visitante (${teamPt(awayTeamId)})`} periods={cardPeriods(projection, awayTeamId)} />
