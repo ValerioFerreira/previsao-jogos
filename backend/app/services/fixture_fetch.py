@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
-import requests
+import httpx  # já é dependência (requirements); 'requests' não está instalado no Render
 from sqlalchemy import text
 
 BASE = "https://v3.football.api-sports.io"
@@ -41,7 +41,7 @@ def _key() -> str:
 
 
 def _get(path: str, **params) -> tuple[list, Optional[str]]:
-    r = requests.get(BASE + path, headers={"x-apisports-key": _key()}, params=params, timeout=30)
+    r = httpx.get(BASE + path, headers={"x-apisports-key": _key()}, params=params, timeout=30)
     r.raise_for_status()
     j = r.json()
     return j.get("response", []), r.headers.get("x-ratelimit-requests-remaining")

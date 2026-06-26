@@ -124,8 +124,18 @@ def _fixture_index_norm() -> dict[str, str]:
 
 
 def get_match_detail(home: str, away: str, date: str) -> dict[str, Any]:
-    """Detalhe completo de uma partida JÁ DISPUTADA, a partir do cache local de
-    fixtures brutos (sem cota). Robusto a dados ausentes (jogos antigos/ligas menores).
+    """Wrapper defensivo: NUNCA propaga exceção (um 500 não leva header CORS e o
+    browser mascara como erro de CORS). Em qualquer falha, devolve found=False."""
+    try:
+        return _match_detail_impl(home, away, date)
+    except Exception as e:
+        print(f"[ERRO match_detail] {home} x {away} {date}: {type(e).__name__}: {e}")
+        return {"found": False}
+
+
+def _match_detail_impl(home: str, away: str, date: str) -> dict[str, Any]:
+    """Detalhe completo de uma partida JÁ DISPUTADA: cache(Neon) -> .gz local -> API.
+    Robusto a dados ausentes (jogos antigos/ligas menores).
     """
     import gzip
     from app.services.fixture_fetch import cache_get, get_or_fetch_detail
