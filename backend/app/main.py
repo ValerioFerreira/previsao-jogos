@@ -56,6 +56,24 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok", service="previsao-jogos-api")
 
 
+@app.get("/api/cron/refresh-fixtures")
+def cron_refresh_fixtures(token: str = Query(default="")) -> dict:
+    """Atualiza a lista de partidas passadas (past_fixtures) com as últimas 24-72h,
+    deixando-as selecionáveis no seletor. Feito para um cron diário (cron-job.org).
+    Protegido por CRON_TOKEN (se a env var estiver setada)."""
+    import os
+    expected = os.getenv("CRON_TOKEN")
+    if expected and token != expected:
+        raise HTTPException(status_code=403, detail="Token inválido.")
+    from app.services.fixtures_refresh import refresh_past_fixtures
+    res = refresh_past_fixtures(days_back=3)
+    # invalida o cache de leitura para a lista nova aparecer já no mesmo processo
+    from app.services.predictor_service import _READER_MEMO
+    for k in ("get_past_fixtures", "get_team_ids", "_fixture_index", "_fixture_index_norm"):
+        _READER_MEMO.pop(k, None)
+    return res
+
+
 @app.get("/teams", response_model=TeamsResponse)
 def teams() -> TeamsResponse:
     predictor = get_predictor()
