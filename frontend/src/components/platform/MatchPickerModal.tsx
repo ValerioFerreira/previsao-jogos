@@ -2,9 +2,29 @@
 import React, { useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { AlertTriangle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { teamLogoUrl } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
+
+// Partidas anteriores a esta data são marcadas como possivelmente incompletas
+// (a cobertura de estatísticas/escalações da api-football é esparsa em jogos antigos).
+const OLD_MATCH_CUTOFF = '2019-01-01';
+const isOldMatch = (iso?: string) => !!iso && iso.slice(0, 10) < OLD_MATCH_CUTOFF;
+
+const OldMatchBadge = () => (
+  <TooltipProvider delayDuration={150}>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex items-center text-amber-500 shrink-0"><AlertTriangle className="w-3.5 h-3.5" /></span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+        <p>Por ser uma partida antiga, algumas informações podem estar faltando.</p>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
 
 export type PickerFixture = {
   fixture_id: string;
@@ -118,7 +138,10 @@ export function MatchPickerModal({
               </div>
               <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                 <span className="truncate">{competitionPt(f.league_name || f.tournament)}</span>
-                <span className="shrink-0 font-mono">{fmtDateTime(f.date)}</span>
+                <span className="flex items-center gap-1 shrink-0">
+                  {isOldMatch(f.date) && <OldMatchBadge />}
+                  <span className="font-mono">{fmtDateTime(f.date)}</span>
+                </span>
               </div>
             </button>
           ))}

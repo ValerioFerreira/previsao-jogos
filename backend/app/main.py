@@ -136,7 +136,9 @@ def upcoming_fixtures() -> dict:
 
 
 @app.get("/api/fixtures/past")
-def past_fixtures(limit: int = Query(1500)) -> dict:
+def past_fixtures(limit: int = Query(100000)) -> dict:
+    # devolve TODAS as partidas passadas (o seletor filtra/limita no cliente);
+    # antes o corte em 1500 escondia jogos antigos de cada seleção.
     return {"fixtures": get_past_fixtures()[:limit]}
 
 
