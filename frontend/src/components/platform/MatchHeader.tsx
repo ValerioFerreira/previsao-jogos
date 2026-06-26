@@ -15,10 +15,10 @@ const Side = ({ name, id, role, align }: { name: string; id?: number; role: stri
   const url = teamLogoUrl(id);
   return (
     <div className={`flex items-center gap-2 min-w-0 ${align === 'right' ? 'flex-row-reverse text-right' : ''}`}>
-      {url && <img src={url} alt="" className="w-7 h-7 object-contain shrink-0" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+      {url && <img src={url} alt="" className="w-[2.1rem] h-[2.1rem] object-contain shrink-0" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
       <div className="min-w-0">
-        <p className="text-sm font-semibold truncate">{teamPt(name)}</p>
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{role}</p>
+        <p className="text-[1.05rem] font-semibold truncate">{teamPt(name)}</p>
+        <p className="text-[12px] uppercase tracking-wide text-muted-foreground">{role}</p>
       </div>
     </div>
   );
@@ -43,14 +43,14 @@ export function MatchHeader({
 
   return (
     <div className="sticky top-14 z-30">
-      <div className="relative bg-card/80 backdrop-blur-md border border-border/50 rounded-xl px-4 py-2.5 shadow-sm">
+      <div className="relative mx-auto w-full sm:w-1/3 bg-card/80 backdrop-blur-md border border-border/50 rounded-xl px-4 py-2.5 shadow-sm">
         <div className="flex items-center justify-center gap-4 sm:gap-8">
           <div className="flex-1 flex justify-end"><Side name={home} id={teamIds[home]} role="Mandante" align="right" /></div>
-          <span className="text-xs text-muted-foreground shrink-0">x</span>
+          <span className="text-[0.9rem] text-muted-foreground shrink-0">x</span>
           <div className="flex-1 flex justify-start"><Side name={away} id={teamIds[away]} role="Visitante" align="left" /></div>
         </div>
         {meta.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground mt-1">
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[12px] text-muted-foreground mt-1">
             {meta.map((m, i) => <span key={i}>{m}</span>)}
           </div>
         )}

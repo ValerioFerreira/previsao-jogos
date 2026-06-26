@@ -45,6 +45,12 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+def root() -> dict:
+    """Raiz — usada por uptime pings (ex.: cron-job.org) para manter o Render acordado."""
+    return {"status": "ok", "service": "previsao-jogos-api", "health": "/health", "docs": "/docs"}
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok", service="previsao-jogos-api")

@@ -133,7 +133,7 @@ export default function Estatisticas() {
             <p className="text-sm text-muted-foreground animate-pulse">Consultando base de dados...</p>
           </div>
         ) : matchData ? (
-          <MatchDetail data={matchData} />
+          <MatchDetail data={matchData} fallback={matchParams ? { ...matchParams, teamIds } : undefined} />
         ) : null}
       </div>
     );

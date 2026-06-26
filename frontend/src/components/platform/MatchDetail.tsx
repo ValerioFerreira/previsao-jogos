@@ -44,8 +44,37 @@ const Logo = ({ id, size = 24 }: { id?: number | null; size?: number }) => {
   return url ? <img src={url} alt="" width={size} height={size} className="object-contain inline-block" loading="lazy" onError={hideOnError} /> : null;
 };
 
-export function MatchDetail({ data }: { data: MD }) {
+type MinFallback = { home: string; away: string; date: string; teamIds: Record<string, number> };
+
+export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallback }) {
   if (!data?.found || !data.info) {
+    // Header mínimo (equipes + bandeiras + data) sempre que houver os dados básicos
+    // da listagem — só as estatísticas completas dependem da API/cache.
+    if (fallback) {
+      return (
+        <div className="space-y-6">
+          <div className="bg-card border border-border/50 rounded-xl p-6">
+            <div className="flex items-center justify-center gap-2 text-[0.94rem] text-muted-foreground mb-4">
+              <span>{dBR(fallback.date)}</span>
+            </div>
+            <div className="flex items-center justify-center gap-4 sm:gap-8">
+              <div className="text-center flex-1">
+                <Logo id={fallback.teamIds[fallback.home]} size={60} />
+                <p className="font-semibold mt-1 text-[1.09rem]">{teamPt(fallback.home)}</p>
+              </div>
+              <span className="text-[2.34rem] font-bold font-mono text-muted-foreground shrink-0">x</span>
+              <div className="text-center flex-1">
+                <Logo id={fallback.teamIds[fallback.away]} size={60} />
+                <p className="font-semibold mt-1 text-[1.09rem]">{teamPt(fallback.away)}</p>
+              </div>
+            </div>
+          </div>
+          <p className="text-center py-6 text-muted-foreground text-sm">
+            Estatísticas completas indisponíveis para esta partida.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="text-center py-16 text-muted-foreground text-sm">
         Detalhe desta partida não está disponível no histórico local.
@@ -61,71 +90,72 @@ export function MatchDetail({ data }: { data: MD }) {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho */}
+      {/* Cabeçalho ("Detalhe da Partida") — fontes/bandeiras +25% */}
       <div className="bg-card border border-border/50 rounded-xl p-6">
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-4">
-          {info.league_logo && <img src={info.league_logo} alt="" className="w-4 h-4 object-contain" onError={hideOnError} />}
+        <div className="flex items-center justify-center gap-2 text-[0.94rem] text-muted-foreground mb-4">
+          {info.league_logo && <img src={info.league_logo} alt="" className="w-5 h-5 object-contain" onError={hideOnError} />}
           <span>{competitionPt(info.league)}{info.round ? ` · ${info.round}` : ''} · {dBR(info.date)}</span>
         </div>
         <div className="flex items-center justify-center gap-4 sm:gap-8">
           <div className="text-center flex-1">
-            <Logo id={info.home_id} size={48} />
-            <p className="font-semibold mt-1 text-sm">{teamPt(info.home || '')}</p>
+            <Logo id={info.home_id} size={60} />
+            <p className="font-semibold mt-1 text-[1.09rem]">{teamPt(info.home || '')}</p>
           </div>
           <div className="text-center shrink-0">
-            <p className="text-3xl font-bold font-mono">{g.home ?? '-'} <span className="text-muted-foreground">x</span> {g.away ?? '-'}</p>
-            {ht && ht.home != null && <p className="text-[10px] text-muted-foreground mt-1">1º tempo: {ht.home}-{ht.away}</p>}
-            <p className="text-[10px] text-muted-foreground mt-1">{info.status}</p>
+            <p className="text-[2.34rem] font-bold font-mono">{g.home ?? '-'} <span className="text-muted-foreground">x</span> {g.away ?? '-'}</p>
+            {ht && ht.home != null && <p className="text-[13px] text-muted-foreground mt-1">1º tempo: {ht.home}-{ht.away}</p>}
+            <p className="text-[13px] text-muted-foreground mt-1">{info.status}</p>
           </div>
           <div className="text-center flex-1">
-            <Logo id={info.away_id} size={48} />
-            <p className="font-semibold mt-1 text-sm">{teamPt(info.away || '')}</p>
+            <Logo id={info.away_id} size={60} />
+            <p className="font-semibold mt-1 text-[1.09rem]">{teamPt(info.away || '')}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground mt-4 border-t border-border/30 pt-3">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[14px] text-muted-foreground mt-4 border-t border-border/30 pt-3">
           {info.venue && <span>🏟️ {info.venue}{info.city ? `, ${info.city}` : ''}</span>}
           {info.referee && <span>👨‍⚖️ {info.referee}</span>}
         </div>
       </div>
 
-      {/* Estatísticas */}
-      {statByTeam.length > 0 && (
-        <div className="bg-card border border-border/50 rounded-xl p-5">
-          <h3 className="text-sm font-semibold mb-4">Estatísticas da Partida</h3>
-          <div className="space-y-2">
-            {STAT_ROWS.filter(([k]) => homeStats[k] != null || awayStats[k] != null).map(([k, label]) => (
-              <div key={k} className="grid grid-cols-3 items-center text-xs">
-                <span className="font-mono font-semibold text-left text-emerald-400">{homeStats[k] ?? '-'}</span>
-                <span className="text-center text-muted-foreground">{label}</span>
-                <span className="font-mono font-semibold text-right text-cyan-400">{awayStats[k] ?? '-'}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Linha do tempo de eventos */}
-      {(data.events || []).length > 0 && (
-        <div className="bg-card border border-border/50 rounded-xl p-5">
-          <h3 className="text-sm font-semibold mb-4">Linha do Tempo</h3>
-          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-            {data.events!.map((e, i) => {
-              const isHome = e.team === info.home;
-              return (
-                <div key={i} className={`flex items-center gap-2 text-xs ${isHome ? 'flex-row' : 'flex-row-reverse text-right'}`}>
-                  <span className="font-mono text-muted-foreground w-9 shrink-0">{e.minute}'{e.extra ? `+${e.extra}` : ''}</span>
-                  <span className="shrink-0">{eventIcon(e.type, e.detail)}</span>
-                  <span className="truncate">
-                    <span className="font-medium">{e.player}</span>
-                    {e.assist && <span className="text-muted-foreground"> ({e.detail === 'Substitution' ? 'entra' : 'assist'}: {e.assist})</span>}
-                    {e.type === 'Card' && <span className="text-muted-foreground"> · {e.detail}</span>}
-                  </span>
+      {/* Estatísticas da Partida (esquerda) + Linha do Tempo (direita), mesma linha */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        {statByTeam.length > 0 && (
+          <div className="bg-card border border-border/50 rounded-xl p-5">
+            <h3 className="text-base font-semibold mb-4 text-center">Estatísticas da Partida</h3>
+            <div className="space-y-2">
+              {STAT_ROWS.filter(([k]) => homeStats[k] != null || awayStats[k] != null).map(([k, label]) => (
+                <div key={k} className="grid grid-cols-3 items-center text-[0.85rem]">
+                  <span className="font-mono font-semibold text-left text-emerald-400">{homeStats[k] ?? '-'}</span>
+                  <span className="text-center text-muted-foreground">{label}</span>
+                  <span className="font-mono font-semibold text-right text-cyan-400">{awayStats[k] ?? '-'}</span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {(data.events || []).length > 0 && (
+          <div className="bg-card border border-border/50 rounded-xl p-5">
+            <h3 className="text-base font-semibold mb-4 text-center">Linha do Tempo</h3>
+            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+              {data.events!.map((e, i) => {
+                const isHome = e.team === info.home;
+                return (
+                  <div key={i} className={`flex items-center gap-2 text-[0.85rem] ${isHome ? 'flex-row' : 'flex-row-reverse text-right'}`}>
+                    <span className="font-mono text-muted-foreground w-9 shrink-0">{e.minute}'{e.extra ? `+${e.extra}` : ''}</span>
+                    <span className="shrink-0">{eventIcon(e.type, e.detail)}</span>
+                    <span className="truncate">
+                      <span className="font-medium">{e.player}</span>
+                      {e.assist && <span className="text-muted-foreground"> ({e.detail === 'Substitution' ? 'entra' : 'assist'}: {e.assist})</span>}
+                      {e.type === 'Card' && <span className="text-muted-foreground"> · {e.detail}</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Escalações */}
       {(data.lineups || []).length > 0 && (
@@ -133,15 +163,15 @@ export function MatchDetail({ data }: { data: MD }) {
           {data.lineups!.map((lu, idx) => (
             <div key={idx} className="bg-card border border-border/50 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-1">
-                <Logo id={lu.team_id} size={20} />
-                <h3 className="text-sm font-semibold">{teamPt(lu.team || '')}</h3>
-                {lu.formation && <span className="text-[10px] text-muted-foreground ml-auto font-mono">{lu.formation}</span>}
+                <Logo id={lu.team_id} size={22} />
+                <h3 className="text-base font-semibold">{teamPt(lu.team || '')}</h3>
+                {lu.formation && <span className="text-[11px] text-muted-foreground ml-auto font-mono">{lu.formation}</span>}
               </div>
-              {lu.coach?.name && <p className="text-[11px] text-muted-foreground mb-3">Técnico: {lu.coach.name}</p>}
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Titulares</p>
+              {lu.coach?.name && <p className="text-[12px] text-muted-foreground mb-3">Técnico: {lu.coach.name}</p>}
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Titulares</p>
               <div className="grid grid-cols-2 gap-1.5 mb-3">
                 {lu.startXI.map((p, i) => (
-                  <div key={i} className="flex items-center gap-1.5 text-xs">
+                  <div key={i} className="flex items-center gap-1.5 text-[0.85rem]">
                     {playerPhotoUrl(p.id) && <img src={playerPhotoUrl(p.id)!} alt="" className="w-6 h-6 rounded-full object-cover bg-muted" loading="lazy" onError={hideOnError} />}
                     <span className="truncate">{p.number ? `${p.number}. ` : ''}{p.name}</span>
                   </div>
@@ -149,8 +179,8 @@ export function MatchDetail({ data }: { data: MD }) {
               </div>
               {lu.substitutes.length > 0 && (
                 <>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Reservas</p>
-                  <p className="text-[11px] text-muted-foreground">{lu.substitutes.map(p => p.name).join(', ')}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Reservas</p>
+                  <p className="text-[12px] text-muted-foreground">{lu.substitutes.map(p => p.name).join(', ')}</p>
                 </>
               )}
             </div>
@@ -164,11 +194,11 @@ export function MatchDetail({ data }: { data: MD }) {
           {data.players!.map((blk, idx) => (
             <div key={idx} className="bg-card border border-border/50 rounded-xl p-5 overflow-hidden">
               <div className="flex items-center gap-2 mb-3">
-                <Logo id={blk.team_id} size={20} />
-                <h3 className="text-sm font-semibold">{teamPt(blk.team || '')}</h3>
+                <Logo id={blk.team_id} size={22} />
+                <h3 className="text-base font-semibold">{teamPt(blk.team || '')}</h3>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-[11px]">
+                <table className="w-full text-[12px]">
                   <thead className="text-muted-foreground">
                     <tr className="text-left">
                       <th className="py-1 font-medium">Jogador</th>
