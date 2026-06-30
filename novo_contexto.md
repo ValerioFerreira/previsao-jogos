@@ -46,3 +46,20 @@
   (correlação mandante×visitante).
 - Forma-por-jogo: usar só em recorte de alta cobertura, com gate, se for promover ao resultado.
 - Nada foi promovido à produção nesta sessão — tudo é medição na branch `claude-testing`.
+
+---
+
+## Adendo — rodada de promoção sob gate (29/06/2026)
+Validação rigorosa (CV temporal, point-in-time) das promoções propostas. **Resultado: nada
+promovido** — ver `relatorio3_promocao_validacao_29062026.md`. Pontos-chave:
+- **Premissa corrigida:** produção JÁ usa NB (finalizações/escanteios/a-gol), GP (cartões),
+  DC-NB (gols). Os ganhos "Poisson→NB" dos relatórios anteriores eram vs baseline não-produção.
+- **GP não bate a NB de produção** (empate/ruído, inconsistente por segmento) → manter NB.
+- **Forma no resultado REPROVA** sob CV temporal (piora LogLoss/ECE) — o ganho do relatório 1
+  era artefato de CV aleatória.
+- **Calibração** pós-hoc não ajuda (produção já calibrada, ECE ~4%). **Posse/passes/faltas**
+  não dão ganho consistente.
+- Pipeline atual confirmado **robusto e bem calibrado**. Próximo: Exp 3/4/5 (multi-output,
+  bivariada/cópula, ataque×defesa) + feature importance (SHAP/permutação).
+Scripts: `promotion_validation.py`, `result_forma_validation.py`, `calibration_experiment.py`,
+`possession_features_experiment.py` (todos reprodutíveis, seed=42, CV temporal).
