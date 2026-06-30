@@ -107,6 +107,14 @@ class Predictor:
         self.cartoes_1t = CornersNB.load(f"{art_dir}/cartoes_1t_nb.joblib")
         self.cartoes_2t = CornersNB.load(f"{art_dir}/cartoes_2t_nb.joblib")
         self.ortho_weights = joblib.load(f"{art_dir}/style_ortho_weights.joblib")
+        # Calibradores isotonicos das linhas O/U do TOTAL (escanteios/a-gol/cartoes).
+        # Validados por walk-forward: reduzem ECE e Bernoulli-LL out-of-time de forma
+        # consistente (ver count_calibration_walkforward.py / relatorio5). Chutes NAO
+        # entra (piora). Opcional: ausencia do artefato = comportamento antigo (sem calibrar).
+        self.ou_calibrators = {}
+        _cal_path = f"{art_dir}/ou_calibrators.joblib"
+        if os.path.exists(_cal_path):
+            self.ou_calibrators = joblib.load(_cal_path)
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
         # Bases de box-score (sb_*): são o sinal "rico" que falta às seleções de
@@ -299,12 +307,17 @@ class Predictor:
         rel = (hi - lo) / max(point, 1e-6)
         return "Alta" if rel < 0.55 else ("Média" if rel < 1.0 else "Baixa")
 
-    def _corners_market(self, pmf, lines=CORNER_LINES):
+    def _corners_market(self, pmf, lines=CORNER_LINES, calibrator=None):
         """Monta a saída de um mercado de contagem (escanteios/cartões) da PMF da NB.
 
         Expõe: estimativa pontual + intervalo 80% (compat), a distribuição/CDF
         completa (fonte de verdade), e prob/odd-justa das linhas O/U (conveniência
         para a UI). Tudo derivado da mesma distribuição — cortes diferentes da CDF.
+
+        Se `calibrator` (isotônico) for passado, a prob. Over de cada linha é
+        recalibrada por ele (validado out-of-time p/ TOTAL de escanteios/a-gol/cartões).
+        A distribuição/estimativa seguem da PMF crua (fonte de verdade); só as linhas
+        O/U são calibradas, e marcadas com `"calibrado": True`.
         """
         pmf = np.asarray(pmf, dtype=float)
         k = np.arange(len(pmf))
@@ -315,11 +328,15 @@ class Predictor:
         linhas = {}
         for L in lines:
             over = float(pmf[int(L) + 1:].sum())   # P(contagem >= L+1), L é x.5
+            if calibrator is not None:
+                over = float(np.clip(calibrator.predict([over])[0], 1e-4, 1 - 1e-4))
             under = 1.0 - over
             linhas[str(L)] = {
                 "over":  {"prob": round(100 * over, 1),  "odd_justa": _fair_odd(over)},
                 "under": {"prob": round(100 * under, 1), "odd_justa": _fair_odd(under)},
             }
+            if calibrator is not None:
+                linhas[str(L)]["calibrado"] = True
         return {
             "estimativa": round(est, 1),
             "intervalo": [round(q10, 1), round(q90, 1)],
@@ -489,13 +506,16 @@ class Predictor:
                               away_team: self._corners_market(cs["away"][0], SHOTS_TEAM_LINES)},
             "chutes_a_gol": {home_team: self._corners_market(sot["home"][0], SOT_TEAM_LINES),
                              away_team: self._corners_market(sot["away"][0], SOT_TEAM_LINES),
-                             "total": self._corners_market(sot["total"][0], SOT_LINES)},
+                             "total": self._corners_market(sot["total"][0], SOT_LINES,
+                                                           self.ou_calibrators.get("finalizacoes_gol"))},
             "escanteios": {home_team: self._corners_market(cd["home"][0]),
                            away_team: self._corners_market(cd["away"][0]),
-                           "total": self._corners_market(cd["total"][0])},
+                           "total": self._corners_market(cd["total"][0],
+                                                         calibrator=self.ou_calibrators.get("escanteios"))},
             "cartoes": {home_team: self._corners_market(cc["home"][0], CARDS_LINES),
                         away_team: self._corners_market(cc["away"][0], CARDS_LINES),
-                        "total": self._corners_market(cc["total"][0], CARDS_LINES)},
+                        "total": self._corners_market(cc["total"][0], CARDS_LINES,
+                                                      self.ou_calibrators.get("cartoes"))},
             "ambas_marcam": btts_res,
             "over_2_5": over_res,
             "placar_exato": placar_exato,
