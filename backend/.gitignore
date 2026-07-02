@@ -30,3 +30,4 @@ model_artifacts_pre_unificacao/
 modelo_statsbomb_backup/
 player_ranking/
 previsao-jogos-base44/
+*.db

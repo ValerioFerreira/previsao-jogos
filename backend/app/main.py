@@ -44,10 +44,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Camada de usuários/monetização (auth). Não afeta as rotas de previsão.
+# Camada de usuários/monetização. Não afeta as rotas de previsão.
 from app.domains.auth.router import router as auth_router  # noqa: E402
+from app.domains.wallet.router import router as wallet_router  # noqa: E402
+from app.domains.payments.router import router as payments_router  # noqa: E402
 
 app.include_router(auth_router)
+app.include_router(wallet_router)
+app.include_router(payments_router)
 
 
 @app.get("/")
