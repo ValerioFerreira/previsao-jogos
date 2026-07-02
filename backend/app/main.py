@@ -44,6 +44,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Camada de usuários/monetização (auth). Não afeta as rotas de previsão.
+from app.domains.auth.router import router as auth_router  # noqa: E402
+
+app.include_router(auth_router)
+
 
 @app.get("/")
 def root() -> dict:
