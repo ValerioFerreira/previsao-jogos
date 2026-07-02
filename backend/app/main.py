@@ -50,12 +50,14 @@ from app.domains.wallet.router import router as wallet_router  # noqa: E402
 from app.domains.payments.router import router as payments_router  # noqa: E402
 from app.domains.legal.router import router as legal_router  # noqa: E402
 from app.domains.analysis.router import router as analysis_router  # noqa: E402
+from app.domains.bets.router import router as bets_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(wallet_router)
 app.include_router(payments_router)
 app.include_router(legal_router)
 app.include_router(analysis_router)
+app.include_router(bets_router)
 
 
 @app.get("/")
