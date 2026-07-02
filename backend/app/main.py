@@ -89,6 +89,25 @@ def cron_refresh_fixtures(token: str = Query(default="")) -> dict:
     return res
 
 
+@app.post("/api/cron/settle-bets")
+def cron_settle_bets(token: str = Query(default="")) -> dict:
+    """Liquida as apostas com partida encerrada (após o delay de segurança): consome o
+    crédito das vencedoras e estorna o das não vencedoras. Feito para um cron periódico.
+    Protegido por CRON_TOKEN (se a env var estiver setada)."""
+    import os
+    expected = os.getenv("CRON_TOKEN")
+    if expected and token != expected:
+        raise HTTPException(status_code=403, detail="Token inválido.")
+    from app.db.base import SessionLocal
+    from app.domains.bets.results import get_result_provider
+    from app.domains.bets.settlement import run_due_settlements
+    db = SessionLocal()
+    try:
+        return run_due_settlements(db, get_result_provider())
+    finally:
+        db.close()
+
+
 @app.get("/teams", response_model=TeamsResponse)
 def teams() -> TeamsResponse:
     predictor = get_predictor()
