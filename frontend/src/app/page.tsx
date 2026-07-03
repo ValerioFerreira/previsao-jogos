@@ -33,7 +33,10 @@ function oddRangeStr(probPct: number): string {
   if (!probPct || probPct <= 0) return '—';
   const odd = 100 / probPct;
   if (odd > 50) return '50+';
-  return `${(odd * 0.93).toFixed(2)}–${odd.toFixed(2)}`;
+  // Odd nunca abaixo de 1.00.
+  const hi = Math.max(1, odd);
+  const lo = Math.max(1, odd * 0.93);
+  return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
 }
 
 // Recortes por tempo para gols e cartões (Partida inteira / 1º / 2º), por lado.
@@ -78,7 +81,7 @@ function PlacarExatoCard({ data, home, away }: {
       <h4 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
         <Target className="w-4 h-4 text-purple-500" />
         Placar Exato
-        <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." />
+        <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." href="/como-funciona#mercado-placar" />
       </h4>
       <p className="text-[10px] text-muted-foreground mb-3">
         {teamPt(home)} <span className="opacity-60">(mandante)</span> × {teamPt(away)} <span className="opacity-60">(visitante)</span>
@@ -127,7 +130,7 @@ function MatchReliabilityBadge({ confiabilidade }: { confiabilidade: PredictionR
     <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border ${styles}`}>
       {tier === 'Alta' ? <ShieldCheck className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
       Confiabilidade dos dados: {tier}
-      <InfoTooltip text={confiabilidade._resumo} />
+      <InfoTooltip text={confiabilidade._resumo} href="/como-funciona#metrica-confiabilidade" />
     </div>
   );
 }
@@ -313,6 +316,7 @@ export default function Previsoes() {
             onClick={() => { setMode('independente'); setMatchDate(undefined); }}
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'independente' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Análise Independente</button>
+          <InfoTooltip text="Partida Futura: reserva 1 crédito e habilita a promoção 'Só Paga se Acertar'. Independente: consome 1 crédito e aceita qualquer par de seleções." href="/como-funciona#partida-futura" />
         </div>
 
         {mode === 'futura' && (
@@ -545,7 +549,7 @@ export default function Previsoes() {
                         <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col">
                           <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
                             Ambas Marcam
-                            <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
+                            <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." href="/como-funciona#mercado-btts" />
                           </h4>
                           <div className="flex-1 flex flex-wrap items-center justify-center gap-8 text-center">
                             <div>
@@ -576,7 +580,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Gols
-                    <InfoTooltip text="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." />
+                    <InfoTooltip text="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." href="/como-funciona#mercado-gols" />
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <MarketCard title="Gols" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={goalPeriods(projection, homeTeamId)} />
@@ -591,7 +595,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Finalizações
-                    <InfoTooltip text="Conta qualquer tentativa de marcar gol, independentemente da direção. Inclui chutes no alvo, para fora, na trave e também os bloqueados pela defesa adversária." />
+                    <InfoTooltip text="Conta qualquer tentativa de marcar gol, independentemente da direção. Inclui chutes no alvo, para fora, na trave e também os bloqueados pela defesa adversária." href="/como-funciona#mercado-finalizacoes" />
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {projection.chutes_equipe && projection.chutes_equipe[homeTeamId] && (
@@ -610,7 +614,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Chutes a Gol
-                    <InfoTooltip text="Considera apenas os chutes que vão na direção exata da baliza e que seriam gol se não houvesse intervenção do goleiro. Chutes na trave, para fora ou bloqueados não contam." />
+                    <InfoTooltip text="Considera apenas os chutes que vão na direção exata da baliza e que seriam gol se não houvesse intervenção do goleiro. Chutes na trave, para fora ou bloqueados não contam." href="/como-funciona#mercado-finalizacoes-gol" />
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <MarketCard title="Chutes a Gol" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.chutes_a_gol[homeTeamId]} />
@@ -625,7 +629,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Escanteios
-                    <InfoTooltip text="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." />
+                    <InfoTooltip text="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." href="/como-funciona#mercado-escanteios" />
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <MarketCard title="Escanteios" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.escanteios[homeTeamId]} />
@@ -640,7 +644,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Cartões
-                    <InfoTooltip text="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." />
+                    <InfoTooltip text="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." href="/como-funciona#mercado-cartoes" />
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <MarketCard title="Cartões" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={cardPeriods(projection, homeTeamId)} />

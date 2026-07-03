@@ -15,7 +15,9 @@ function oddRangeStr(probPct: number): string {
   if (!probPct || probPct <= 0) return "—";
   const odd = 100 / probPct;
   if (odd > 50) return "50+";
-  return `${(odd * 0.93).toFixed(2)}–${odd.toFixed(2)}`;
+  const hi = Math.max(1, odd);
+  const lo = Math.max(1, odd * 0.93);
+  return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
 }
 function goalPeriods(p: PredictionResponse, side: string) {
   return {

@@ -35,7 +35,7 @@ export function PredictionProvider({ children }: { children: ReactNode }) {
 
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [h2hData, setH2hData] = useState<any>(null);
-  const [mode, setMode] = useState<"independente" | "futura">("independente");
+  const [mode, setMode] = useState<"independente" | "futura">("futura");
   const [fixtureId, setFixtureId] = useState<number | null>(null);
   const [matchDate, setMatchDate] = useState<string | undefined>(undefined);
 

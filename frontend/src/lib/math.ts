@@ -1,6 +1,7 @@
 export function getOddFromProb(prob: number): number {
   if (prob <= 0) return 999;
-  return parseFloat((1 / prob).toFixed(2));
+  // Odd justa nunca é menor que 1.00 (não existe no mercado).
+  return Math.max(1, parseFloat((1 / prob).toFixed(2)));
 }
 
 export function getProbFromOdd(odd: number): number {
@@ -14,7 +15,10 @@ export function fairOddRange(prob: number): string {
   if (!prob || prob <= 0) return "—";
   const odd = 1 / prob;
   if (odd > 50) return "50+";
-  return `${(odd * 0.93).toFixed(2)}–${odd.toFixed(2)}`;
+  // Odd nunca abaixo de 1.00; se os limites colapsam em ~1.00, mostra valor único.
+  const hi = Math.max(1, odd);
+  const lo = Math.max(1, odd * 0.93);
+  return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
 }
 
 export function cdfFromDistribution(distribution: number[], threshold: number): number {

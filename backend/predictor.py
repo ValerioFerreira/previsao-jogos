@@ -85,7 +85,8 @@ def _clamp_p(p):
 
 
 def _fair_odd(p):
-    return round(1.0 / _clamp_p(p), 2)
+    # Odd justa nunca abaixo de 1.00 (não existe no mercado).
+    return max(1.0, round(1.0 / _clamp_p(p), 2))
 
 
 class Predictor:

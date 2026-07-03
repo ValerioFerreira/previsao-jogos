@@ -10,6 +10,7 @@ import AccountMenu from '@/components/platform/AccountMenu';
 const NAV_ITEMS = [
   { path: '/', label: 'Análise' },
   { path: '/estatisticas', label: 'Estatísticas' },
+  { path: '/como-funciona', label: 'Como Funciona?' },
 ];
 
 export default function Header() {

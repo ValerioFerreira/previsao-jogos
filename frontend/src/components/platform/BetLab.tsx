@@ -39,7 +39,7 @@ function LineExplorer({ prediction }: { prediction: PredictionResponse }) {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border/50 rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
         <Search className="w-4 h-4 text-cyan-500" /> Explorador de Linha
-        <InfoTooltip text="Escolha o mercado, o lado (Over/Under) e escaneie a grade de odds justas pela CDF da distribuição." />
+        <InfoTooltip text="Escolha o mercado, o lado (Over/Under) e escaneie a grade de odds justas pela CDF da distribuição." href="/como-funciona#explorador-de-linha" />
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
         <div>
@@ -96,7 +96,7 @@ function ValueBetting({ prediction }: { prediction: PredictionResponse }) {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border/50 rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
         <TrendingUp className="w-4 h-4 text-emerald-500" /> Value Betting — Identificação de Assimetrias
-        <InfoTooltip text="Compare a probabilidade do modelo com a odd da casa. EV positivo = assimetria a favor. O De-Vig remove a margem da banca." />
+        <InfoTooltip text="Compare a probabilidade do modelo com a odd da casa. EV positivo = assimetria a favor. O De-Vig remove a margem da banca." href="/como-funciona#value-betting" />
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <div>
@@ -115,7 +115,7 @@ function ValueBetting({ prediction }: { prediction: PredictionResponse }) {
         </div>
         <div><Label className="text-xs text-muted-foreground mb-1.5 block">Odd Oferecida</Label><Input type="number" step="0.01" min="1.01" placeholder="Ex: 1.85" value={offeredOdd} onChange={(e) => setOfferedOdd(e.target.value)} className="h-9 text-sm font-mono" /></div>
         <div>
-          <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1">Odd Oposta (De-Vig)<InfoTooltip text="Odd do lado oposto para calcular o De-Vig." /></Label>
+          <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1">Odd Oposta (De-Vig)<InfoTooltip text="Odd do lado oposto para calcular o De-Vig." href="/como-funciona#de-vig" /></Label>
           <Input type="number" step="0.01" min="1.01" placeholder="Opcional" value={oppositeOdd} onChange={(e) => setOppositeOdd(e.target.value)} className="h-9 text-sm font-mono" />
         </div>
       </div>
