@@ -1,16 +1,14 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Search, TrendingUp, Layers, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { Search, TrendingUp, CheckCircle2, XCircle } from "lucide-react";
 import { getOddFromProb, calculateOverProb, calculateUnderProb, fairOddRange } from "@/lib/math";
 import { PredictionResponse } from "@/lib/api";
 import InfoTooltip from "@/components/platform/InfoTooltip";
-import { teamPt } from "@/lib/teamNames";
 
 const MARKET_OPTIONS = [
   { value: "gols", label: "Gols Totais" },
@@ -144,92 +142,11 @@ function ValueBetting({ prediction }: { prediction: PredictionResponse }) {
   );
 }
 
-const PARLAY_MARKETS = [{ value: "resultado", label: "Resultado (1X2)" }, ...MARKET_OPTIONS];
-type ParlayOption = { id: string; label: string; prob: number; market: string };
-
-function ParlayBuilder({ prediction, homeTeam, awayTeam }: { prediction: PredictionResponse; homeTeam: string; awayTeam: string }) {
-  const [activeMarket, setActiveMarket] = useState("resultado");
-  const [selections, setSelections] = useState<string[]>([]);
-  const allOptions = useMemo(() => {
-    const map: Record<string, ParlayOption> = {};
-    const add = (o: ParlayOption) => { map[o.id] = o; };
-    add({ id: "res_home", label: `Vitória ${teamPt(homeTeam)}`, prob: (prediction.vencedor.probabilidades[homeTeam] || 0) / 100, market: "resultado" });
-    add({ id: "res_draw", label: "Empate", prob: (prediction.vencedor.probabilidades["Empate"] || 0) / 100, market: "resultado" });
-    add({ id: "res_away", label: `Vitória ${teamPt(awayTeam)}`, prob: (prediction.vencedor.probabilidades[awayTeam] || 0) / 100, market: "resultado" });
-    MARKET_OPTIONS.forEach(({ value, label }) => {
-      const { mean, dist } = getMarketDistribution(prediction, value);
-      if (!dist.length) return;
-      const center = Math.round(mean - 0.5) + 0.5;
-      for (let i = -4; i <= 4; i++) {
-        const L = Number((center + i).toFixed(1));
-        if (L < 0.5) continue;
-        add({ id: `${value}_over_${L}`, label: `Acima de ${L} · ${label}`, prob: calculateOverProb(dist, L), market: value });
-        add({ id: `${value}_under_${L}`, label: `Abaixo de ${L} · ${label}`, prob: calculateUnderProb(dist, L), market: value });
-      }
-    });
-    return map;
-  }, [prediction, homeTeam, awayTeam]);
-  const activeOptions = useMemo(() => Object.values(allOptions).filter((o) => o.market === activeMarket), [allOptions, activeMarket]);
-  const toggle = (id: string) => setSelections((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
-  const selectedOptions = selections.map((id) => allOptions[id]).filter(Boolean) as ParlayOption[];
-  const combinedProb = selectedOptions.reduce((acc, o) => acc * o.prob, 1);
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border/50 rounded-xl p-5">
-      <h3 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
-        <Layers className="w-4 h-4 text-amber-500" /> Calculadora de Combinadas
-        <InfoTooltip text="Filtre por mercado e selecione múltiplas linhas (de mercados diferentes) para montar a combinada. Eventos do mesmo jogo têm correlações não captadas pelo cálculo independente." />
-      </h3>
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        {PARLAY_MARKETS.map((m) => (
-          <button key={m.value} onClick={() => setActiveMarket(m.value)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition ${activeMarket === m.value ? "bg-purple-500/10 border-purple-500/40 text-foreground" : "border-border/50 text-muted-foreground hover:text-foreground"}`}>
-            {m.label}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
-        {activeOptions.map((o) => (
-          <div key={o.id} role="button" tabIndex={0} onClick={() => toggle(o.id)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(o.id); } }}
-            className={`flex items-center gap-2 p-3 rounded-lg border text-left text-xs transition cursor-pointer ${selections.includes(o.id) ? "bg-purple-500/10 border-purple-500/30 text-foreground" : "bg-muted/30 border-border/30 text-muted-foreground hover:border-border"}`}>
-            <Checkbox checked={selections.includes(o.id)} onCheckedChange={() => toggle(o.id)} className="pointer-events-none" />
-            <div className="min-w-0"><p className="font-medium truncate">{o.label}</p><p className="text-[10px] opacity-60 font-mono">{(o.prob * 100).toFixed(1)}%</p></div>
-          </div>
-        ))}
-      </div>
-      {selections.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {selectedOptions.map((o) => (
-            <button key={o.id} onClick={() => toggle(o.id)} className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/20 transition">{o.label} <XCircle className="w-3 h-3 opacity-60" /></button>
-          ))}
-        </div>
-      )}
-      <AnimatePresence>
-        {selections.length >= 2 && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-            <div className="grid grid-cols-3 gap-4 bg-muted/50 rounded-lg p-4">
-              <div className="text-center"><p className="text-[10px] text-muted-foreground mb-1">Seleções</p><p className="text-lg font-bold font-mono">{selections.length}</p></div>
-              <div className="text-center"><p className="text-[10px] text-muted-foreground mb-1 flex items-center justify-center gap-1">Teto Otimista<InfoTooltip text="Produto simples das probabilidades (independência). A real tende a ser menor." /></p><p className="text-lg font-bold font-mono text-amber-400">{(combinedProb * 100).toFixed(2)}%</p></div>
-              <div className="text-center"><p className="text-[10px] text-muted-foreground mb-1 flex items-center justify-center gap-1">Faixa de Odd Combinada<InfoTooltip text="Da odd com 7% de margem até 1/probabilidade combinada." /></p><p className="text-base font-bold font-mono text-cyan-400">{fairOddRange(combinedProb)}</p></div>
-            </div>
-            <div className="rounded-lg p-3 bg-amber-500/5 border border-amber-500/20 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-300/80 leading-relaxed"><strong>Atenção:</strong> eventos da mesma partida têm correlações inerentes; a probabilidade real tende a ser menor que o teto independente.</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-export default function BetLab({ prediction, home, away }: { prediction: PredictionResponse; home: string; away: string }) {
+export default function BetLab({ prediction }: { prediction: PredictionResponse }) {
   return (
     <div className="space-y-6">
       <LineExplorer prediction={prediction} />
       <ValueBetting prediction={prediction} />
-      <ParlayBuilder prediction={prediction} homeTeam={home} awayTeam={away} />
     </div>
   );
 }

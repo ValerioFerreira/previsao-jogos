@@ -657,12 +657,12 @@ export default function Previsoes() {
               {analysis?.type === 'future_match' && (
                 <div className="mb-6">
                   <p className="text-sm text-muted-foreground mb-3">
-                    Aposta Escolhida (promoção &quot;Só Paga se Acertar&quot; — crédito reservado desta análise):
+                    Promoção &quot;Só Paga se Acertar&quot; — monte sua aposta com o crédito reservado desta análise:
                   </p>
                   <BetBuilder analysisId={analysis.id} onConfirmed={() => refreshWallet()} />
                 </div>
               )}
-              <BetLab prediction={projection} home={homeTeamId} away={awayTeamId} />
+              <BetLab prediction={projection} />
             </div>
 
           </motion.div>
