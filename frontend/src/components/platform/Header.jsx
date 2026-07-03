@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Sun, Moon, Activity, Wifi, WifiOff } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 import { motion } from 'framer-motion';
+import AccountMenu from '@/components/platform/AccountMenu';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Previsões' },
@@ -101,6 +102,9 @@ export default function Header() {
                 </motion.div>
               </button>
             )}
+
+            {/* Conta / créditos */}
+            <AccountMenu />
           </div>
         </div>
       </div>
