@@ -3,6 +3,7 @@ import React from 'react';
 import { MatchDetail as MD, teamLogoUrl, playerPhotoUrl } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
+import InfoTooltip from '@/components/platform/InfoTooltip';
 
 function dBR(s?: string | null): string {
   const d = (s || '').slice(0, 10).split('-');
@@ -104,7 +105,6 @@ export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallba
           <div className="text-center shrink-0">
             <p className="text-[2.34rem] font-bold font-mono">{g.home ?? '-'} <span className="text-muted-foreground">x</span> {g.away ?? '-'}</p>
             {ht && ht.home != null && <p className="text-[13px] text-muted-foreground mt-1">1º tempo: {ht.home}-{ht.away}</p>}
-            <p className="text-[13px] text-muted-foreground mt-1">{info.status}</p>
           </div>
           <div className="text-center flex-1">
             <Logo id={info.away_id} size={60} />
@@ -117,8 +117,8 @@ export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallba
         </div>
       </div>
 
-      {/* Estatísticas da Partida (esquerda) + Linha do Tempo (direita), mesma linha */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      {/* Estatísticas da Partida (esquerda) + Linha do Tempo (direita), mesma altura */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         {statByTeam.length > 0 && (
           <div className="bg-card border border-border/50 rounded-xl p-5">
             <h3 className="text-base font-semibold mb-4 text-center">Estatísticas da Partida</h3>
@@ -135,9 +135,9 @@ export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallba
         )}
 
         {(data.events || []).length > 0 && (
-          <div className="bg-card border border-border/50 rounded-xl p-5">
+          <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col">
             <h3 className="text-base font-semibold mb-4 text-center">Linha do Tempo</h3>
-            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            <div className="space-y-1.5 overflow-y-auto pr-1 flex-1 min-h-0">
               {data.events!.map((e, i) => {
                 const isHome = e.team === info.home;
                 return (
@@ -157,72 +157,78 @@ export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallba
         )}
       </div>
 
-      {/* Escalações */}
-      {(data.lineups || []).length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {data.lineups!.map((lu, idx) => (
-            <div key={idx} className="bg-card border border-border/50 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-1">
-                <Logo id={lu.team_id} size={22} />
-                <h3 className="text-base font-semibold">{teamPt(lu.team || '')}</h3>
-                {lu.formation && <span className="text-[11px] text-muted-foreground ml-auto font-mono">{lu.formation}</span>}
-              </div>
-              {lu.coach?.name && <p className="text-[12px] text-muted-foreground mb-3">Técnico: {lu.coach.name}</p>}
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Titulares</p>
-              <div className="grid grid-cols-2 gap-1.5 mb-3">
-                {lu.startXI.map((p, i) => (
-                  <div key={i} className="flex items-center gap-1.5 text-[0.85rem]">
-                    {playerPhotoUrl(p.id) && <img src={playerPhotoUrl(p.id)!} alt="" className="w-6 h-6 rounded-full object-cover bg-muted" loading="lazy" onError={hideOnError} />}
-                    <span className="truncate">{p.number ? `${p.number}. ` : ''}{p.name}</span>
-                  </div>
-                ))}
-              </div>
-              {lu.substitutes.length > 0 && (
-                <>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Reservas</p>
-                  <p className="text-[12px] text-muted-foreground">{lu.substitutes.map(p => p.name).join(', ')}</p>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Metades por equipe: mandante (esquerda) e visitante (direita) — bandeira/nome
+          num cabeçalho fixo por coluna, evitando repetir a bandeira em cada card. */}
+      {((data.lineups || []).length > 0 || (data.players || []).length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-4 items-start">
+          {[{ id: info.home_id, name: info.home }, { id: info.away_id, name: info.away }].map((team, ti) => {
+            const lu = (data.lineups || []).find(l => l.team_id === team.id) || (data.lineups || [])[ti];
+            const pb = (data.players || []).find(p => p.team_id === team.id) || (data.players || [])[ti];
+            return (
+              <div key={ti} className="space-y-4">
+                {/* Cabeçalho fixo da equipe (sobrepõe levemente ao rolar) */}
+                <div className="sticky top-[3.25rem] z-20 -mb-1 pt-2 pb-3 bg-background/85 backdrop-blur-md rounded-b-xl flex flex-col items-center">
+                  <Logo id={team.id} size={52} />
+                  <p className="font-bold mt-1 text-[1.05rem]">{teamPt(team.name || '')}</p>
+                </div>
 
-      {/* Estatísticas por jogador */}
-      {(data.players || []).length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {data.players!.map((blk, idx) => (
-            <div key={idx} className="bg-card border border-border/50 rounded-xl p-5 overflow-hidden">
-              <div className="flex items-center gap-2 mb-3">
-                <Logo id={blk.team_id} size={22} />
-                <h3 className="text-base font-semibold">{teamPt(blk.team || '')}</h3>
+                {lu && (
+                  <div className="bg-card border border-border/50 rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="text-base font-semibold">Escalação</h3>
+                      {lu.formation && <span className="text-[11px] text-muted-foreground font-mono">{lu.formation}</span>}
+                    </div>
+                    {lu.coach?.name && <p className="text-[12px] text-muted-foreground mb-3">Técnico: {lu.coach.name}</p>}
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Titulares</p>
+                    <div className="grid grid-cols-2 gap-1.5 mb-3">
+                      {lu.startXI.map((p, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-[0.85rem]">
+                          {playerPhotoUrl(p.id) && <img src={playerPhotoUrl(p.id)!} alt="" className="w-6 h-6 rounded-full object-cover bg-muted" loading="lazy" onError={hideOnError} />}
+                          <span className="truncate">{p.number ? `${p.number}. ` : ''}{p.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {lu.substitutes.length > 0 && (
+                      <>
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Reservas</p>
+                        <p className="text-[12px] text-muted-foreground">{lu.substitutes.map(p => p.name).join(', ')}</p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {pb && (
+                  <div className="bg-card border border-border/50 rounded-xl p-5 overflow-hidden">
+                    <h3 className="text-base font-semibold mb-3">Avaliações dos jogadores</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[12px]">
+                        <thead className="text-muted-foreground">
+                          <tr className="text-left">
+                            <th className="py-1 font-medium">Jogador</th>
+                            <th className="py-1 font-medium text-center"><span className="inline-flex items-center gap-0.5 justify-center">Nota <InfoTooltip text="Nota da partida" /></span></th>
+                            <th className="py-1 font-medium text-center"><span className="inline-flex items-center gap-0.5 justify-center">Min <InfoTooltip text="Minutos jogados" /></span></th>
+                            <th className="py-1 font-medium text-center"><span className="inline-flex items-center gap-0.5 justify-center">G/A <InfoTooltip text="Gols/Assistências" /></span></th>
+                            <th className="py-1 font-medium text-center"><span className="inline-flex items-center gap-0.5 justify-center">Fin. <InfoTooltip text="Finalizações" /></span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pb.players.map((p, i) => (
+                            <tr key={i} className="border-t border-border/20">
+                              <td className="py-1 truncate max-w-[120px]">{p.name}</td>
+                              <td className="py-1 text-center font-mono">{p.rating ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{p.minutes ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{p.goals ?? 0}/{p.assists ?? 0}</td>
+                              <td className="py-1 text-center font-mono">{p.shots_total ?? '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
-                  <thead className="text-muted-foreground">
-                    <tr className="text-left">
-                      <th className="py-1 font-medium">Jogador</th>
-                      <th className="py-1 font-medium text-center">Nota</th>
-                      <th className="py-1 font-medium text-center">Min</th>
-                      <th className="py-1 font-medium text-center">G/A</th>
-                      <th className="py-1 font-medium text-center">Fin.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {blk.players.map((p, i) => (
-                      <tr key={i} className="border-t border-border/20">
-                        <td className="py-1 truncate max-w-[120px]">{p.name}</td>
-                        <td className="py-1 text-center font-mono">{p.rating ?? '-'}</td>
-                        <td className="py-1 text-center font-mono">{p.minutes ?? '-'}</td>
-                        <td className="py-1 text-center font-mono">{p.goals ?? 0}/{p.assists ?? 0}</td>
-                        <td className="py-1 text-center font-mono">{p.shots_total ?? '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

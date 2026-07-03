@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Label } from '@/components/ui/label';
 import { BarChart3, TrendingUp, Target, Users } from 'lucide-react';
@@ -17,7 +18,8 @@ import { ArrowLeft } from 'lucide-react';
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
   
-  const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, neutralField } = usePrediction();
+  const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, neutralField, analysis } = usePrediction();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   
   const [homeHistory, setHomeHistory] = useState<TeamHistoryResponse | null>(null);
@@ -50,6 +52,16 @@ export default function Estatisticas() {
     setMatchParams(null);
     setMatchData(null);
     window.history.replaceState(null, '', '/estatisticas');
+  };
+
+  // Volta para a página Análise. Se não houver uma análise em andamento, pré-seleciona
+  // a partida que estava sendo vista; se houver, mantém a análise persistida.
+  const backToAnalise = () => {
+    if (!analysis && matchParams) {
+      setHomeTeamId(matchParams.home);
+      setAwayTeamId(matchParams.away);
+    }
+    router.push('/');
   };
 
   const bothSelected = homeTeamId && awayTeamId && homeTeamId !== awayTeamId;
@@ -120,8 +132,8 @@ export default function Estatisticas() {
   if (matchParams) {
     return (
       <div className="space-y-6">
-        <button onClick={clearMatch} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Voltar ao painel comparativo
+        <button onClick={backToAnalise} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Voltar para a Análise
         </button>
         <h2 className="text-lg font-heading font-bold flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-cyan-500" />
