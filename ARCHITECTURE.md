@@ -80,3 +80,36 @@ PORT=8000
 # Chaves de API de Terceiros utilizadas nos coletores ETL
 API_FOOTBALL_KEY=your_api_football_key
 ```
+
+## 5. Camada de Usuários / Monetização (tabelas `app_*`)
+
+Introduzida em 2026-07. Estende o mesmo FastAPI/Neon com estado transacional, **isolada** do
+pipeline de dados/previsão (que segue intacto).
+
+- **ORM declarativo + Alembic.** Diferente do pipeline (SQLAlchemy Core + pandas), a camada
+  transacional usa **ORM 2.0** (`backend/app/db/base.py`) e **migrations** (`backend/alembic/`).
+  As migrations gerenciam **apenas** as tabelas com prefixo `app_` (filtro em `alembic/env.py`);
+  as tabelas de dados (`matches`, `fixture_index`, `odds_registry`…) não são tocadas.
+  Aplicar/atualizar: `cd backend && .venv/Scripts/python -m alembic upgrade head`.
+- **Estrutura modular por domínio:** `backend/app/domains/{users,legal,wallet,payments,analysis,
+  bets,promotions,admin}` — cada um com `models.py`/`schemas.py`/`service.py`/`router.py`.
+  Config central em `backend/app/core/config.py` (pydantic-settings). Segurança em
+  `app/core/security.py` (argon2 + JWT + OTP), validação CPF/telefone em `app/core/validators.py`.
+- **23 tabelas `app_*`** no Neon (já criadas em produção): usuários/OTP/sessões/auditoria,
+  carteira + **ledger** de créditos (saldo só via lançamento, idempotência), pagamentos, análises
+  com snapshot imutável, apostas + liquidação, promoções e suporte ao admin.
+- **Adapters trocáveis (hoje em MOCK):**
+  - **E-mail (OTP):** `app/core/email.py` — adapter `mock` (loga o código no console). Provedor
+    real (Resend/SES/SMTP) pluga pela mesma interface via `EMAIL_PROVIDER`.
+  - **Gateway de pagamento:** `app/domains/payments/gateways/` — adapter `mock` (confirmação via
+    `POST /payments/mock/confirm/{id}`). Asaas/MercadoPago/Pagar.me/Stripe plugam via `PAYMENT_PROVIDER`.
+- **Env vars novas (opcionais; defaults de dev):** `JWT_SECRET` (obrigatório trocar em produção),
+  `EMAIL_PROVIDER`, `PAYMENT_PROVIDER`, TTLs de token/OTP, `CRON_TOKEN` (protege liquidação).
+- **Liquidação de apostas:** worker `backend/scripts/settle_bets.py` (ou `POST /api/cron/settle-bets`)
+  agendável — pós-jogo, consulta a API-Football, consome/estorna o crédito reservado.
+- **Frontend:** rotas novas `/entrar`, `/cadastro`, `/carteira`, `/perfil`, `/admin`,
+  `/documentos/[type]`, `/como-funciona`; auth via `lib/AuthContext.tsx` + `lib/authApi.ts`
+  (JWT no localStorage + refresh automático). `NEXT_PUBLIC_API_URL` deve apontar para o backend.
+
+Detalhes completos (domínios, fluxos, promoção, admin) em `docs/ARQUITETURA_MONETIZACAO.md` e
+`DOCUMENTACAO_CENTRAL.md`.

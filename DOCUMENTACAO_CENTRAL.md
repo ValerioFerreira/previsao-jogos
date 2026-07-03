@@ -358,3 +358,48 @@ Re-treino do DC após validar uma feature: `scripts/retrain_dc_pace.py` (cirúrg
 - Console Windows é cp1252 — evitar caracteres Unicode (Δ, →) em `print` de scripts.
 - Jobs em background morrem no teardown de sessão → fazer scripts **resumíveis** (checkpoint).
 - `nbinom.ppf` é lento para r alto; amostrar via **CDF em grade + searchsorted**.
+
+---
+
+## 12. Camada de Usuários / Monetização (2026-07)
+
+Além do motor de previsão, o produto ganhou uma **camada completa de usuários, créditos,
+apostas promocionais e administração**, construída na branch `feat/monetizacao` (mergeada na
+`main`). O motor de previsão e seus modelos **não mudaram** (só ganharam a calibração O/U já
+descrita e a odd mínima 1.00 na exibição).
+
+### 12.1 O que existe
+Backend **modular por domínio** (`backend/app/domains/*`), ORM 2.0 + **Alembic** (só tabelas
+`app_*`, isoladas do pipeline de dados), **23 tabelas** já criadas no Neon. Fluxo completo:
+```
+cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome/reserva 1 crédito)
+   →  "Monte sua Aposta" (odd ≤2,00, auto ~2,00, imutável)  →  liquidação pós-jogo
+      (vence: consome o crédito · perde/anula: estorna)  —  Painel Admin gerindo tudo
+```
+- **Auth:** argon2, JWT de acesso + refresh rotativo, OTP por e-mail (mock), CPF (dígitos
+  verificadores) + telefone, rate limiting, lockout, auditoria.
+- **Carteira:** ledger de créditos (saldo só via lançamento, idempotência), disponível/reservado.
+- **Pagamentos:** gateway abstrato (mock; Asaas/MercadoPago/Pagar.me/Stripe plugáveis), webhooks
+  idempotentes. 1 crédito = R$1,00.
+- **Análise:** grava **snapshot imutável** + versão do algoritmo/dados; independente consome 1
+  crédito, partida futura reserva 1.
+- **Aposta ("Monte sua Aposta"):** combina mercados da análise (O/U em colunas Acima/Abaixo),
+  odd combinada **≤ 2,00**, **auto-seleção ~2,00** se o usuário não escolher, imutável.
+- **Liquidação:** worker `scripts/settle_bets.py` / `POST /api/cron/settle-bets` — pós-jogo via
+  API-Football, consome (venceu) ou estorna (perdeu/indeterminável) — promoção "Só Paga se Acertar".
+- **Admin (backend + UI):** usuários (bloquear, creditar), financeiro, promoções, documentos
+  legais versionados, settings/banners, **auditoria completa**.
+- **Frontend:** página única **Análise** (`/`) com config → gerar (crédito) → previsão completa →
+  **Construção da Aposta** (Monte sua Aposta + Explorador de Linha + Value Betting/De-Vig);
+  `/carteira`, `/perfil`, `/admin`, `/documentos/[type]`, **`/como-funciona`** (doc interativo).
+  Persistência da análise no `PredictionContext` (não some ao navegar). Auth no `AuthContext`.
+
+### 12.2 Estado dos adapters (importante)
+- **E-mail OTP:** modo **mock** — o código aparece no **log do backend**, não vai por e-mail real.
+- **Gateway de pagamento:** modo **mock** — confirmação via `POST /payments/mock/confirm/{id}`.
+- Ambos têm interface pronta; plugar o provedor real é troca de adapter + credenciais.
+
+### 12.3 Onde está a documentação
+- Desenho/arquitetura da camada: **`docs/ARQUITETURA_MONETIZACAO.md`**.
+- Infra/deploy/env: **`ARCHITECTURE.md` §5**.
+- Estado atual + próximos passos (handoff vivo): **`ESTADO_ATUAL_E_PROXIMOS_PASSOS.md`** (raiz).
