@@ -8,8 +8,7 @@ import { motion } from 'framer-motion';
 import AccountMenu from '@/components/platform/AccountMenu';
 
 const NAV_ITEMS = [
-  { path: '/analise', label: 'Análise' },
-  { path: '/', label: 'Previsões' },
+  { path: '/', label: 'Análise' },
   { path: '/estatisticas', label: 'Estatísticas' },
 ];
 

@@ -15,6 +15,12 @@ import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 import { MatchPickerModal } from '@/components/platform/MatchPickerModal';
 import { MatchHeader } from '@/components/platform/MatchHeader';
+import Link from 'next/link';
+import { Coins, Sparkles } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
+import { analysisApi } from '@/lib/monetizationApi';
+import BetLab from '@/components/platform/BetLab';
+import BetBuilder from '@/components/platform/BetBuilder';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -176,28 +182,40 @@ export default function Previsoes() {
   const [tournaments, setTournaments] = React.useState<string[]>([]);
   
   const router = useRouter();
-  const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, setCompetition, neutralField, setNeutralField } = usePrediction();
-  
+  const {
+    homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, setCompetition, neutralField, setNeutralField,
+    analysis, setAnalysis, mode, setMode, fixtureId, setFixtureId, matchDate, setMatchDate,
+  } = usePrediction();
+  const { user, wallet, refreshWallet } = useAuth();
+
   const [loading, setLoading] = useState(false);
-  const [projection, setProjection] = useState<PredictionResponse | null>(null);
+  // projection é derivada da análise persistida no contexto (persiste ao navegar e voltar).
+  const projection = analysis ? (analysis.snapshot as unknown as PredictionResponse) : null;
+  const setProjection = (_: PredictionResponse | null) => { if (_ === null) setAnalysis(null); };
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const credits = wallet ? Math.floor(Number(wallet.available_balance)) : 0;
   
   const [homeForm, setHomeForm] = useState<{matches: RecentMatch[], total: number}>({matches: [], total: 0});
   const [awayForm, setAwayForm] = useState<{matches: RecentMatch[], total: number}>({matches: [], total: 0});
   const [homeAnomalies, setHomeAnomalies] = useState<Anomaly[]>([]);
   const [awayAnomalies, setAwayAnomalies] = useState<Anomaly[]>([]);
   
-  const [h2hBtts, setH2hBtts] = useState<number | null>(null);
-  const [h2hGoals, setH2hGoals] = useState<number | null>(null);
   const [h2hData, setH2hData] = useState<any>(null);
 
-  // Modo de análise: partida futura (pré-preenche de um jogo agendado) ou independente.
-  const [mode, setMode] = useState<'independente' | 'futura'>('independente');
+  // Restaura o H2H quando a análise persiste do contexto (ao voltar para a página).
+  React.useEffect(() => {
+    if (analysis && homeTeamId && awayTeamId && !h2hData) {
+      api.h2h(homeTeamId, awayTeamId).then(h => setH2hData(h?.metrics ?? null)).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis]);
+
+  // Modo de análise (mode) e data (matchDate) vêm do contexto (persistem ao navegar).
   const [referee, setReferee] = useState('');
   const [referees, setReferees] = useState<string[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
   const [modalOpen, setModalOpen] = useState(false);
-  const [matchDate, setMatchDate] = useState<string | undefined>(undefined);
 
   React.useEffect(() => {
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
@@ -213,6 +231,7 @@ export default function Previsoes() {
     setCompetition(fx.tournament);
     setNeutralField(fx.neutral);
     setMatchDate(fx.date);
+    setFixtureId(Number(fx.fixture_id));
     setProjection(null);
   };
 
@@ -245,40 +264,34 @@ export default function Previsoes() {
 
   const canGenerate = homeTeamId && awayTeamId && homeTeamId !== awayTeamId;
 
-  const handleGenerate = useCallback(() => {
+  const handleGenerate = useCallback(async () => {
     if (!canGenerate) return;
+    if (!user) { router.push('/entrar'); return; }
     setLoading(true);
-    setProjection(null);
-    setH2hBtts(null);
-    setH2hGoals(null);
-    setH2hData(null);
+    setErrMsg(null);
+    setAnalysis(null);
 
-    // Fetch H2H explicitly to get extra metrics if needed, although prediction might not have it.
-    api.h2h(homeTeamId, awayTeamId).then(h2h => {
-      const btts = h2h?.metrics?.btts_percentage;
-      const goals = h2h?.metrics?.avg_total_goals;
-      setH2hBtts(typeof btts === 'number' ? btts : null);
-      setH2hGoals(typeof goals === 'number' ? goals : null);
-      setH2hData(h2h?.metrics ?? null);
-    }).catch(() => {
-      setH2hBtts(null);
-      setH2hGoals(null);
-      setH2hData(null);
-    });
+    api.h2h(homeTeamId, awayTeamId)
+      .then(h2h => setH2hData(h2h?.metrics ?? null))
+      .catch(() => setH2hData(null));
 
-    api.predict({
-      home_team: homeTeamId,
-      away_team: awayTeamId,
-      tournament: competition,
-      neutral: neutralField
-    }).then(res => {
-      setProjection(res);
+    try {
+      const a = await analysisApi.create({
+        home_team: homeTeamId,
+        away_team: awayTeamId,
+        tournament: competition,
+        neutral: neutralField,
+        type: mode === 'futura' ? 'future_match' : 'independent',
+        fixture_id: mode === 'futura' ? fixtureId : null,
+      });
+      setAnalysis(a); // persiste no contexto — não some ao navegar e voltar
+      await refreshWallet();
+    } catch (e) {
+      setErrMsg((e as Error).message);
+    } finally {
       setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      setLoading(false);
-    });
-  }, [homeTeamId, awayTeamId, competition, neutralField, canGenerate]);
+    }
+  }, [canGenerate, user, homeTeamId, awayTeamId, competition, neutralField, mode, fixtureId, refreshWallet, router, setAnalysis]);
 
   return (
     <div className="space-y-6">
@@ -415,14 +428,26 @@ export default function Previsoes() {
         )}
       </AnimatePresence>
 
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center gap-2">
+        {errMsg && (
+          <div className="text-sm rounded-md bg-red-500/10 text-red-600 p-3 max-w-md text-center">
+            {errMsg}{errMsg.toLowerCase().includes('insuficiente') && <> <Link href="/carteira" className="underline font-medium">Comprar créditos</Link>.</>}
+          </div>
+        )}
         <motion.button
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          onClick={handleGenerate} disabled={!canGenerate || loading}
+          onClick={handleGenerate} disabled={!canGenerate || loading || (!!user && credits < 1)}
           className="px-8 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
         >
-          {loading ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processando...</span> : 'Gerar Previsão'}
+          {loading
+            ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processando...</span>
+            : <span className="flex items-center gap-2"><Sparkles className="w-4 h-4" /> {user ? 'Gerar análise (1 crédito)' : 'Entrar para gerar análise'}</span>}
         </motion.button>
+        {user && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <Coins className="w-3.5 h-3.5 text-emerald-500" /> {credits} créditos · <Link href="/carteira" className="underline">carteira</Link>
+          </p>
+        )}
       </div>
 
       <AnimatePresence>
@@ -624,6 +649,20 @@ export default function Previsoes() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Construção da Aposta: Aposta Escolhida (promoção) + ferramentas (Combinadas etc.) */}
+            <div className="pt-4">
+              <h3 className="text-lg font-heading font-bold mt-8 mb-4 border-b border-border/50 pb-2">CONSTRUÇÃO DA APOSTA</h3>
+              {analysis?.type === 'future_match' && (
+                <div className="mb-6">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Aposta Escolhida (promoção &quot;Só Paga se Acertar&quot; — crédito reservado desta análise):
+                  </p>
+                  <BetBuilder analysisId={analysis.id} onConfirmed={() => refreshWallet()} />
+                </div>
+              )}
+              <BetLab prediction={projection} home={homeTeamId} away={awayTeamId} />
             </div>
 
           </motion.div>
