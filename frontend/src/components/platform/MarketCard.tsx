@@ -22,7 +22,10 @@ function fairOddRange(prob: number): string {
   if (!prob || prob <= 0) return '—';
   const odd = 1 / prob;
   if (odd > 50) return '50+';
-  return `${(odd * 0.93).toFixed(2)}–${odd.toFixed(2)}`;
+  // Odd nunca abaixo de 1.00.
+  const hi = Math.max(1, odd);
+  const lo = Math.max(1, odd * 0.93);
+  return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
 }
 
 // P(total > linha) a partir da PMF (linha é x.5): soma de dist[floor(L)+1 ..].

@@ -15,6 +15,12 @@ import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 import { MatchPickerModal } from '@/components/platform/MatchPickerModal';
 import { MatchHeader } from '@/components/platform/MatchHeader';
+import Link from 'next/link';
+import { Coins, Sparkles } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
+import { analysisApi } from '@/lib/monetizationApi';
+import BetLab from '@/components/platform/BetLab';
+import BetBuilder from '@/components/platform/BetBuilder';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -27,7 +33,10 @@ function oddRangeStr(probPct: number): string {
   if (!probPct || probPct <= 0) return '—';
   const odd = 100 / probPct;
   if (odd > 50) return '50+';
-  return `${(odd * 0.93).toFixed(2)}–${odd.toFixed(2)}`;
+  // Odd nunca abaixo de 1.00.
+  const hi = Math.max(1, odd);
+  const lo = Math.max(1, odd * 0.93);
+  return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
 }
 
 // Recortes por tempo para gols e cartões (Partida inteira / 1º / 2º), por lado.
@@ -72,7 +81,7 @@ function PlacarExatoCard({ data, home, away }: {
       <h4 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
         <Target className="w-4 h-4 text-purple-500" />
         Placar Exato
-        <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." />
+        <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." href="/como-funciona#mercado-placar" />
       </h4>
       <p className="text-[10px] text-muted-foreground mb-3">
         {teamPt(home)} <span className="opacity-60">(mandante)</span> × {teamPt(away)} <span className="opacity-60">(visitante)</span>
@@ -121,7 +130,7 @@ function MatchReliabilityBadge({ confiabilidade }: { confiabilidade: PredictionR
     <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border ${styles}`}>
       {tier === 'Alta' ? <ShieldCheck className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
       Confiabilidade dos dados: {tier}
-      <InfoTooltip text={confiabilidade._resumo} />
+      <InfoTooltip text={confiabilidade._resumo} href="/como-funciona#metrica-confiabilidade" />
     </div>
   );
 }
@@ -176,28 +185,40 @@ export default function Previsoes() {
   const [tournaments, setTournaments] = React.useState<string[]>([]);
   
   const router = useRouter();
-  const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, setCompetition, neutralField, setNeutralField } = usePrediction();
-  
+  const {
+    homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, setCompetition, neutralField, setNeutralField,
+    analysis, setAnalysis, mode, setMode, fixtureId, setFixtureId, matchDate, setMatchDate,
+  } = usePrediction();
+  const { user, wallet, refreshWallet } = useAuth();
+
   const [loading, setLoading] = useState(false);
-  const [projection, setProjection] = useState<PredictionResponse | null>(null);
+  // projection é derivada da análise persistida no contexto (persiste ao navegar e voltar).
+  const projection = analysis ? (analysis.snapshot as unknown as PredictionResponse) : null;
+  const setProjection = (_: PredictionResponse | null) => { if (_ === null) setAnalysis(null); };
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const credits = wallet ? Math.floor(Number(wallet.available_balance)) : 0;
   
   const [homeForm, setHomeForm] = useState<{matches: RecentMatch[], total: number}>({matches: [], total: 0});
   const [awayForm, setAwayForm] = useState<{matches: RecentMatch[], total: number}>({matches: [], total: 0});
   const [homeAnomalies, setHomeAnomalies] = useState<Anomaly[]>([]);
   const [awayAnomalies, setAwayAnomalies] = useState<Anomaly[]>([]);
   
-  const [h2hBtts, setH2hBtts] = useState<number | null>(null);
-  const [h2hGoals, setH2hGoals] = useState<number | null>(null);
   const [h2hData, setH2hData] = useState<any>(null);
 
-  // Modo de análise: partida futura (pré-preenche de um jogo agendado) ou independente.
-  const [mode, setMode] = useState<'independente' | 'futura'>('independente');
+  // Restaura o H2H quando a análise persiste do contexto (ao voltar para a página).
+  React.useEffect(() => {
+    if (analysis && homeTeamId && awayTeamId && !h2hData) {
+      api.h2h(homeTeamId, awayTeamId).then(h => setH2hData(h?.metrics ?? null)).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis]);
+
+  // Modo de análise (mode) e data (matchDate) vêm do contexto (persistem ao navegar).
   const [referee, setReferee] = useState('');
   const [referees, setReferees] = useState<string[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
   const [modalOpen, setModalOpen] = useState(false);
-  const [matchDate, setMatchDate] = useState<string | undefined>(undefined);
 
   React.useEffect(() => {
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
@@ -213,6 +234,7 @@ export default function Previsoes() {
     setCompetition(fx.tournament);
     setNeutralField(fx.neutral);
     setMatchDate(fx.date);
+    setFixtureId(Number(fx.fixture_id));
     setProjection(null);
   };
 
@@ -245,40 +267,34 @@ export default function Previsoes() {
 
   const canGenerate = homeTeamId && awayTeamId && homeTeamId !== awayTeamId;
 
-  const handleGenerate = useCallback(() => {
+  const handleGenerate = useCallback(async () => {
     if (!canGenerate) return;
+    if (!user) { router.push('/entrar'); return; }
     setLoading(true);
-    setProjection(null);
-    setH2hBtts(null);
-    setH2hGoals(null);
-    setH2hData(null);
+    setErrMsg(null);
+    setAnalysis(null);
 
-    // Fetch H2H explicitly to get extra metrics if needed, although prediction might not have it.
-    api.h2h(homeTeamId, awayTeamId).then(h2h => {
-      const btts = h2h?.metrics?.btts_percentage;
-      const goals = h2h?.metrics?.avg_total_goals;
-      setH2hBtts(typeof btts === 'number' ? btts : null);
-      setH2hGoals(typeof goals === 'number' ? goals : null);
-      setH2hData(h2h?.metrics ?? null);
-    }).catch(() => {
-      setH2hBtts(null);
-      setH2hGoals(null);
-      setH2hData(null);
-    });
+    api.h2h(homeTeamId, awayTeamId)
+      .then(h2h => setH2hData(h2h?.metrics ?? null))
+      .catch(() => setH2hData(null));
 
-    api.predict({
-      home_team: homeTeamId,
-      away_team: awayTeamId,
-      tournament: competition,
-      neutral: neutralField
-    }).then(res => {
-      setProjection(res);
+    try {
+      const a = await analysisApi.create({
+        home_team: homeTeamId,
+        away_team: awayTeamId,
+        tournament: competition,
+        neutral: neutralField,
+        type: mode === 'futura' ? 'future_match' : 'independent',
+        fixture_id: mode === 'futura' ? fixtureId : null,
+      });
+      setAnalysis(a); // persiste no contexto — não some ao navegar e voltar
+      await refreshWallet();
+    } catch (e) {
+      setErrMsg((e as Error).message);
+    } finally {
       setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      setLoading(false);
-    });
-  }, [homeTeamId, awayTeamId, competition, neutralField, canGenerate]);
+    }
+  }, [canGenerate, user, homeTeamId, awayTeamId, competition, neutralField, mode, fixtureId, refreshWallet, router, setAnalysis]);
 
   return (
     <div className="space-y-6">
@@ -300,6 +316,7 @@ export default function Previsoes() {
             onClick={() => { setMode('independente'); setMatchDate(undefined); }}
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'independente' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Análise Independente</button>
+          <InfoTooltip text="Partida Futura: reserva 1 crédito e habilita a promoção 'Só Paga se Acertar'. Independente: consome 1 crédito e aceita qualquer par de seleções." href="/como-funciona#partida-futura" />
         </div>
 
         {mode === 'futura' && (
@@ -415,14 +432,26 @@ export default function Previsoes() {
         )}
       </AnimatePresence>
 
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center gap-2">
+        {errMsg && (
+          <div className="text-sm rounded-md bg-red-500/10 text-red-600 p-3 max-w-md text-center">
+            {errMsg}{errMsg.toLowerCase().includes('insuficiente') && <> <Link href="/carteira" className="underline font-medium">Comprar créditos</Link>.</>}
+          </div>
+        )}
         <motion.button
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          onClick={handleGenerate} disabled={!canGenerate || loading}
+          onClick={handleGenerate} disabled={!canGenerate || loading || (!!user && credits < 1)}
           className="px-8 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
         >
-          {loading ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processando...</span> : 'Gerar Previsão'}
+          {loading
+            ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processando...</span>
+            : <span className="flex items-center gap-2"><Sparkles className="w-4 h-4" /> {user ? 'Gerar análise (1 crédito)' : 'Entrar para gerar análise'}</span>}
         </motion.button>
+        {user && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <Coins className="w-3.5 h-3.5 text-emerald-500" /> {credits} créditos · <Link href="/carteira" className="underline">carteira</Link>
+          </p>
+        )}
       </div>
 
       <AnimatePresence>
@@ -520,7 +549,7 @@ export default function Previsoes() {
                         <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col">
                           <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
                             Ambas Marcam
-                            <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." />
+                            <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." href="/como-funciona#mercado-btts" />
                           </h4>
                           <div className="flex-1 flex flex-wrap items-center justify-center gap-8 text-center">
                             <div>
@@ -551,7 +580,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Gols
-                    <InfoTooltip text="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." />
+                    <InfoTooltip text="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." href="/como-funciona#mercado-gols" />
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <MarketCard title="Gols" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={goalPeriods(projection, homeTeamId)} />
@@ -566,7 +595,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Finalizações
-                    <InfoTooltip text="Conta qualquer tentativa de marcar gol, independentemente da direção. Inclui chutes no alvo, para fora, na trave e também os bloqueados pela defesa adversária." />
+                    <InfoTooltip text="Conta qualquer tentativa de marcar gol, independentemente da direção. Inclui chutes no alvo, para fora, na trave e também os bloqueados pela defesa adversária." href="/como-funciona#mercado-finalizacoes" />
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {projection.chutes_equipe && projection.chutes_equipe[homeTeamId] && (
@@ -585,7 +614,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Chutes a Gol
-                    <InfoTooltip text="Considera apenas os chutes que vão na direção exata da baliza e que seriam gol se não houvesse intervenção do goleiro. Chutes na trave, para fora ou bloqueados não contam." />
+                    <InfoTooltip text="Considera apenas os chutes que vão na direção exata da baliza e que seriam gol se não houvesse intervenção do goleiro. Chutes na trave, para fora ou bloqueados não contam." href="/como-funciona#mercado-finalizacoes-gol" />
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <MarketCard title="Chutes a Gol" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.chutes_a_gol[homeTeamId]} />
@@ -600,7 +629,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Escanteios
-                    <InfoTooltip text="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." />
+                    <InfoTooltip text="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." href="/como-funciona#mercado-escanteios" />
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <MarketCard title="Escanteios" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.escanteios[homeTeamId]} />
@@ -615,7 +644,7 @@ export default function Previsoes() {
                 <div>
                   <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
                     Cartões
-                    <InfoTooltip text="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." />
+                    <InfoTooltip text="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." href="/como-funciona#mercado-cartoes" />
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <MarketCard title="Cartões" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={cardPeriods(projection, homeTeamId)} />
@@ -624,6 +653,20 @@ export default function Previsoes() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Construção da Aposta: Aposta Escolhida (promoção) + ferramentas (Combinadas etc.) */}
+            <div className="pt-4">
+              <h3 className="text-lg font-heading font-bold mt-8 mb-4 border-b border-border/50 pb-2">CONSTRUÇÃO DA APOSTA</h3>
+              {analysis?.type === 'future_match' && (
+                <div className="mb-6">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Promoção &quot;Só Paga se Acertar&quot; — monte sua aposta com o crédito reservado desta análise:
+                  </p>
+                  <BetBuilder analysisId={analysis.id} onConfirmed={() => refreshWallet()} />
+                </div>
+              )}
+              <BetLab prediction={projection} />
             </div>
 
           </motion.div>

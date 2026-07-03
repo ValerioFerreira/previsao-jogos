@@ -61,10 +61,35 @@ def get_referees() -> list[str]:
         return []
 
 
+# Alias explícitos nome-canônico -> chave presente no team_ids (quando a normalização
+# "loose" não casa: FYR vs North, Mação vs Macau).
+_TEAM_ID_ALIASES = {
+    "North Macedonia": "FYR Macedonia",
+    "Macau": "Mação",
+}
+
+
+def _loose_team_key(s: str) -> str:
+    """Chave frouxa p/ casar grafias: sem acento, minúscula, &->and, Rep.->Republic,
+    remove FYR/Islands e pontuação."""
+    import re
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(s or ""))
+    s = "".join(c for c in s if not unicodedata.combining(c)).lower()
+    s = s.replace("&", " and ").replace(".", " ")
+    s = re.sub(r"\brep\b", "republic", s)
+    s = re.sub(r"\bfyr\b", "", s)
+    s = re.sub(r"\bislands?\b", "", s)
+    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    return re.sub(r"\s+", " ", s)
+
+
 @_cache_nonempty
 def get_team_ids() -> dict[str, int]:
-    """Mapa nome_da_seleção -> team_id (para montar URL do logo).
-    Inclui as chaves canonizadas (alias)."""
+    """Mapa nome_da_seleção -> team_id (para logo E busca de partidas antigas).
+    Resolve grafias divergentes (ex.: 'Bosnia and Herzegovina' vs 'Bosnia & Herzegovina',
+    'North Macedonia' vs 'FYR Macedonia') casando os nomes canônicos por normalização
+    frouxa + aliases, para que toda seleção com id disponível fique acessível pelo nome."""
     from app.db.connection import engine
     try:
         df = pd.read_sql("SELECT team_name, team_id FROM team_ids", con=engine)
@@ -72,10 +97,32 @@ def get_team_ids() -> dict[str, int]:
     except Exception as e:
         print(f"[ERRO DB] team_ids: {e}")
         raw = {}
-        
+
     out = dict(raw)
     for name, tid in raw.items():
         out.setdefault(_norm(name), tid)
+
+    # índice frouxo das chaves cruas
+    loose_idx: dict[str, int] = {}
+    for name, tid in raw.items():
+        loose_idx.setdefault(_loose_team_key(name), tid)
+
+    # resolve cada nome canônico que ainda não tem id
+    try:
+        canon = get_predictor().teams()
+    except Exception:
+        canon = []
+    for name in canon:
+        if name in out:
+            continue
+        tid = None
+        alias = _TEAM_ID_ALIASES.get(name)
+        if alias and alias in raw:
+            tid = raw[alias]
+        if tid is None:
+            tid = loose_idx.get(_loose_team_key(name))
+        if tid is not None:
+            out[name] = tid
     return out
 
 

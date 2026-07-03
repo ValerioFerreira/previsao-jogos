@@ -5,11 +5,12 @@ import { usePathname } from 'next/navigation';
 import { Sun, Moon, Activity, Wifi, WifiOff, BarChart3, Wrench } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 import { motion } from 'framer-motion';
+import AccountMenu from '@/components/platform/AccountMenu';
 
 const NAV_ITEMS = [
-  { path: '/', label: 'Previsões' },
+  { path: '/', label: 'Análise' },
   { path: '/estatisticas', label: 'Estatísticas' },
-  { path: '/construir-aposta', label: 'Construir Aposta' },
+  { path: '/como-funciona', label: 'Como Funciona?' },
 ];
 
 export default function Header() {
@@ -102,6 +103,8 @@ export default function Header() {
                   </motion.div>
                 </button>
               )}
+              {/* Conta / créditos */}
+              <AccountMenu />
             </div>
           </div>
         </div>

@@ -44,6 +44,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Camada de usuários/monetização. Não afeta as rotas de previsão.
+from app.domains.auth.router import router as auth_router  # noqa: E402
+from app.domains.wallet.router import router as wallet_router  # noqa: E402
+from app.domains.payments.router import router as payments_router  # noqa: E402
+from app.domains.legal.router import router as legal_router  # noqa: E402
+from app.domains.analysis.router import router as analysis_router  # noqa: E402
+from app.domains.bets.router import router as bets_router  # noqa: E402
+from app.domains.admin.router import router as admin_router  # noqa: E402
+
+app.include_router(auth_router)
+app.include_router(wallet_router)
+app.include_router(payments_router)
+app.include_router(legal_router)
+app.include_router(analysis_router)
+app.include_router(bets_router)
+app.include_router(admin_router)
+
 
 @app.get("/")
 def root() -> dict:
@@ -72,6 +89,25 @@ def cron_refresh_fixtures(token: str = Query(default="")) -> dict:
     for k in ("get_past_fixtures", "get_team_ids", "_fixture_index", "_fixture_index_norm"):
         _READER_MEMO.pop(k, None)
     return res
+
+
+@app.post("/api/cron/settle-bets")
+def cron_settle_bets(token: str = Query(default="")) -> dict:
+    """Liquida as apostas com partida encerrada (após o delay de segurança): consome o
+    crédito das vencedoras e estorna o das não vencedoras. Feito para um cron periódico.
+    Protegido por CRON_TOKEN (se a env var estiver setada)."""
+    import os
+    expected = os.getenv("CRON_TOKEN")
+    if expected and token != expected:
+        raise HTTPException(status_code=403, detail="Token inválido.")
+    from app.db.base import SessionLocal
+    from app.domains.bets.results import get_result_provider
+    from app.domains.bets.settlement import run_due_settlements
+    db = SessionLocal()
+    try:
+        return run_due_settlements(db, get_result_provider())
+    finally:
+        db.close()
 
 
 @app.get("/teams", response_model=TeamsResponse)
