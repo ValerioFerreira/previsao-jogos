@@ -50,3 +50,25 @@ Estrutura de correlação dos resíduos (PIT) dos modelos de produção:
 
 **Próximo passo de produção:** persistir Σ (por corte temporal recente) e aplicar na odd
 combinada quando as seleções forem de contagens correlacionadas.
+
+## Extensão a 5 contagens (finalizações, a-gol, escanteios, impedimentos, cartões)
+Rodando com 5 mercados (3.969 jogos), a estrutura fica clara — **fator latente ofensivo forte**:
+
+| | fin | a-gol | esc | imped | cart |
+|---|---|---|---|---|---|
+| **finalizações** | 1.00 | **+0.57** | +0.30 | −0.03 | +0.03 |
+| **a-gol** | +0.57 | 1.00 | +0.18 | ≈0 | −0.02 |
+| **escanteios** | +0.30 | +0.18 | 1.00 | ≈0 | ≈0 |
+| **impedimentos** | −0.03 | ≈0 | ≈0 | 1.00 | +0.03 |
+| **cartões** | +0.03 | −0.02 | ≈0 | +0.03 | 1.00 |
+
+**dNLL conjunto −0.280 (4/4 folds)** — muito maior que no caso de 3 (−0.056), puxado pela
+correlação finalizações↔a-gol (+0.57, em parte mecânica: a-gol ⊂ finalizações) e
+finalizações↔escanteios (+0.30). **Impedimentos e cartões são idiossincráticos** (≈0 com tudo).
+
+**Reforço do veredito:** combos entre contagens OFENSIVAS (ex.: "mais de X finalizações E mais
+de Y a-gol", ou finalizações+escanteios) são **fortemente correlacionados** e hoje precificados
+como independentes — a odd combinada do "Monte sua Aposta" **superestima muito** a dificuldade.
+Aplicar a cópula (Σ 5×5, ou ao menos o bloco ofensivo 3×3) é a melhoria de produção mais clara
+e de baixo risco desta bateria.
+

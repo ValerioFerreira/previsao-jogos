@@ -34,7 +34,9 @@ OOF = pd.read_csv(ROOT / "data" / "built" / "oof_shots.csv")
 
 MARKETS = [  # (nome, artefato, coluna_home, coluna_away)
     ("finalizacoes", "shots_nb.joblib", "home_cur_sb_shots", "away_cur_sb_shots"),
+    ("a_gol", "shots_on_target_nb.joblib", "home_cur_sb_shots_on_target", "away_cur_sb_shots_on_target"),
     ("escanteios", "corners_cascade_rfixo.joblib", "home_cur_sb_corners", "away_cur_sb_corners"),
+    ("impedimentos", "offsides_nb.joblib", "home_cur_sb_offsides", "away_cur_sb_offsides"),
     ("cartoes", "cards_gp.joblib", "home_cur_sb_cards", "away_cur_sb_cards"),
 ]
 
@@ -71,18 +73,20 @@ def main():
     adv = enrich(adv).sort_values("date").reset_index(drop=True)
     print(f"jogos com as 3 contagens: {len(adv)}", flush=True)
 
+    K = len(MARKETS); zc = [f"_z{j}" for j in range(K)]
     # PMFs e observados por mercado
-    Z = np.zeros((len(adv), len(MARKETS))); LOGP = np.zeros((len(adv), len(MARKETS)))
+    Z = np.zeros((len(adv), K)); LOGP = np.zeros((len(adv), K))
     for j, (name, artf, ch, ca) in enumerate(MARKETS):
         model = joblib.load(ART / artf)
         pmf = total_pmf(model, adv[model.feats])
         obs = (adv[ch].astype(int) + adv[ca].astype(int)).values
         u, p = mid_pit(pmf, obs)
         Z[:, j] = norm.ppf(u); LOGP[:, j] = np.log(p)
-    adv["_z0"], adv["_z1"], adv["_z2"] = Z[:, 0], Z[:, 1], Z[:, 2]
+    for j in range(K): adv[zc[j]] = Z[:, j]
     adv["_lp"] = LOGP.sum(1)
 
     # correlação empírica global (referência)
+    print("mercados:", [m[0] for m in MARKETS])
     print("corr(z) global:\n", np.round(np.corrcoef(Z.T), 3), flush=True)
 
     cuts = np.linspace(0.5, 0.85, 4); rows = []
@@ -90,18 +94,19 @@ def main():
         n = int(len(adv) * c); m = int(len(adv) * min(c + 0.15, 1.0))
         tr, te = adv.iloc[:n], adv.iloc[n:m]
         if len(te) < 80: continue
-        Ztr = tr[["_z0", "_z1", "_z2"]].values; Zte = te[["_z0", "_z1", "_z2"]].values
+        Ztr = tr[zc].values; Zte = te[zc].values
         S = np.corrcoef(Ztr.T)                      # matriz da cópula (estimada no passado)
         Sinv = np.linalg.inv(S); sign, logdet = np.linalg.slogdet(S)
         # densidade da cópula gaussiana por linha (test)
-        quad = np.einsum("ij,jk,ik->i", Zte, (Sinv - np.eye(3)), Zte)
+        quad = np.einsum("ij,jk,ik->i", Zte, (Sinv - np.eye(K)), Zte)
         log_c = -0.5 * logdet - 0.5 * quad
         nll_indep = -te["_lp"].values                       # −Σ log pmf
         nll_cop = nll_indep - log_c                          # + correção da cópula
+        offdiag = (np.abs(S) - np.eye(K))
         rows.append(dict(fold=round(c, 2), n=len(te),
                          nll_indep=nll_indep.mean(), nll_cop=nll_cop.mean(),
                          dNLL=(nll_cop - nll_indep).mean(),
-                         corr01=S[0, 1], corr02=S[0, 2], corr12=S[1, 2]))
+                         corr_media=offdiag.sum() / (K * (K - 1)), corr_max=offdiag.max()))
     R = pd.DataFrame(rows)
     print("\n=== NLL conjunto: independente vs cópula gaussiana ===")
     print(R.to_string(index=False))
