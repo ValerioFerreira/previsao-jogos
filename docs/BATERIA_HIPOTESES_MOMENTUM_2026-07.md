@@ -89,5 +89,16 @@ A oportunidade #1 foi construída end-to-end:
   (foto/posição/prob/odd justa). Validado ao vivo: Messi 54.5%, Salah 20.3%, goleiro ~0%.
 - **Manutenção:** rebuild diário anexado a `scripts/prefetch_wc.cmd` (estado por jogador
   acompanha os dados novos do prefetch).
-- **Pendências:** filtrar aos titulares quando a escalação for confirmada; deploy/commit.
+- **Pendências:** filtrar aos titulares quando a escalação for confirmada.
+
+### Atualização com histórico COMPLETO (2026-07-07)
+O prefetch terminou de baixar o histórico inteiro (2010→2026) das 48 seleções (~5.162 jogos
+em cache, ~74k player-games). Rebuild do modelo com esses dados **melhorou**: **AUC 0.713→0.752
+(+0.039), LogLoss 0.266→0.257, ECE 0.75%** (7.218 jogadores no estado).
+
+**Diagnóstico multi-prop** (o momentum generaliza?): com features "stripped" (só forma do
+próprio alvo), o sinal é **mais forte para gol** e **fraco para finalizações**: finalização a
+gol AUC +0.001 (4/4), 2+ finalizações +0.005 (4/4) — base+posição dominam. Ou seja, outros
+props (chutes/a-gol/cartões) são construíveis com a mesma infra, mas com edge de momentum
+menor → **prioridade menor que o goleador**. Cartões/assistências exigem extrair esses campos.
 
