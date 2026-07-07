@@ -50,6 +50,11 @@ A forma recente adiciona sinal **out-of-time e consistente** além da propensão
 É o mercado onde o momentum não compete com o Elo. **→ construir modelo de goleador.**
 
 ## 3. Força da escalação (personnel) — PROMISSOR, limitado por dados
+**Re-teste com histórico completo (1.647 jogos, 2026-07-07):** dRMSE −0.0074 (3/4 folds,
+−0.019 no recente), coef_xi +0.98 — o XI escalado segue prevendo o saldo de gols ALÉM do Elo,
+com mais poder estatístico. Modesto e ainda limitado à cobertura de escalação (não treinável no
+DC amplo); vale como ajuste para partida futura/goleador, não como feature do DC de produção.
+
 `xi_strength` = média (ponderada por minutos) do rating-base recente dos jogadores em
 campo, point-in-time. 581 jogos casados (escalação+Elo+resultado). GD ~ elo_diff vs
 GD ~ elo_diff + xi_diff (CV temporal): **dRMSE −0.0203 (3/4 folds, −0.050 no mais recente),
