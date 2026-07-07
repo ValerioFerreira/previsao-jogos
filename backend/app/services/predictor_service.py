@@ -510,6 +510,85 @@ def get_team_history(team_name: str) -> dict[str, Any]:
     }
 
 
+_GOAL_TIMING_MEMO: dict[str, dict] = {}
+_TIMING_BLOCKS = [(1, 15, "1-15"), (16, 30, "16-30"), (31, 45, "31-45"),
+                  (46, 60, "46-60"), (61, 75, "61-75"), (76, 90, "76-90+")]
+
+
+def _timing_block_idx(elapsed: int) -> int:
+    """Bloco de 15' pelo minuto REGULAMENTAR (elapsed), acréscimos entram no bloco do
+    tempo (45+X -> 31-45, 90+X -> 76-90). Prorrogação (>90) cai no último bloco."""
+    if elapsed <= 0:
+        return 0
+    return min((elapsed - 1) // 15, 5)
+
+
+def get_goal_timing(team_name: str) -> dict[str, Any]:
+    """Distribuição de MINUTAGEM de gols (marcados e sofridos) por blocos de 15',
+    agregada do histórico já cacheado (match_detail_cache). Zero chamada à API."""
+    if team_name in _GOAL_TIMING_MEMO:
+        return _GOAL_TIMING_MEMO[team_name]
+
+    team_id = get_team_ids().get(team_name)
+    blocks = [{"label": lbl, "scored": 0, "conceded": 0} for _, _, lbl in _TIMING_BLOCKS]
+    empty = {"team": team_name, "n_matches": 0, "total_scored": 0, "total_conceded": 0, "blocks": blocks}
+    if not team_id:
+        return empty
+
+    from app.db.connection import engine
+    from sqlalchemy import text as _text
+    try:
+        # Casa a seleção como mandante (…|TIME|…) ou visitante (…|TIME) na chave do cache.
+        rows = pd.read_sql(
+            _text("SELECT raw FROM match_detail_cache WHERE key LIKE :h OR key LIKE :a"),
+            con=engine, params={"h": f"%|{team_name}|%", "a": f"%|{team_name}"},
+        )
+    except Exception as e:
+        print(f"[ERRO DB] goal_timing {team_name}: {e}")
+        return empty
+
+    n_matches = 0
+    for raw_json in rows["raw"]:
+        try:
+            d = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+        except Exception:
+            continue
+        if not d:
+            continue
+        status = (((d.get("fixture") or {}).get("status") or {}).get("short"))
+        if status not in ("FT", "AET", "PEN"):  # só partidas efetivamente disputadas
+            continue
+        # Confirma que a seleção participou (por id) e evita falso-positivo do LIKE.
+        teams = d.get("teams") or {}
+        ids = {((teams.get("home") or {}).get("id")), ((teams.get("away") or {}).get("id"))}
+        if team_id not in ids:
+            continue
+        n_matches += 1
+        for e in (d.get("events") or []):
+            if (e.get("type") or "").lower() != "goal":
+                continue
+            detail = e.get("detail") or ""
+            if "Missed" in detail:  # pênalti perdido não é gol
+                continue
+            elapsed = ((e.get("time") or {}).get("elapsed")) or 0
+            is_team_event = ((e.get("team") or {}).get("id")) == team_id
+            own = "Own" in detail
+            scored_by_team = is_team_event != own  # XOR: gol contra inverte o lado
+            bi = _timing_block_idx(int(elapsed))
+            blocks[bi]["scored" if scored_by_team else "conceded"] += 1
+
+    out = {
+        "team": team_name,
+        "n_matches": n_matches,
+        "total_scored": sum(b["scored"] for b in blocks),
+        "total_conceded": sum(b["conceded"] for b in blocks),
+        "blocks": blocks,
+    }
+    if n_matches:
+        _GOAL_TIMING_MEMO[team_name] = out
+    return out
+
+
 def get_team_anomalies(team_name: str) -> list[dict[str, Any]]:
     """Detecta anomalias estatísticas recentes baseadas no Z-Score da equipe."""
     # Obter o torneio padrão para determinar a classe competitivo/amistoso

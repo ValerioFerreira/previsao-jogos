@@ -12,7 +12,8 @@ from app.schemas import (
     SystemStatusResponse,
     RecentMatchesResponse,
     AnomaliesResponse,
-    TeamHistoryResponse
+    TeamHistoryResponse,
+    GoalTimingResponse,
 )
 from app.services.predictor_service import (
     allowed_origins,
@@ -22,6 +23,7 @@ from app.services.predictor_service import (
     get_recent_matches,
     get_team_anomalies,
     get_team_history,
+    get_goal_timing,
     get_referees,
     get_team_ids,
     get_upcoming_fixtures,
@@ -242,3 +244,17 @@ def team_history(team_name: str) -> TeamHistoryResponse:
         
     history = get_team_history(team_match)
     return TeamHistoryResponse(**history)
+
+
+@app.get("/api/teams/{team_name:path}/goal-timing", response_model=GoalTimingResponse)
+def goal_timing(team_name: str) -> GoalTimingResponse:
+    predictor = get_predictor()
+    team_match = None
+    for t in predictor.teams():
+        if t.lower() == team_name.lower():
+            team_match = t
+            break
+    if not team_match:
+        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+
+    return GoalTimingResponse(**get_goal_timing(team_match))

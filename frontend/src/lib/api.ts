@@ -252,6 +252,15 @@ export type TeamHistoryResponse = {
   cards_freq: FrequencyPoint[];
 };
 
+export type GoalTimingBlock = { label: string; scored: number; conceded: number };
+export type GoalTimingResponse = {
+  team: string;
+  n_matches: number;
+  total_scored: number;
+  total_conceded: number;
+  blocks: GoalTimingBlock[];
+};
+
 export const api = {
   health: () => request<{ status: string; service: string }>("/health"),
   teams: () => request<TeamsResponse>("/teams"),
@@ -267,6 +276,7 @@ export const api = {
   recentMatches: (name: string) => request<RecentMatchesResponse>(`/api/teams/${encodeURIComponent(name)}/recent`),
   teamAnomalies: (name: string) => request<AnomaliesResponse>(`/api/teams/${encodeURIComponent(name)}/anomalies`),
   teamHistory: (name: string) => request<TeamHistoryResponse>(`/api/teams/${encodeURIComponent(name)}/history`),
+  goalTiming: (name: string) => request<GoalTimingResponse>(`/api/teams/${encodeURIComponent(name)}/goal-timing`),
   referees: () => request<{ referees: string[] }>("/api/referees"),
   teamIds: () => request<Record<string, number>>("/api/team-ids"),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),

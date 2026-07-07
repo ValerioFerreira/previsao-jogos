@@ -97,3 +97,17 @@ class TeamHistoryResponse(BaseModel):
     defense_avg: float
     corners_freq: list[FrequencyPoint]
     cards_freq: list[FrequencyPoint]
+
+
+class GoalTimingBlock(BaseModel):
+    label: str
+    scored: int
+    conceded: int
+
+
+class GoalTimingResponse(BaseModel):
+    team: str
+    n_matches: int
+    total_scored: int
+    total_conceded: int
+    blocks: list[GoalTimingBlock]

@@ -16,7 +16,8 @@ import { MatchHeader } from '@/components/platform/MatchHeader';
 import { ArrowLeft } from 'lucide-react';
 import StyleRadar from '@/components/platform/StyleRadar';
 import FormAndNarratives from '@/components/platform/FormAndNarratives';
-import type { RecentMatch } from '@/lib/api';
+import GoalTiming from '@/components/platform/GoalTiming';
+import type { RecentMatch, GoalTimingResponse } from '@/lib/api';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -30,6 +31,8 @@ export default function Estatisticas() {
   const [h2h, setH2h] = useState<H2HResponse | null>(null);
   const [homeRecent, setHomeRecent] = useState<RecentMatch[]>([]);
   const [awayRecent, setAwayRecent] = useState<RecentMatch[]>([]);
+  const [homeTiming, setHomeTiming] = useState<GoalTimingResponse | null>(null);
+  const [awayTiming, setAwayTiming] = useState<GoalTimingResponse | null>(null);
 
   // Detalhe de uma partida específica (via ?home=&away=&date= ou seletor de passadas).
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
@@ -80,12 +83,16 @@ export default function Estatisticas() {
         api.h2h(homeTeamId, awayTeamId).catch(() => null),
         api.recentMatches(homeTeamId).catch(() => null),
         api.recentMatches(awayTeamId).catch(() => null),
-      ]).then(([hHist, aHist, h2hData, hRec, aRec]) => {
+        api.goalTiming(homeTeamId).catch(() => null),
+        api.goalTiming(awayTeamId).catch(() => null),
+      ]).then(([hHist, aHist, h2hData, hRec, aRec, hTim, aTim]) => {
         setHomeHistory(hHist);
         setAwayHistory(aHist);
         setH2h(h2hData);
         setHomeRecent(hRec?.matches || []);
         setAwayRecent(aRec?.matches || []);
+        setHomeTiming(hTim);
+        setAwayTiming(aTim);
         setLoading(false);
       }).catch(err => {
         console.error(err);
@@ -216,6 +223,7 @@ export default function Estatisticas() {
           {/* Visão high-level: forma/narrativas + radar de estilo */}
           <FormAndNarratives home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
           <StyleRadar home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
+          <GoalTiming home={homeTeamId} homeData={homeTiming} away={awayTeamId} awayData={awayTiming} />
 
           {/* Tendência de Gols (últimos jogos) */}
           <div className="bg-card border border-border/50 rounded-xl p-5">
