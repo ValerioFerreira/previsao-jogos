@@ -18,6 +18,7 @@ vs produção, consistência em folds/segmentos. Cada experimento tem script iso
 | 11 | Cobrador de pênalti no scorer | 🟡 Marginal | +0.0011 AUC (base já embute) |
 | 12 | Força ofensiva do próprio time no scorer | ❌ Reprovado | −0.0005 AUC (redundante com base_scored) |
 | 13 | **Dependência cruzada gols × contagens (cópula)** | ✅ **APROVADO** | gols↔finalizações +0.22 (esc ~0); NLL conjunto −0.092 |
+| 14 | **Backtest de combos com cópula** | ✅ **APROVADO** | combo gols+fin LL −0.0050 (4/4); valida a melhoria nº1 |
 
 ## As DUAS oportunidades claras para produção
 
