@@ -261,6 +261,9 @@ export type GoalTimingResponse = {
   blocks: GoalTimingBlock[];
 };
 
+export type InjuryPlayer = { player_id: number | null; name: string | null; reason: string | null; type: string | null };
+export type InjuriesResponse = { team: string; season: number | null; players: InjuryPlayer[] };
+
 export type RefereeStatsResponse = {
   referee: string;
   n_matches: number;
@@ -291,6 +294,7 @@ export const api = {
   teamHistory: (name: string) => request<TeamHistoryResponse>(`/api/teams/${encodeURIComponent(name)}/history`),
   goalTiming: (name: string) => request<GoalTimingResponse>(`/api/teams/${encodeURIComponent(name)}/goal-timing`),
   refereeStats: (name: string) => request<RefereeStatsResponse>(`/api/referees/${encodeURIComponent(name)}/stats`),
+  injuries: (name: string) => request<InjuriesResponse>(`/api/teams/${encodeURIComponent(name)}/injuries`),
   referees: () => request<{ referees: string[] }>("/api/referees"),
   teamIds: () => request<Record<string, number>>("/api/team-ids"),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),

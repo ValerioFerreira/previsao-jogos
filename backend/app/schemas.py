@@ -124,3 +124,16 @@ class RefereeStatsResponse(BaseModel):
     avg_fouls: float
     bench_cards: float
     bench_fouls: float
+
+
+class InjuryPlayer(BaseModel):
+    player_id: int | None = None
+    name: str | None = None
+    reason: str | None = None
+    type: str | None = None
+
+
+class InjuriesResponse(BaseModel):
+    team: str
+    season: int | None = None
+    players: list[InjuryPlayer]

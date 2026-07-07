@@ -43,7 +43,9 @@ def _key() -> str:
 def _get(path: str, **params) -> tuple[list, Optional[str]]:
     r = httpx.get(BASE + path, headers={"x-apisports-key": _key()}, params=params, timeout=30)
     r.raise_for_status()
-    j = r.json()
+    # A api-football nem sempre declara charset; httpx pode cair em latin-1 e gerar
+    # mojibake (ex.: "Paquetá" -> "PaquetÃ¡"). Força UTF-8 sobre os bytes crus.
+    j = json.loads(r.content.decode("utf-8", errors="replace"))
     return j.get("response", []), r.headers.get("x-ratelimit-requests-remaining")
 
 
@@ -152,4 +154,56 @@ def get_or_fetch_detail(home: str, away: str, d10: str, key: str,
 def recent_fixture_ids(team_id: int, last: int = 5) -> list[dict]:
     """Últimas N partidas (resolvidas) de um time: lista de fixtures base."""
     resp, _ = _get("/fixtures", team=team_id, last=last)
+    return resp
+
+
+INJURIES_TABLE = "injuries_cache"
+_injuries_table_ready = False
+
+
+def _ensure_injuries_table():
+    global _injuries_table_ready
+    if _injuries_table_ready:
+        return
+    from app.db.connection import engine
+    with engine.begin() as c:
+        c.execute(text(
+            f"CREATE TABLE IF NOT EXISTS {INJURIES_TABLE} ("
+            "team_id BIGINT, season INT, raw TEXT, cached_at TIMESTAMPTZ DEFAULT now(), "
+            "PRIMARY KEY (team_id, season))"
+        ))
+    _injuries_table_ready = True
+
+
+def fetch_injuries(team_id: int, season: int, ttl_hours: int = 12) -> list[dict]:
+    """Lesões/desfalques de uma seleção na temporada: cache(Neon, TTL) -> API -> cache.
+    Uma chamada à API por (time, temporada) a cada `ttl_hours` — protege a cota."""
+    from app.db.connection import engine
+    try:
+        _ensure_injuries_table()
+        with engine.connect() as c:
+            row = c.execute(text(
+                f"SELECT raw, EXTRACT(EPOCH FROM (now() - cached_at))/3600 AS age "
+                f"FROM {INJURIES_TABLE} WHERE team_id=:t AND season=:s"
+            ), {"t": team_id, "s": season}).first()
+        if row and row[0] is not None and row[1] is not None and row[1] < ttl_hours:
+            return json.loads(row[0])
+    except Exception as e:
+        print(f"[ERRO DB] injuries_cache_get {team_id}/{season}: {e}")
+
+    try:
+        resp, _ = _get("/injuries", team=team_id, season=season)
+    except Exception as e:
+        print(f"[AVISO] fetch injuries {team_id}/{season}: {e}")
+        return []
+    try:
+        _ensure_injuries_table()
+        with engine.begin() as c:
+            c.execute(text(
+                f"INSERT INTO {INJURIES_TABLE} (team_id, season, raw, cached_at) "
+                "VALUES (:t, :s, :r, now()) "
+                "ON CONFLICT (team_id, season) DO UPDATE SET raw=EXCLUDED.raw, cached_at=now()"
+            ), {"t": team_id, "s": season, "r": json.dumps(resp, ensure_ascii=False)})
+    except Exception as e:
+        print(f"[ERRO DB] injuries_cache_put {team_id}/{season}: {e}")
     return resp

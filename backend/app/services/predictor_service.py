@@ -18,6 +18,18 @@ def _norm(name: str) -> str:
     return TEAM_ALIASES.get(name, name) if name else name
 
 
+def _fix_mojibake(s: str | None) -> str | None:
+    """Repara texto UTF-8 duplo-codificado vindo da fonte (ex.: 'PaquetÃ¡' -> 'Paquetá').
+    Só age quando há marcadores típicos e o resultado é válido, preservando nomes corretos."""
+    if not s or not any(m in s for m in ("Ã", "Â", "â€")):
+        return s
+    try:
+        r = s.encode("latin-1").decode("utf-8")
+        return r if "�" not in r else s
+    except UnicodeError:
+        return s
+
+
 import functools as _functools
 _READER_MEMO: dict = {}
 
@@ -692,6 +704,42 @@ def get_referee_stats(referee_name: str) -> dict[str, Any]:
         "avg_fouls": round(e["fouls"] / nf, 2) if nf else 0.0,
         "bench_cards": bench["cards"], "bench_fouls": bench["fouls"],
     }
+
+
+def get_injuries(team_name: str) -> dict[str, Any]:
+    """Boletim de desfalques (lesões/suspensões) atual da seleção. Consulta a API
+    com cache diário no Neon; deduplica por jogador (registro mais recente)."""
+    team_id = get_team_ids().get(team_name)
+    if not team_id:
+        return {"team": team_name, "season": None, "players": []}
+
+    from app.services.fixture_fetch import fetch_injuries
+    year = datetime.date.today().year
+    resp = fetch_injuries(int(team_id), year)
+    if not resp:  # início de ano/temporada vazia: tenta o ano anterior
+        resp = fetch_injuries(int(team_id), year - 1)
+
+    latest: dict[int, dict[str, Any]] = {}
+    for r in resp or []:
+        p = r.get("player") or {}
+        f = r.get("fixture") or {}
+        pid = p.get("id")
+        if pid is None:
+            continue
+        fdate = (f.get("date") or "")
+        cur = latest.get(pid)
+        if cur is None or fdate > cur["_date"]:
+            latest[pid] = {
+                "player_id": pid,
+                "name": _fix_mojibake(p.get("name")),
+                "reason": p.get("reason"),
+                "type": p.get("type"),
+                "_date": fdate,
+            }
+    players = sorted(latest.values(), key=lambda x: x["_date"], reverse=True)
+    for pl in players:
+        pl.pop("_date", None)
+    return {"team": team_name, "season": year, "players": players}
 
 
 def get_team_anomalies(team_name: str) -> list[dict[str, Any]]:

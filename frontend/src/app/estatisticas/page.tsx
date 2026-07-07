@@ -18,7 +18,8 @@ import StyleRadar from '@/components/platform/StyleRadar';
 import FormAndNarratives from '@/components/platform/FormAndNarratives';
 import GoalTiming from '@/components/platform/GoalTiming';
 import FatorArbitro from '@/components/platform/FatorArbitro';
-import type { RecentMatch, GoalTimingResponse } from '@/lib/api';
+import BoletimDesfalques from '@/components/platform/BoletimDesfalques';
+import type { RecentMatch, GoalTimingResponse, InjuriesResponse } from '@/lib/api';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -34,6 +35,8 @@ export default function Estatisticas() {
   const [awayRecent, setAwayRecent] = useState<RecentMatch[]>([]);
   const [homeTiming, setHomeTiming] = useState<GoalTimingResponse | null>(null);
   const [awayTiming, setAwayTiming] = useState<GoalTimingResponse | null>(null);
+  const [homeInjuries, setHomeInjuries] = useState<InjuriesResponse | null>(null);
+  const [awayInjuries, setAwayInjuries] = useState<InjuriesResponse | null>(null);
 
   // Detalhe de uma partida específica (via ?home=&away=&date= ou seletor de passadas).
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
@@ -101,6 +104,17 @@ export default function Estatisticas() {
       });
     }
   }, [homeTeamId, awayTeamId, bothSelected]);
+
+  // Desfalques só no modo Partida Futura (consulta à API com cache diário — evita
+  // gastar cota em análises independentes).
+  React.useEffect(() => {
+    if (!bothSelected || pickerMode !== 'futura') {
+      setHomeInjuries(null); setAwayInjuries(null);
+      return;
+    }
+    api.injuries(homeTeamId).then(setHomeInjuries).catch(() => setHomeInjuries(null));
+    api.injuries(awayTeamId).then(setAwayInjuries).catch(() => setAwayInjuries(null));
+  }, [homeTeamId, awayTeamId, bothSelected, pickerMode]);
 
   // Tendência de gols marcados nos últimos jogos, alinhada por "jogos atrás" (J-N),
   // já que cada seleção tem datas próprias. Compara ataque recente das duas.
@@ -228,7 +242,10 @@ export default function Estatisticas() {
 
           {/* Central Pré-Jogo (só Partida Futura) */}
           {pickerMode === 'futura' && (
-            <FatorArbitro />
+            <>
+              <BoletimDesfalques home={homeInjuries} away={awayInjuries} />
+              <FatorArbitro />
+            </>
           )}
 
           {/* Tendência de Gols (últimos jogos) */}
