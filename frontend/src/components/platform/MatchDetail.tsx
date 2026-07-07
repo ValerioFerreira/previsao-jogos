@@ -4,6 +4,7 @@ import { MatchDetail as MD, MatchPlayer, LineupPlayer, teamLogoUrl, playerPhotoU
 import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 import InfoTooltip from '@/components/platform/InfoTooltip';
+import MatchPlayerStats from '@/components/platform/MatchPlayerStats';
 
 function dBR(s?: string | null): string {
   const d = (s || '').slice(0, 10).split('-');
@@ -301,6 +302,9 @@ export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallba
           </div>
         )}
       </div>
+
+      {/* Destaques + tabela de estatísticas por jogador (ordenável, drill-down do hover) */}
+      <MatchPlayerStats data={data} />
 
       {/* Escalações em campo (foto/número/nome/nota + stats no hover) por equipe.
           Os blocos `players` (com as estatísticas) são a fonte autoritária do time de
