@@ -19,7 +19,8 @@ import FormAndNarratives from '@/components/platform/FormAndNarratives';
 import GoalTiming from '@/components/platform/GoalTiming';
 import FatorArbitro from '@/components/platform/FatorArbitro';
 import BoletimDesfalques from '@/components/platform/BoletimDesfalques';
-import type { RecentMatch, GoalTimingResponse, InjuriesResponse } from '@/lib/api';
+import KeyPlayerMatchup from '@/components/platform/KeyPlayerMatchup';
+import type { RecentMatch, GoalTimingResponse, InjuriesResponse, ScorersResponse } from '@/lib/api';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -37,6 +38,7 @@ export default function Estatisticas() {
   const [awayTiming, setAwayTiming] = useState<GoalTimingResponse | null>(null);
   const [homeInjuries, setHomeInjuries] = useState<InjuriesResponse | null>(null);
   const [awayInjuries, setAwayInjuries] = useState<InjuriesResponse | null>(null);
+  const [scorers, setScorers] = useState<ScorersResponse | null>(null);
 
   // Detalhe de uma partida específica (via ?home=&away=&date= ou seletor de passadas).
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
@@ -109,11 +111,12 @@ export default function Estatisticas() {
   // gastar cota em análises independentes).
   React.useEffect(() => {
     if (!bothSelected || pickerMode !== 'futura') {
-      setHomeInjuries(null); setAwayInjuries(null);
+      setHomeInjuries(null); setAwayInjuries(null); setScorers(null);
       return;
     }
     api.injuries(homeTeamId).then(setHomeInjuries).catch(() => setHomeInjuries(null));
     api.injuries(awayTeamId).then(setAwayInjuries).catch(() => setAwayInjuries(null));
+    api.scorers(homeTeamId, awayTeamId).then(setScorers).catch(() => setScorers(null));
   }, [homeTeamId, awayTeamId, bothSelected, pickerMode]);
 
   // Tendência de gols marcados nos últimos jogos, alinhada por "jogos atrás" (J-N),
@@ -243,6 +246,7 @@ export default function Estatisticas() {
           {/* Central Pré-Jogo (só Partida Futura) */}
           {pickerMode === 'futura' && (
             <>
+              <KeyPlayerMatchup data={scorers} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
               <BoletimDesfalques home={homeInjuries} away={awayInjuries} />
               <FatorArbitro />
             </>
