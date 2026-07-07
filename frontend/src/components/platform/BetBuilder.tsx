@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { CheckCircle2, Loader2, Lock, Sparkles, Layers, XCircle } from "lucide-react";
 import { betsApi, type MarketOption, type BetResponse } from "@/lib/monetizationApi";
 import { Button } from "@/components/ui/button";
+import { teamPt } from "@/lib/teamNames";
 
 const STATUS_LABEL: Record<string, string> = {
   awaiting_start: "Aguardando início", in_progress: "Em andamento", awaiting_settlement: "Aguardando liquidação",
@@ -26,7 +27,14 @@ function lineOf(o: MarketOption): number {
   return 0;
 }
 
-export default function BetBuilder({ analysisId, onConfirmed }: { analysisId: string; onConfirmed?: (b: BetResponse) => void }) {
+export default function BetBuilder({ analysisId, home, away, onConfirmed }: { analysisId: string; home?: string; away?: string; onConfirmed?: (b: BetResponse) => void }) {
+  // Traduz nomes de seleção (em inglês nos rótulos do backend) para PT-BR.
+  const tl = useCallback((s: string) => {
+    let out = s;
+    if (home) out = out.split(home).join(teamPt(home));
+    if (away) out = out.split(away).join(teamPt(away));
+    return out;
+  }, [home, away]);
   const [options, setOptions] = useState<MarketOption[]>([]);
   const [cap, setCap] = useState(2.0);
   const [selected, setSelected] = useState<string[]>([]);
@@ -96,7 +104,7 @@ export default function BetBuilder({ analysisId, onConfirmed }: { analysisId: st
         </p>
         <div className="space-y-1.5 mb-3">
           {bet.selections.map((s) => (
-            <div key={s.market_key} className="flex justify-between text-sm border-b border-border/30 py-1.5"><span>{s.label}</span><span className="font-mono font-semibold">{s.odd.toFixed(2)}</span></div>
+            <div key={s.market_key} className="flex justify-between text-sm border-b border-border/30 py-1.5"><span>{tl(s.label)}</span><span className="font-mono font-semibold">{s.odd.toFixed(2)}</span></div>
           ))}
         </div>
         <div className="flex justify-between items-center bg-emerald-500/10 rounded-lg p-3">
@@ -118,7 +126,7 @@ export default function BetBuilder({ analysisId, onConfirmed }: { analysisId: st
     return (
       <button onClick={() => toggle(o)}
         className={`px-2.5 py-1.5 rounded-md text-xs border transition text-left ${on ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 hover:bg-muted border-border/50"}`}>
-        {showLineOnly ? lineOf(o).toFixed(1) : o.label} <span className="font-mono opacity-80">@{o.odd.toFixed(2)}</span>
+        {showLineOnly ? lineOf(o).toFixed(1) : tl(o.label)} <span className="font-mono opacity-80">@{o.odd.toFixed(2)}</span>
       </button>
     );
   };
@@ -163,7 +171,7 @@ export default function BetBuilder({ analysisId, onConfirmed }: { analysisId: st
         <div className="flex flex-wrap gap-1.5 mb-4">
           {selected.map((k) => byId[k]).filter(Boolean).map((o) => (
             <button key={o.market_key} onClick={() => toggle(o)} className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] bg-primary/10 border border-primary/30 hover:bg-primary/20 transition">
-              {o.label} @{o.odd.toFixed(2)} <XCircle className="w-3 h-3 opacity-60" />
+              {tl(o.label)} @{o.odd.toFixed(2)} <XCircle className="w-3 h-3 opacity-60" />
             </button>
           ))}
         </div>
@@ -173,7 +181,7 @@ export default function BetBuilder({ analysisId, onConfirmed }: { analysisId: st
       {selected.length === 0 && autoPreview.length > 0 && (
         <div className="mb-4 text-xs rounded-md bg-primary/5 border border-primary/20 p-3">
           <div className="flex items-center gap-1.5 font-medium mb-1"><Sparkles className="w-3.5 h-3.5 text-primary" /> Seleção automática (prévia)</div>
-          {autoPreview.map((s, i) => <div key={i} className="flex justify-between text-muted-foreground"><span>{s.label}</span><span className="font-mono">@{s.odd.toFixed(2)}</span></div>)}
+          {autoPreview.map((s, i) => <div key={i} className="flex justify-between text-muted-foreground"><span>{tl(s.label)}</span><span className="font-mono">@{s.odd.toFixed(2)}</span></div>)}
         </div>
       )}
 

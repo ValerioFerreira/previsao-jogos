@@ -183,6 +183,14 @@ def match_detail(home: str = Query(...), away: str = Query(...), date: str = Que
     return get_match_detail(home, away, date)
 
 
+@app.get("/api/scorers")
+def scorers(home: str = Query(...), away: str = Query(...)) -> dict:
+    """Prováveis goleadores (prop "jogador a marcar") de um confronto."""
+    from app.services.scorer_service import get_scorers
+    predictor = get_predictor()
+    return get_scorers(predictor.norm_team(home), predictor.norm_team(away))
+
+
 @app.get("/api/system/status", response_model=SystemStatusResponse)
 def system_status() -> SystemStatusResponse:
     status = get_system_status()

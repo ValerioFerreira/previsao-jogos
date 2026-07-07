@@ -73,10 +73,10 @@ export function MarketCard({ title, subtitle, prediction, periods, icon }: Marke
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             {icon}
             {subtitle ?? title}
-            <InfoTooltip text="Média projetada é o valor esperado. A linha em destaque é a mais próxima da média. A faixa de odd justa vai da odd com 7% de margem até a odd prevista (1/probabilidade)." />
+            <InfoTooltip text="Quantidade prevista é o valor esperado. A linha em destaque é a mais próxima dela. A faixa de odd justa vai da odd com 7% de margem até a odd prevista (1/probabilidade)." />
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Média Projetada: <span className="font-bold text-foreground">{mean.toFixed(1)}</span>
+            Quantidade prevista: <span className="font-bold text-foreground">{mean.toFixed(1)}</span>
           </p>
         </div>
         <div className="bg-muted p-1 rounded-md flex text-[10px] font-medium shrink-0">
@@ -108,11 +108,11 @@ export function MarketCard({ title, subtitle, prediction, periods, icon }: Marke
         {/* Banner da linha principal (mais próxima da média) */}
         <div className="flex justify-between items-center mb-3 text-xs bg-muted/40 p-3 rounded-lg border border-border/40">
           <div className="flex-1 text-center">
-            <span className="block text-muted-foreground mb-1">Over {mainLine}</span>
+            <span className="block text-muted-foreground mb-1">Acima de {mainLine}</span>
             <span className="font-mono font-bold text-emerald-400"><Cell line={mainLine} side="over" /></span>
           </div>
           <div className="flex-1 text-center border-l border-border/40">
-            <span className="block text-muted-foreground mb-1">Under {mainLine}</span>
+            <span className="block text-muted-foreground mb-1">Abaixo de {mainLine}</span>
             <span className="font-mono font-bold text-blue-400"><Cell line={mainLine} side="under" /></span>
           </div>
         </div>
@@ -135,9 +135,9 @@ export function MarketCard({ title, subtitle, prediction, periods, icon }: Marke
             >
               <div className="pt-3 mt-1 border-t border-border/30">
                 <div className="grid grid-cols-3 text-[10px] font-semibold text-muted-foreground uppercase pb-2">
-                  <div className="text-center text-emerald-400/70">Over</div>
+                  <div className="text-center text-emerald-400/70">Acima</div>
                   <div className="text-center">Linha</div>
-                  <div className="text-center text-blue-400/70">Under</div>
+                  <div className="text-center text-blue-400/70">Abaixo</div>
                 </div>
                 {/* Altura fixa + rolagem vertical (mais linhas sem crescer o card) */}
                 <div className="space-y-1 max-h-44 overflow-y-auto pr-1">

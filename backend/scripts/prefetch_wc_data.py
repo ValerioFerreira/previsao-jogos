@@ -45,7 +45,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max", type=int, default=3000, help="máx. de chamadas de detalhe por execução")
     ap.add_argument("--margin", type=int, default=50, help="parar quando restarem < margem chamadas na cota")
-    ap.add_argument("--recent", type=int, default=10, help="últimas N partidas por seleção a precachear")
+    ap.add_argument("--floor", type=int, default=2010, help="temporada mais antiga a varrer por seleção (o detalhe da API rareia antes de ~2010)")
     a = ap.parse_args()
 
     state = {"calls": 0, "novos": 0, "jacache": 0, "falhas": 0, "rem": None, "parou": None}
@@ -98,26 +98,33 @@ def main():
         if not budget_ok():
             break
 
-    # 2) Últimas N partidas de cada seleção (detalhe), recente->antigo
+    # 2) HISTÓRICO COMPLETO de cada seleção: varre temporada a temporada, do mais
+    #    recente ao mais antigo (SEASON -> --floor), cacheando o detalhe de cada jogo.
+    #    Cache-first (pula o que já tem) e para no limite diário -> retoma no dia seguinte.
     if budget_ok():
-        print(f"Seleções: {len(teams)} | precache das últimas {a.recent} de cada...", flush=True)
+        top_season = max(SEASON, __import__("datetime").date.today().year)
+        seasons = list(range(top_season, a.floor - 1, -1))
+        print(f"Seleções: {len(teams)} | histórico completo temporadas {top_season}->{a.floor}...", flush=True)
         for tid in teams:
             if not budget_ok():
                 break
-            try:
-                recents, rem = get("/fixtures", team=tid, last=a.recent)
-                state["calls"] += 1
-                if rem is not None:
-                    state["rem"] = rem
-            except Exception as e:
-                print(f"  [AVISO] recent {tid}: {e}", flush=True); continue
-            for f in recents:
+            for season in seasons:
                 if not budget_ok():
                     break
-                fx = f.get("fixture") or {}; tt = f.get("teams") or {}
-                if ((fx.get("status") or {}).get("short")) in FINISHED:
-                    cache_fixture(fx.get("id"), (fx.get("date") or "")[:10],
-                                  (tt.get("home") or {}).get("name"), (tt.get("away") or {}).get("name"))
+                try:
+                    fxs, rem = get("/fixtures", team=tid, season=season)
+                    state["calls"] += 1
+                    if rem is not None:
+                        state["rem"] = rem
+                except Exception as e:
+                    print(f"  [AVISO] {tid}/{season}: {e}", flush=True); continue
+                for f in fxs:
+                    if not budget_ok():
+                        break
+                    fx = f.get("fixture") or {}; tt = f.get("teams") or {}
+                    if ((fx.get("status") or {}).get("short")) in FINISHED:
+                        cache_fixture(fx.get("id"), (fx.get("date") or "")[:10],
+                                      (tt.get("home") or {}).get("name"), (tt.get("away") or {}).get("name"))
 
     print(f">> Prefetch: {state['novos']} novos | {state['jacache']} já em cache | "
           f"{state['falhas']} falhas | {state['calls']} chamadas | cota ~{state['rem']} "

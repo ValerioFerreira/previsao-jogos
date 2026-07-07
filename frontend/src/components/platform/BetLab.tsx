@@ -39,7 +39,7 @@ function LineExplorer({ prediction }: { prediction: PredictionResponse }) {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border/50 rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
         <Search className="w-4 h-4 text-cyan-500" /> Explorador de Linha
-        <InfoTooltip text="Escolha o mercado, o lado (Over/Under) e escaneie a grade de odds justas pela CDF da distribuição." href="/como-funciona#explorador-de-linha" />
+        <InfoTooltip text="Escolha um mercado (ex.: gols), o lado (Acima/Abaixo) e deslize a linha para ver a probabilidade e a odd justa de cada corte. Exemplo: em 'Acima de 2,5 gols', se o modelo indica 55%, a odd justa é ~1,82 — se a casa paga mais que isso, pode haver valor a favor. Serve para varrer toda a grade e achar a linha mais interessante." href="/como-funciona#explorador-de-linha" />
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
         <div>
@@ -52,12 +52,12 @@ function LineExplorer({ prediction }: { prediction: PredictionResponse }) {
         <div>
           <Label className="text-xs text-muted-foreground mb-1.5 block">Lado</Label>
           <div className="flex gap-1">
-            <button onClick={() => setSide("over")} className={`flex-1 py-2 text-xs font-medium rounded-md transition ${side === "over" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-muted text-muted-foreground"}`}>Over</button>
-            <button onClick={() => setSide("under")} className={`flex-1 py-2 text-xs font-medium rounded-md transition ${side === "under" ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-muted text-muted-foreground"}`}>Under</button>
+            <button onClick={() => setSide("over")} className={`flex-1 py-2 text-xs font-medium rounded-md transition ${side === "over" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-muted text-muted-foreground"}`}>Acima de</button>
+            <button onClick={() => setSide("under")} className={`flex-1 py-2 text-xs font-medium rounded-md transition ${side === "under" ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-muted text-muted-foreground"}`}>Abaixo de</button>
           </div>
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground mb-1.5 block text-center">Média Projetada</Label>
+          <Label className="text-xs text-muted-foreground mb-1.5 block text-center">Quantidade prevista</Label>
           <div className="h-9 flex items-center justify-center text-2xl font-bold font-mono">{marketData.mean}</div>
         </div>
       </div>
@@ -96,7 +96,7 @@ function ValueBetting({ prediction }: { prediction: PredictionResponse }) {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border/50 rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
         <TrendingUp className="w-4 h-4 text-emerald-500" /> Value Betting — Identificação de Assimetrias
-        <InfoTooltip text="Compare a probabilidade do modelo com a odd da casa. EV positivo = assimetria a favor. O De-Vig remove a margem da banca." href="/como-funciona#value-betting" />
+        <InfoTooltip text="Compara a probabilidade do modelo com a odd oferecida pela casa. Se a odd paga mais do que a probabilidade justifica, existe 'valor' (EV positivo). Exemplo: o modelo dá 50% (odd justa 2,00) e a casa oferece 2,20 → é uma aposta com valor a longo prazo. O 'De-Vig' usa a odd do lado oposto para descontar a margem embutida da casa e revelar a probabilidade real que ela enxerga." href="/como-funciona#value-betting" />
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <div>
@@ -109,7 +109,7 @@ function ValueBetting({ prediction }: { prediction: PredictionResponse }) {
         <div>
           <Label className="text-xs text-muted-foreground mb-1.5 block">Lado & Linha</Label>
           <div className="flex gap-1">
-            <button onClick={() => setSide((s) => (s === "over" ? "under" : "over"))} className="px-3 py-2 text-xs font-medium rounded-md bg-muted shrink-0">{side === "over" ? "Over" : "Under"}</button>
+            <button onClick={() => setSide((s) => (s === "over" ? "under" : "over"))} className="px-3 py-2 text-xs font-medium rounded-md bg-muted shrink-0">{side === "over" ? "Acima de" : "Abaixo de"}</button>
             <Input type="number" step="0.5" value={line} onChange={(e) => setLine(parseFloat(e.target.value) || 0)} className="h-9 text-sm font-mono" />
           </div>
         </div>

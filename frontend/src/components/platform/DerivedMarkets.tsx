@@ -13,7 +13,7 @@ export function DerivedBigCard({ title, tip, outcomes }: { title: string; tip: s
   if (valid.length === 0) return null;
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
-      <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">{title}<InfoTooltip text={tip} /></h4>
+      <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">{title}<InfoTooltip text={tip} /></h4>
       <div className="flex-1 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:gap-x-8 text-center">
         {valid.map(({ label, o, color }) => (
           <div key={label}>
@@ -33,7 +33,7 @@ export function DerivedRowsCard({ title, tip, rows }: { title: string; tip: stri
   if (valid.length === 0) return null;
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
-      <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">{title}<InfoTooltip text={tip} /></h4>
+      <h4 className="text-sm font-semibold mb-2 flex items-center justify-center gap-1.5">{title}<InfoTooltip text={tip} /></h4>
       <div className="flex-1 flex flex-col justify-center">
         {valid.map(({ label, o }) => (
           <div key={label} className="flex items-center justify-between text-xs py-1.5 border-t border-border/20 first:border-t-0">
@@ -82,7 +82,7 @@ export function HandicapsCard({ d, home, away, teamIds }: DProps & { teamIds: Re
   };
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
-      <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+      <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
         Handicaps
         <InfoTooltip text="Vantagem/desvantagem de gols aplicada a cada equipe (linhas .5, sem empate). Odd justa = 1/probabilidade." />
       </h4>

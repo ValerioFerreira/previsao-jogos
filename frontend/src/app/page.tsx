@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowLeft, ArrowRight, CheckCircle2, Target } from 'lucide-react';
+import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowLeft, ArrowRight, CheckCircle2, Target, ChevronDown, Sliders } from 'lucide-react';
 import { api, PredictionResponse, PlacarMotivo, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
@@ -21,8 +21,10 @@ import { useAuth } from '@/lib/AuthContext';
 import { analysisApi } from '@/lib/monetizationApi';
 import BetLab from '@/components/platform/BetLab';
 import BetBuilder from '@/components/platform/BetBuilder';
-import { DuplaChanceCard, EmpateAnulaCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard } from '@/components/platform/DerivedMarkets';
+import { DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard } from '@/components/platform/DerivedMarkets';
 import H2HCard from '@/components/platform/H2HCard';
+import ScorersCard from '@/components/platform/ScorersCard';
+import type { ScorersResponse } from '@/lib/api';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -91,7 +93,7 @@ function PlacarExatoCard({ data, home, away }: {
   };
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5">
-      <h4 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
+      <h4 className="text-sm font-semibold mb-1 flex items-center justify-center gap-1.5">
         <Target className="w-4 h-4 text-purple-500" />
         Placar Exato
         <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." href="/como-funciona#mercado-placar" />
@@ -217,14 +219,28 @@ export default function Previsoes() {
   const [awayAnomalies, setAwayAnomalies] = useState<Anomaly[]>([]);
   
   const [h2hData, setH2hData] = useState<any>(null);
+  const [scorers, setScorers] = useState<ScorersResponse | null>(null);
+  const [showSecondary, setShowSecondary] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Prováveis goleadores (modelo de goleador) — busca ao gerar a análise.
+  React.useEffect(() => {
+    if (analysis && homeTeamId && awayTeamId && homeTeamId !== awayTeamId) {
+      api.scorers(homeTeamId, awayTeamId).then(setScorers).catch(() => setScorers(null));
+    } else {
+      setScorers(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis]);
 
   // Busca o H2H assim que as duas seleções estão escolhidas — o card de confronto
   // direto fica disponível ANTES de gerar a análise (e persiste ao voltar à página).
   React.useEffect(() => {
     if (homeTeamId && awayTeamId && homeTeamId !== awayTeamId) {
-      api.h2h(homeTeamId, awayTeamId).then(h => setH2hData(h?.metrics ?? null)).catch(() => setH2hData(null));
+      setLoadingH2H(true);
+      api.h2h(homeTeamId, awayTeamId).then(h => setH2hData(h?.metrics ?? null)).catch(() => setH2hData(null)).finally(() => setLoadingH2H(false));
     } else {
-      setH2hData(null);
+      setH2hData(null); setLoadingH2H(false);
     }
   }, [homeTeamId, awayTeamId]);
 
@@ -234,10 +250,15 @@ export default function Previsoes() {
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
   const [modalOpen, setModalOpen] = useState(false);
+  const [loadingUpcoming, setLoadingUpcoming] = useState(false);
+  const [loadingHome, setLoadingHome] = useState(false);
+  const [loadingAway, setLoadingAway] = useState(false);
+  const [loadingH2H, setLoadingH2H] = useState(false);
 
   React.useEffect(() => {
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
-    api.upcomingFixtures().then(r => setUpcoming(r.fixtures)).catch(() => {});
+    setLoadingUpcoming(true);
+    api.upcomingFixtures().then(r => setUpcoming(r.fixtures)).catch(() => {}).finally(() => setLoadingUpcoming(false));
     api.teamIds().then(setTeamIds).catch(() => {});
   }, []);
 
@@ -262,8 +283,11 @@ export default function Previsoes() {
 
   React.useEffect(() => {
     if (homeTeamId) {
-      api.recentMatches(homeTeamId).then(res => setHomeForm({matches: res.matches, total: res.total_matches})).catch(() => {});
-      api.teamAnomalies(homeTeamId).then(res => setHomeAnomalies(res.anomalies)).catch(() => {});
+      setLoadingHome(true);
+      Promise.all([
+        api.recentMatches(homeTeamId).then(res => setHomeForm({matches: res.matches, total: res.total_matches})),
+        api.teamAnomalies(homeTeamId).then(res => setHomeAnomalies(res.anomalies)),
+      ]).catch(() => {}).finally(() => setLoadingHome(false));
     } else {
       setHomeForm({matches: [], total: 0});
       setHomeAnomalies([]);
@@ -272,8 +296,11 @@ export default function Previsoes() {
 
   React.useEffect(() => {
     if (awayTeamId) {
-      api.recentMatches(awayTeamId).then(res => setAwayForm({matches: res.matches, total: res.total_matches})).catch(() => {});
-      api.teamAnomalies(awayTeamId).then(res => setAwayAnomalies(res.anomalies)).catch(() => {});
+      setLoadingAway(true);
+      Promise.all([
+        api.recentMatches(awayTeamId).then(res => setAwayForm({matches: res.matches, total: res.total_matches})),
+        api.teamAnomalies(awayTeamId).then(res => setAwayAnomalies(res.anomalies)),
+      ]).catch(() => {}).finally(() => setLoadingAway(false));
     } else {
       setAwayForm({matches: [], total: 0});
       setAwayAnomalies([]);
@@ -341,9 +368,12 @@ export default function Previsoes() {
 
         {mode === 'futura' && (
           <div className="mb-2">
-            <button onClick={() => setModalOpen(true)}
-              className="px-4 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-foreground hover:bg-cyan-500/20 transition-colors">
-              {homeTeamId && awayTeamId ? `${teamPt(homeTeamId)} x ${teamPt(awayTeamId)} — trocar partida` : 'Escolher partida agendada'}
+            <button onClick={() => !loadingUpcoming && setModalOpen(true)} disabled={loadingUpcoming}
+              className="px-4 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-foreground hover:bg-cyan-500/20 transition-colors disabled:opacity-60 inline-flex items-center gap-2">
+              {loadingUpcoming && <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />}
+              {loadingUpcoming
+                ? 'Buscando partidas agendadas…'
+                : (homeTeamId && awayTeamId ? `${teamPt(homeTeamId)} x ${teamPt(awayTeamId)} — trocar partida` : 'Escolher partida agendada')}
             </button>
             {homeTeamId && awayTeamId && (
               <p className="text-[11px] text-muted-foreground mt-2">Competição: {competition} · {neutralField ? 'Campo neutro' : 'Com mando'}</p>
@@ -392,16 +422,16 @@ export default function Previsoes() {
         fixtures={upcoming}
         teamIds={teamIds}
         onSelect={(fx) => selectFutureFixture(fx.fixture_id)}
-        title="Selecionar Partida Futura"
+        title="Selecionar Partida Agendada"
       />
 
       <AnimatePresence>
         {(homeTeamId || awayTeamId) && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { teamId: homeTeamId, form: homeForm, anomalies: homeAnomalies, label: 'Mandante' },
-              { teamId: awayTeamId, form: awayForm, anomalies: awayAnomalies, label: 'Visitante' }
-            ].map(({ teamId, form, anomalies, label }) => teamId && (
+              { teamId: homeTeamId, form: homeForm, anomalies: homeAnomalies, label: 'Mandante', loading: loadingHome },
+              { teamId: awayTeamId, form: awayForm, anomalies: awayAnomalies, label: 'Visitante', loading: loadingAway }
+            ].map(({ teamId, form, anomalies, label, loading }) => teamId && (
               <div key={teamId} className="bg-card border border-border/50 rounded-xl p-5 overflow-hidden">
                 <div className="mb-2 text-center">
                   {teamLogoUrl(teamIds[teamId]) && (
@@ -411,6 +441,12 @@ export default function Previsoes() {
                   <h3 className="text-sm font-semibold">{teamPt(teamId)}</h3>
                 </div>
 
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground text-sm">
+                    <div className="w-5 h-5 border-2 border-muted-foreground/30 border-t-emerald-500 rounded-full animate-spin" />
+                    Buscando informações da equipe…
+                  </div>
+                ) : (<>
                 <div className="mt-4 mb-4">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <p className="text-xs text-muted-foreground">Resultados dos últimos 5 jogos</p>
@@ -446,16 +482,24 @@ export default function Previsoes() {
                     <p className="text-xs text-muted-foreground italic">Nenhum desvio estatístico detectado recentemente.</p>
                   )}
                 </div>
+                </>)}
               </div>
             ))}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {homeTeamId && awayTeamId && homeTeamId !== awayTeamId && h2hData && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <H2HCard h2hData={h2hData} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
-        </motion.div>
+      {homeTeamId && awayTeamId && homeTeamId !== awayTeamId && (
+        loadingH2H && !h2hData ? (
+          <div className="bg-card border border-border/50 rounded-xl p-5 max-w-3xl mx-auto flex items-center justify-center gap-2 text-muted-foreground text-sm">
+            <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-emerald-500 rounded-full animate-spin" />
+            Buscando confronto direto…
+          </div>
+        ) : h2hData ? (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <H2HCard h2hData={h2hData} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
+          </motion.div>
+        ) : null
       )}
 
       <div className="flex flex-col items-center gap-2">
@@ -525,7 +569,7 @@ export default function Previsoes() {
               {/* Ambas Marcam (à direita de Resultados) */}
               {projection.ambas_marcam && (
                 <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
-                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
                     Ambas Marcam
                     <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." href="/como-funciona#mercado-btts" />
                   </h4>
@@ -544,19 +588,34 @@ export default function Previsoes() {
                 </div>
               )}
 
-              {/* Dupla Chance (abaixo de Resultados) */}
+              {/* Dupla Chance | Handicaps */}
               {projection.mercados_derivados && <DuplaChanceCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />}
-              {/* Empate Anula (abaixo de Ambas Marcam) */}
-              {projection.mercados_derivados && <EmpateAnulaCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />}
-              {/* Placar Exato (abaixo de Dupla Chance) */}
-              {projection.placar_exato && <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} />}
-              {/* Handicaps unificado (à direita de Placar Exato) */}
               {projection.mercados_derivados && <HandicapsCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />}
+              {/* Placar Exato — card detalhado em largura total */}
+              {projection.placar_exato && (
+                <div className="md:col-span-2">
+                  <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} />
+                </div>
+              )}
             </div>
 
-            {/* MERCADOS SECUNDÁRIOS */}
+            {/* MERCADOS SECUNDÁRIOS (recolhidos por padrão) */}
             <SectionDivider>MERCADOS SECUNDÁRIOS</SectionDivider>
-
+            <div className="flex justify-center mb-4">
+              <button
+                onClick={() => setShowSecondary(s => !s)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border/60 bg-muted/40 hover:bg-muted transition-colors"
+              >
+                {showSecondary ? 'Ocultar mercados' : 'Exibir mercados secundários'}
+                <ChevronDown className={`w-4 h-4 transition-transform ${showSecondary ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
+            <AnimatePresence initial={false}>
+            {showSecondary && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
             <div className="space-y-8">
               {/* Gols (mandante/total/visitante, com seletor de tempo) */}
               {projection.gols && (
@@ -660,20 +719,62 @@ export default function Previsoes() {
                 </div>
               )}
             </div>
+            </motion.div>
+            )}
+            </AnimatePresence>
 
-            {/* Construção da Aposta: Aposta Escolhida (promoção) + ferramentas (Combinadas etc.) */}
-            <div className="pt-4">
-              <h3 className="text-lg font-heading font-bold mt-8 mb-4 border-b border-border/50 pb-2">CONSTRUÇÃO DA APOSTA</h3>
-              {analysis?.type === 'future_match' && (
-                <div className="mb-6">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Promoção &quot;Só Paga se Acertar&quot; — monte sua aposta com o crédito reservado desta análise:
+            {/* Jogador a Marcar (modelo de goleador) */}
+            {scorers?.disponivel && (
+              <ScorersCard data={scorers} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
+            )}
+
+            {/* MONTE SUA APOSTA — oferta "ParcerIA" (Só Paga se Acertar) */}
+            <SectionDivider>MONTE SUA APOSTA</SectionDivider>
+            {analysis?.type === 'future_match' ? (
+              <div className="max-w-3xl mx-auto mb-2">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 mb-4 text-sm text-muted-foreground leading-relaxed">
+                  <p className="mb-2">
+                    <b className="text-foreground">Como funciona:</b> esta é uma <b>partida agendada</b>, então você tem <b>1 crédito
+                    reservado</b> para montar uma aposta na oferta <b>&quot;ParcerIA&quot;</b>.
                   </p>
-                  <BetBuilder analysisId={analysis.id} onConfirmed={() => refreshWallet()} />
+                  <p className="mb-2">
+                    Escolha abaixo alguns palpites desta análise — por exemplo, <i>{teamPt(homeTeamId)} não perde</i> combinado com
+                    <i> mais de 2,5 gols</i>. O sistema junta tudo numa aposta única com odd de até 2,00. <b>Se acertar, o crédito é
+                    usado normalmente; se errar, ele volta para a sua conta</b> — por isso o nome &quot;só paga se acertar&quot;.
+                  </p>
+                  <Link href="/como-funciona#promocao" className="text-primary font-medium inline-flex items-center gap-1">
+                    Ver a explicação completa da oferta ParcerIA →
+                  </Link>
                 </div>
-              )}
-              <BetLab prediction={projection} />
+                <BetBuilder analysisId={analysis.id} home={homeTeamId} away={awayTeamId} onConfirmed={() => refreshWallet()} />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center max-w-2xl mx-auto">
+                A oferta <b>&quot;ParcerIA&quot;</b> (só paga se acertar) vale apenas para <b>análises de partidas agendadas</b>. Esta é
+                uma <b>análise independente</b>, então não é elegível.{' '}
+                <Link href="/como-funciona#promocao" className="text-primary font-medium">Saiba mais</Link>.
+              </p>
+            )}
+
+            {/* FUNÇÕES AVANÇADAS DE ANÁLISE (recolhidas por padrão) */}
+            <SectionDivider>FUNÇÕES AVANÇADAS DE ANÁLISE</SectionDivider>
+            <div className="flex justify-center mb-4">
+              <button
+                onClick={() => setShowAdvanced(s => !s)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border/60 bg-muted/40 hover:bg-muted transition-colors"
+              >
+                <Sliders className="w-4 h-4" />
+                {showAdvanced ? 'Ocultar ferramentas' : 'Explorador de Linha e Value Betting'}
+                <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+              </button>
             </div>
+            <AnimatePresence initial={false}>
+              {showAdvanced && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                  <BetLab prediction={projection} />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
           </motion.div>
         )}

@@ -273,6 +273,15 @@ export const api = {
   pastFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/past"),
   matchDetail: (home: string, away: string, date: string) =>
     request<MatchDetail>(`/api/match-detail?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&date=${encodeURIComponent(date)}`),
+  scorers: (home: string, away: string) =>
+    request<ScorersResponse>(`/api/scorers?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`),
+};
+
+// Prop "jogador a marcar": P(marca | joga) calibrada + odd justa.
+export type ScorerPlayer = { player_id: number | null; nome: string; pos: string | null; prob: number; odd_justa: number };
+export type ScorersResponse = {
+  disponivel: boolean; motivo?: string; info?: string;
+  [team: string]: boolean | string | ScorerPlayer[] | undefined;
 };
 
 export type LineupPlayer = { id: number | null; name: string; number: number | null; pos: string | null; grid: string | null };
