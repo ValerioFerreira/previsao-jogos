@@ -17,6 +17,7 @@ import { ArrowLeft } from 'lucide-react';
 import StyleRadar from '@/components/platform/StyleRadar';
 import FormAndNarratives from '@/components/platform/FormAndNarratives';
 import GoalTiming from '@/components/platform/GoalTiming';
+import FatorArbitro from '@/components/platform/FatorArbitro';
 import type { RecentMatch, GoalTimingResponse } from '@/lib/api';
 
 export default function Estatisticas() {
@@ -224,6 +225,11 @@ export default function Estatisticas() {
           <FormAndNarratives home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
           <StyleRadar home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
           <GoalTiming home={homeTeamId} homeData={homeTiming} away={awayTeamId} awayData={awayTiming} />
+
+          {/* Central Pré-Jogo (só Partida Futura) */}
+          {pickerMode === 'futura' && (
+            <FatorArbitro />
+          )}
 
           {/* Tendência de Gols (últimos jogos) */}
           <div className="bg-card border border-border/50 rounded-xl p-5">

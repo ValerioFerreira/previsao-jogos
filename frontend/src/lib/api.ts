@@ -261,6 +261,19 @@ export type GoalTimingResponse = {
   blocks: GoalTimingBlock[];
 };
 
+export type RefereeStatsResponse = {
+  referee: string;
+  n_matches: number;
+  n_card_matches: number;
+  n_foul_matches: number;
+  avg_yellow: number;
+  avg_red: number;
+  avg_cards: number;
+  avg_fouls: number;
+  bench_cards: number;
+  bench_fouls: number;
+};
+
 export const api = {
   health: () => request<{ status: string; service: string }>("/health"),
   teams: () => request<TeamsResponse>("/teams"),
@@ -277,6 +290,7 @@ export const api = {
   teamAnomalies: (name: string) => request<AnomaliesResponse>(`/api/teams/${encodeURIComponent(name)}/anomalies`),
   teamHistory: (name: string) => request<TeamHistoryResponse>(`/api/teams/${encodeURIComponent(name)}/history`),
   goalTiming: (name: string) => request<GoalTimingResponse>(`/api/teams/${encodeURIComponent(name)}/goal-timing`),
+  refereeStats: (name: string) => request<RefereeStatsResponse>(`/api/referees/${encodeURIComponent(name)}/stats`),
   referees: () => request<{ referees: string[] }>("/api/referees"),
   teamIds: () => request<Record<string, number>>("/api/team-ids"),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),

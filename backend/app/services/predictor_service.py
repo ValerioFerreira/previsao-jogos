@@ -589,6 +589,111 @@ def get_goal_timing(team_name: str) -> dict[str, Any]:
     return out
 
 
+_REFEREE_TABLE: dict[str, Any] | None = None
+
+
+def _to_int(v) -> int:
+    try:
+        return int(v) if v is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _build_referee_table() -> dict[str, Any]:
+    """Agrega, do match_detail_cache, cartões e faltas por árbitro (uma varredura por
+    processo). Zero chamada à API. Retorna {refs:{nome:{...}}, bench:{cards,fouls}}."""
+    from app.db.connection import engine
+    from sqlalchemy import text as _text
+    refs: dict[str, dict[str, float]] = {}
+    tot_cards = tot_fouls = 0.0
+    n_card_matches = n_foul_matches = 0
+    try:
+        with engine.connect() as c:
+            rows = c.execute(_text("SELECT raw FROM match_detail_cache")).fetchall()
+    except Exception as e:
+        print(f"[ERRO DB] referee_table: {e}")
+        return {"refs": {}, "bench": {"cards": 0.0, "fouls": 0.0}}
+
+    for (raw_json,) in rows:
+        try:
+            d = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+        except Exception:
+            continue
+        if not d:
+            continue
+        status = (((d.get("fixture") or {}).get("status") or {}).get("short"))
+        if status not in ("FT", "AET", "PEN"):
+            continue
+        ref = ((d.get("fixture") or {}).get("referee")) or ""
+        ref = ref.split(",")[0].strip()  # remove sufixo de país, se houver
+        stats = d.get("statistics") or []
+        y = r = fouls = 0
+        has_cards = has_fouls = False
+        for st in stats:
+            for s2 in (st.get("statistics") or []):
+                t, v = s2.get("type"), s2.get("value")
+                if t == "Yellow Cards" and v is not None:
+                    y += _to_int(v); has_cards = True
+                elif t == "Red Cards" and v is not None:
+                    r += _to_int(v); has_cards = True
+                elif t == "Fouls" and v is not None:
+                    fouls += _to_int(v); has_fouls = True
+        if has_cards:
+            tot_cards += (y + r); n_card_matches += 1
+        if has_fouls:
+            tot_fouls += fouls; n_foul_matches += 1
+        if not ref:
+            continue
+        e = refs.setdefault(ref, {"n": 0, "n_c": 0, "n_f": 0, "y": 0.0, "r": 0.0, "fouls": 0.0})
+        e["n"] += 1
+        if has_cards:
+            e["n_c"] += 1; e["y"] += y; e["r"] += r
+        if has_fouls:
+            e["n_f"] += 1; e["fouls"] += fouls
+
+    bench = {
+        "cards": round(tot_cards / n_card_matches, 2) if n_card_matches else 0.0,
+        "fouls": round(tot_fouls / n_foul_matches, 2) if n_foul_matches else 0.0,
+    }
+    return {"refs": refs, "bench": bench}
+
+
+def _referee_table() -> dict[str, Any]:
+    global _REFEREE_TABLE
+    if _REFEREE_TABLE is None or not _REFEREE_TABLE.get("refs"):
+        _REFEREE_TABLE = _build_referee_table()
+    return _REFEREE_TABLE
+
+
+def get_referee_stats(referee_name: str) -> dict[str, Any]:
+    """Tendência disciplinar de um árbitro (média de cartões/faltas por jogo) vs a média
+    geral. Agregado do histórico cacheado; zero chamada à API."""
+    tbl = _referee_table()
+    bench = tbl["bench"]
+    empty = {
+        "referee": referee_name, "n_matches": 0, "n_card_matches": 0, "n_foul_matches": 0,
+        "avg_yellow": 0.0, "avg_red": 0.0, "avg_cards": 0.0, "avg_fouls": 0.0,
+        "bench_cards": bench["cards"], "bench_fouls": bench["fouls"],
+    }
+    e = tbl["refs"].get(referee_name)
+    if not e:  # tenta casar por normalização frouxa (case/acentos)
+        key = _loose_team_key(referee_name)
+        for name, rec in tbl["refs"].items():
+            if _loose_team_key(name) == key:
+                e = rec; referee_name = name; break
+    if not e:
+        return empty
+    nc, nf = e["n_c"], e["n_f"]
+    return {
+        "referee": referee_name, "n_matches": e["n"], "n_card_matches": nc, "n_foul_matches": nf,
+        "avg_yellow": round(e["y"] / nc, 2) if nc else 0.0,
+        "avg_red": round(e["r"] / nc, 2) if nc else 0.0,
+        "avg_cards": round((e["y"] + e["r"]) / nc, 2) if nc else 0.0,
+        "avg_fouls": round(e["fouls"] / nf, 2) if nf else 0.0,
+        "bench_cards": bench["cards"], "bench_fouls": bench["fouls"],
+    }
+
+
 def get_team_anomalies(team_name: str) -> list[dict[str, Any]]:
     """Detecta anomalias estatísticas recentes baseadas no Z-Score da equipe."""
     # Obter o torneio padrão para determinar a classe competitivo/amistoso

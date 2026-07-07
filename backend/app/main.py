@@ -14,6 +14,7 @@ from app.schemas import (
     AnomaliesResponse,
     TeamHistoryResponse,
     GoalTimingResponse,
+    RefereeStatsResponse,
 )
 from app.services.predictor_service import (
     allowed_origins,
@@ -24,6 +25,7 @@ from app.services.predictor_service import (
     get_team_anomalies,
     get_team_history,
     get_goal_timing,
+    get_referee_stats,
     get_referees,
     get_team_ids,
     get_upcoming_fixtures,
@@ -161,6 +163,11 @@ def predict(payload: PredictRequest) -> dict:
 @app.get("/api/referees")
 def referees() -> dict:
     return {"referees": get_referees()}
+
+
+@app.get("/api/referees/{name:path}/stats", response_model=RefereeStatsResponse)
+def referee_stats(name: str) -> RefereeStatsResponse:
+    return RefereeStatsResponse(**get_referee_stats(name))
 
 
 @app.get("/api/team-ids")

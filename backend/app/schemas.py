@@ -111,3 +111,16 @@ class GoalTimingResponse(BaseModel):
     total_scored: int
     total_conceded: int
     blocks: list[GoalTimingBlock]
+
+
+class RefereeStatsResponse(BaseModel):
+    referee: str
+    n_matches: int
+    n_card_matches: int
+    n_foul_matches: int
+    avg_yellow: float
+    avg_red: float
+    avg_cards: float
+    avg_fouls: float
+    bench_cards: float
+    bench_fouls: float
