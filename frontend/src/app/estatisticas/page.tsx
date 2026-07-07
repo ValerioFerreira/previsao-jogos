@@ -14,6 +14,9 @@ import { MatchDetail } from '@/components/platform/MatchDetail';
 import { MatchModePicker } from '@/components/platform/MatchModePicker';
 import { MatchHeader } from '@/components/platform/MatchHeader';
 import { ArrowLeft } from 'lucide-react';
+import StyleRadar from '@/components/platform/StyleRadar';
+import FormAndNarratives from '@/components/platform/FormAndNarratives';
+import type { RecentMatch } from '@/lib/api';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -25,6 +28,8 @@ export default function Estatisticas() {
   const [homeHistory, setHomeHistory] = useState<TeamHistoryResponse | null>(null);
   const [awayHistory, setAwayHistory] = useState<TeamHistoryResponse | null>(null);
   const [h2h, setH2h] = useState<H2HResponse | null>(null);
+  const [homeRecent, setHomeRecent] = useState<RecentMatch[]>([]);
+  const [awayRecent, setAwayRecent] = useState<RecentMatch[]>([]);
 
   // Detalhe de uma partida específica (via ?home=&away=&date= ou seletor de passadas).
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
@@ -72,11 +77,15 @@ export default function Estatisticas() {
       Promise.all([
         api.teamHistory(homeTeamId).catch(() => null),
         api.teamHistory(awayTeamId).catch(() => null),
-        api.h2h(homeTeamId, awayTeamId).catch(() => null)
-      ]).then(([hHist, aHist, h2hData]) => {
+        api.h2h(homeTeamId, awayTeamId).catch(() => null),
+        api.recentMatches(homeTeamId).catch(() => null),
+        api.recentMatches(awayTeamId).catch(() => null),
+      ]).then(([hHist, aHist, h2hData, hRec, aRec]) => {
         setHomeHistory(hHist);
         setAwayHistory(aHist);
         setH2h(h2hData);
+        setHomeRecent(hRec?.matches || []);
+        setAwayRecent(aRec?.matches || []);
         setLoading(false);
       }).catch(err => {
         console.error(err);
@@ -204,6 +213,10 @@ export default function Estatisticas() {
           transition={{ duration: 0.4 }}
           className="space-y-6"
         >
+          {/* Visão high-level: forma/narrativas + radar de estilo */}
+          <FormAndNarratives home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
+          <StyleRadar home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
+
           {/* Tendência de Gols (últimos jogos) */}
           <div className="bg-card border border-border/50 rounded-xl p-5">
             <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
