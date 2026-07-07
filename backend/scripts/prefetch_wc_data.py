@@ -46,6 +46,7 @@ def main():
     ap.add_argument("--max", type=int, default=3000, help="máx. de chamadas de detalhe por execução")
     ap.add_argument("--margin", type=int, default=50, help="parar quando restarem < margem chamadas na cota")
     ap.add_argument("--floor", type=int, default=2010, help="temporada mais antiga a varrer por seleção (o detalhe da API rareia antes de ~2010)")
+    ap.add_argument("--all-nations", action="store_true", help="além das seleções da Copa, varre TODAS as seleções com id em team_ids (usa a cota ociosa; cache-first)")
     a = ap.parse_args()
 
     state = {"calls": 0, "novos": 0, "jacache": 0, "falhas": 0, "rem": None, "parou": None}
@@ -97,6 +98,21 @@ def main():
                           (tt.get("home") or {}).get("name"), (tt.get("away") or {}).get("name"))
         if not budget_ok():
             break
+
+    # 1b) --all-nations: expande o conjunto para TODAS as seleções com id (não só as da
+    #     Copa). Cache-first + guarda de cota fazem a cobertura crescer dia a dia usando a
+    #     cota ociosa (75k/dia). Ordena as da Copa primeiro (já semeadas).
+    if a.all_nations:
+        try:
+            from app.db.connection import engine
+            from sqlalchemy import text as _t
+            with engine.connect() as c:
+                for name, tid in c.execute(_t("SELECT team_name, team_id FROM team_ids")).fetchall():
+                    if tid is not None:
+                        teams.setdefault(int(tid), name)
+            print(f"All-nations: conjunto expandido para {len(teams)} seleções", flush=True)
+        except Exception as e:
+            print(f"[AVISO] all-nations seed: {e}", flush=True)
 
     # 2) HISTÓRICO COMPLETO de cada seleção: varre temporada a temporada, do mais
     #    recente ao mais antigo (SEASON -> --floor), cacheando o detalhe de cada jogo.
