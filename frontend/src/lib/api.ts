@@ -42,6 +42,18 @@ export type CountPrediction = NumericPrediction & {
 
 // Motivo estruturado do alerta de desvio do Placar Exato (texto montado no front
 // em PT-BR; o lado favorito vira teamPt(home)/teamPt(away)).
+// Resultado de um mercado derivado: probabilidade (%) + odd justa (nunca < 1,00).
+export type DerivedOutcome = { prob: number; odd_justa: number };
+export type DerivedMarkets = {
+  dupla_chance: Record<string, DerivedOutcome>;
+  empate_anula: Record<string, DerivedOutcome>;
+  handicap: Record<string, Record<string, DerivedOutcome>>;
+  clean_sheet: Record<string, DerivedOutcome>;
+  vitoria_sem_sofrer: Record<string, DerivedOutcome>;
+  gols_par_impar: Record<string, DerivedOutcome>;
+  faixa_gols: Record<string, DerivedOutcome>;
+};
+
 export type PlacarMotivo =
   | { tipo: "favoritismo"; favorito_lado: "mandante" | "visitante"; exp_alto: number; exp_baixo: number }
   | { tipo: "placar_alto"; exp_total: number; prob_4_mais: number };
@@ -61,6 +73,10 @@ export type PredictionResponse = {
   chutes_a_gol?: Record<string, CountPrediction>;
   escanteios: Record<string, CountPrediction>;
   cartoes: Record<string, CountPrediction>;
+  // Impedimentos (mandante/visitante/total) — mercado NB exposto cru (sem calibração).
+  impedimentos?: Record<string, CountPrediction>;
+  // Mercados derivados: cortes exatos da matriz conjunta do Dixon-Coles / PMFs de gols.
+  mercados_derivados?: DerivedMarkets;
   // Mercados por tempo (1º/2º): cada chave (gols_1t, gols_2t, cartoes_1t, cartoes_2t)
   // é um mapa {mandante, visitante, total} -> CountPrediction.
   tempos?: Record<string, Record<string, CountPrediction>>;
@@ -276,7 +292,7 @@ export type MatchDetail = {
   goals?: { home: number | null; away: number | null };
   score?: { halftime?: { home: number | null; away: number | null }; fulltime?: any; extratime?: any; penalty?: any };
   statistics?: { team: string; team_id: number; stats: Record<string, string | number | null> }[];
-  events?: { minute: number | null; extra: number | null; type: string; detail: string; team: string; player: string; assist: string | null }[];
+  events?: { minute: number | null; extra: number | null; type: string; detail: string; team: string; team_id: number | null; player: string; assist: string | null }[];
   lineups?: { team: string; team_id: number; formation: string | null; coach: { id: number | null; name: string | null }; startXI: LineupPlayer[]; substitutes: LineupPlayer[] }[];
   players?: { team: string; team_id: number; players: MatchPlayer[] }[];
 };

@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, ShieldAlert, ShieldCheck, Target } from "l
 import { PredictionResponse, PlacarMotivo, teamLogoUrl } from "@/lib/api";
 import InfoTooltip from "@/components/platform/InfoTooltip";
 import { MarketCard } from "@/components/platform/MarketCard";
+import DerivedMarketsBlock from "@/components/platform/DerivedMarkets";
 import { teamPt } from "@/lib/teamNames";
 
 function formatDateBR(s: string): string {
@@ -246,7 +247,18 @@ export default function PredictionDisplay({
             <MarketCard title="Cartões" subtitle={`Visitante (${teamPt(away)})`} periods={cardPeriods(projection, away)} />
           </MarketSection>
         )}
+        {projection.impedimentos?.total && (
+          <MarketSection title="Impedimentos" tip="Total de impedimentos assinalados pela arbitragem. Mercado novo — exibido sem calibração (a arbitragem de vídeo alterou o padrão histórico).">
+            <MarketCard title="Impedimentos" subtitle={`Mandante (${teamPt(home)})`} prediction={projection.impedimentos[home]} />
+            <MarketCard title="Impedimentos" subtitle="Totais (Partida)" prediction={projection.impedimentos.total} />
+            <MarketCard title="Impedimentos" subtitle={`Visitante (${teamPt(away)})`} prediction={projection.impedimentos[away]} />
+          </MarketSection>
+        )}
       </div>
+
+      {projection.mercados_derivados && (
+        <DerivedMarketsBlock d={projection.mercados_derivados} home={home} away={away} />
+      )}
     </motion.div>
   );
 }

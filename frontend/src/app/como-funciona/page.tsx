@@ -95,7 +95,7 @@ export default function ComoFunciona() {
       {/* Conteúdo */}
       <div className="space-y-5 max-w-3xl">
         <p className="text-sm text-muted-foreground">
-          A <b className="text-foreground">ApostAI</b> é uma plataforma de <b className="text-foreground">análise
+          A <b className="text-foreground">ApostaInfo</b> é uma plataforma de <b className="text-foreground">análise
           probabilística</b> de partidas de seleções. Ela não “dá palpites”: estima a <b className="text-foreground">distribuição
           de probabilidade</b> de cada mercado com modelos estatísticos, para você comparar com as odds do mercado.
           Os créditos remuneram exclusivamente o uso da Inteligência Artificial; nenhuma previsão garante resultado.

@@ -78,6 +78,8 @@ SOT_TEAM_LINES = [2.5, 3.5, 4.5, 5.5, 6.5]        # chutes a gol por equipe
 GOALS_HALF_LINES = [0.5, 1.5, 2.5, 3.5]           # gols por tempo (total)
 CARDS_HALF_LINES = [1.5, 2.5, 3.5, 4.5]           # cartões por tempo (total)
 GOALS_LINES = [0.5, 1.5, 2.5, 3.5, 4.5]           # gols (equipe/total, partida)
+OFFSIDES_LINES = [1.5, 2.5, 3.5, 4.5, 5.5]        # impedimentos (total)
+OFFSIDES_TEAM_LINES = [0.5, 1.5, 2.5, 3.5]        # impedimentos por equipe
 
 
 def _clamp_p(p):
@@ -102,6 +104,12 @@ class Predictor:
         self.cards = CardsGP.load(f"{art_dir}/cards_gp.joblib")
         self.shots = ShotsNB.load(f"{art_dir}/shots_nb.joblib")
         self.shots_on_target = ShotsNB.load(f"{art_dir}/shots_on_target_nb.joblib")
+        # Impedimentos (mercado novo): NB independente sobre base_feats + rolantes de
+        # box-score. Opcional/retrocompatível — ausência do artefato = mercado não exposto.
+        self.offsides = None
+        _off_path = f"{art_dir}/offsides_nb.joblib"
+        if os.path.exists(_off_path):
+            self.offsides = CornersNB.load(_off_path)
         # Mercados por tempo (1º/2º) — gols e cartões (CornersNB sobre base_feats).
         self.gols_1t = CornersNB.load(f"{art_dir}/gols_1t_nb.joblib")
         self.gols_2t = CornersNB.load(f"{art_dir}/gols_2t_nb.joblib")
@@ -200,14 +208,26 @@ class Predictor:
                     out[key] = round(float(np.mean(vals)), 1) if vals else None
             return out
 
+        # Últimos confrontos (mais recentes primeiro) para enriquecer o card de H2H.
+        has_tourn = "tournament" in m.columns
+        m_recent = m.sort_values("date", ascending=False).head(6)
+        recent = [{
+            "date": str(pd.to_datetime(x["date"]).date()),
+            "home_team": x["home_team"], "away_team": x["away_team"],
+            "home_score": int(x["home_score"]), "away_score": int(x["away_score"]),
+            "tournament": (str(x["tournament"]) if has_tourn and pd.notna(x["tournament"]) else None),
+        } for _, x in m_recent.iterrows()]
+
         return {"h2h_played": n, "h2h_home_winrate": wins / n,
                 "h2h_home_gd_mean": gds / n,
                 "days_since_last_h2h": float((self.anchor_date - last).days),
-                "btts_percentage": btts_percentage,
-                "avg_total_goals": avg_total_goals,
+                "btts_percentage": round(btts_percentage, 1),
+                "btts_count": int(btts_count),
+                "avg_total_goals": round(avg_total_goals, 1),
                 "home_wins": h, "draws": d, "away_wins": a,
                 "last_date": str(pd.to_datetime(last).date()),
                 "home_avgs": _avgs(home_team), "away_avgs": _avgs(away_team),
+                "recent": recent,
                 "_resumo": f"{n} jogos · {home_team} {h}V · {d}E · {away_team} {a}V"}
 
     # ----------------------------------------------------------------- montagem da linha
@@ -486,22 +506,62 @@ class Predictor:
         sot = self.shots_on_target.predict_distributions(X_resid)
 
         # 6. Mercados por tempo (1º/2º) — gols e cartões (mandante/visitante/total)
-        def _half(model, lines):
+        # Calibração isotônica O/U por tempo/lado — só as chaves validadas out-of-time
+        # (walk-forward) existem no artefato; ausência = comportamento antigo (sem calibrar).
+        def _half(model, lines, prefix):
             d = model.predict_distributions(X[bf])
-            return {home_team: self._corners_market(d["home"][0], lines),
-                    away_team: self._corners_market(d["away"][0], lines),
-                    "total": self._corners_market(d["total"][0], lines)}
+            return {home_team: self._corners_market(d["home"][0], lines,
+                                                    self.ou_calibrators.get(f"{prefix}_home")),
+                    away_team: self._corners_market(d["away"][0], lines,
+                                                    self.ou_calibrators.get(f"{prefix}_away")),
+                    "total": self._corners_market(d["total"][0], lines,
+                                                  self.ou_calibrators.get(f"{prefix}_total"))}
         tempos = {
-            "gols_1t": _half(self.gols_1t, GOALS_HALF_LINES),
-            "gols_2t": _half(self.gols_2t, GOALS_HALF_LINES),
-            "cartoes_1t": _half(self.cartoes_1t, CARDS_HALF_LINES),
-            "cartoes_2t": _half(self.cartoes_2t, CARDS_HALF_LINES),
+            "gols_1t": _half(self.gols_1t, GOALS_HALF_LINES, "gols_1t"),
+            "gols_2t": _half(self.gols_2t, GOALS_HALF_LINES, "gols_2t"),
+            "cartoes_1t": _half(self.cartoes_1t, CARDS_HALF_LINES, "cartoes_1t"),
+            "cartoes_2t": _half(self.cartoes_2t, CARDS_HALF_LINES, "cartoes_2t"),
         }
 
-        return {
+        # Mercados DERIVADOS — transformações exatas da matriz conjunta do Dixon-Coles
+        # e das PMFs de gols (já validadas). Sem modelo/gate próprio: são cortes da CDF.
+        Jm = np.asarray(P_joint_single, dtype=float); Jm = Jm / Jm.sum() if Jm.sum() > 0 else Jm
+        mg = Jm.shape[0] - 1
+        pH, pD, pA = pm["H"], pm["D"], pm["A"]
+        def _mk(p): p = _clamp_p(p); return {"prob": round(100 * p, 1), "odd_justa": _fair_odd(p)}
+        # distribuição da diferença de gols (mandante - visitante)
+        gd = {}
+        for i in range(mg + 1):
+            for j in range(mg + 1):
+                gd[i - j] = gd.get(i - j, 0.0) + Jm[i, j]
+        def _hcap(h):  # P(mandante cobre handicap h, linha .5)
+            return sum(p for d, p in gd.items() if d + h > 0)
+        par = float(sum(prob_total_goals[k] for k in range(len(prob_total_goals)) if k % 2 == 0))
+        cs_home = float(away_goals_pmf[0]); cs_away = float(home_goals_pmf[0])
+        derivados = {
+            "dupla_chance": {f"{home_team} ou Empate": _mk(pH + pD),
+                             f"{home_team} ou {away_team}": _mk(pH + pA),
+                             f"Empate ou {away_team}": _mk(pD + pA)},
+            "empate_anula": {home_team: _mk(pH / (pH + pA + 1e-9)),
+                             away_team: _mk(pA / (pH + pA + 1e-9))},
+            "handicap": {home_team: {str(h): _mk(_hcap(h)) for h in (-2.5, -1.5, -0.5, 0.5, 1.5)},
+                         away_team: {str(-h): _mk(1 - _hcap(h)) for h in (-2.5, -1.5, -0.5, 0.5, 1.5)}},
+            "clean_sheet": {home_team: _mk(cs_home), away_team: _mk(cs_away)},
+            "vitoria_sem_sofrer": {
+                home_team: _mk(float(sum(Jm[i, 0] for i in range(1, mg + 1)))),
+                away_team: _mk(float(sum(Jm[0, j] for j in range(1, mg + 1))))},
+            "gols_par_impar": {"Par": _mk(par), "Ímpar": _mk(1 - par)},
+            "faixa_gols": {"0-1": _mk(float(prob_total_goals[:2].sum())),
+                           "2-3": _mk(float(prob_total_goals[2:4].sum())),
+                           "4-6": _mk(float(prob_total_goals[4:7].sum())),
+                           "7+": _mk(float(prob_total_goals[7:].sum()))},
+        }
+
+        resultado = {
             "vencedor": winner,
             "gols": gols_res,
             "gols_equipe": gols_equipe,
+            "mercados_derivados": derivados,
             "chutes": self._corners_market(cs["total"][0], SHOTS_LINES),
             "chutes_equipe": {home_team: self._corners_market(cs["home"][0], SHOTS_TEAM_LINES),
                               away_team: self._corners_market(cs["away"][0], SHOTS_TEAM_LINES)},
@@ -509,7 +569,8 @@ class Predictor:
                              away_team: self._corners_market(sot["away"][0], SOT_TEAM_LINES),
                              "total": self._corners_market(sot["total"][0], SOT_LINES,
                                                            self.ou_calibrators.get("finalizacoes_gol"))},
-            "escanteios": {home_team: self._corners_market(cd["home"][0]),
+            "escanteios": {home_team: self._corners_market(cd["home"][0],
+                                          calibrator=self.ou_calibrators.get("escanteios_home")),
                            away_team: self._corners_market(cd["away"][0]),
                            "total": self._corners_market(cd["total"][0],
                                                          calibrator=self.ou_calibrators.get("escanteios"))},
@@ -524,6 +585,18 @@ class Predictor:
             "confronto_direto": h2h["_resumo"],
             "confiabilidade": confiabilidade,
         }
+
+        # Impedimentos (mercado novo, exibido cru — a calibração isotônica não passou
+        # o gate p/ este mercado; ver histórico). Só é anexado se o artefato existe.
+        if self.offsides is not None:
+            of = self.offsides.predict_distributions(X[self.offsides.feats])
+            resultado["impedimentos"] = {
+                home_team: self._corners_market(of["home"][0], OFFSIDES_TEAM_LINES),
+                away_team: self._corners_market(of["away"][0], OFFSIDES_TEAM_LINES),
+                "total": self._corners_market(of["total"][0], OFFSIDES_LINES),
+            }
+
+        return resultado
 
 
 if __name__ == "__main__":

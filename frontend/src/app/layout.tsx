@@ -11,7 +11,7 @@ import { AuthProvider } from "@/lib/AuthContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ApostAI - Tips and Stats",
+  title: "ApostaInfo - Análises Esportivas",
   description: "Análise quantitativa e previsão probabilística para partidas de futebol de seleções.",
   icons: {
     icon: "/images/favicon-32x32.ico",

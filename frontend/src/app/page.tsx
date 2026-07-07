@@ -21,6 +21,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { analysisApi } from '@/lib/monetizationApi';
 import BetLab from '@/components/platform/BetLab';
 import BetBuilder from '@/components/platform/BetBuilder';
+import { DuplaChanceCard, EmpateAnulaCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard } from '@/components/platform/DerivedMarkets';
+import H2HCard from '@/components/platform/H2HCard';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -37,6 +39,17 @@ function oddRangeStr(probPct: number): string {
   const hi = Math.max(1, odd);
   const lo = Math.max(1, odd * 0.93);
   return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
+}
+
+// Título de seção centralizado com linhas em degradê preenchendo a horizontal.
+function SectionDivider({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-4 mt-8 mb-4">
+      <div className="h-px flex-1 bg-gradient-to-r from-transparent to-border" />
+      <h3 className="text-lg font-heading font-bold uppercase tracking-wide whitespace-nowrap text-center">{children}</h3>
+      <div className="h-px flex-1 bg-gradient-to-l from-transparent to-border" />
+    </div>
+  );
 }
 
 // Recortes por tempo para gols e cartões (Partida inteira / 1º / 2º), por lado.
@@ -205,13 +218,15 @@ export default function Previsoes() {
   
   const [h2hData, setH2hData] = useState<any>(null);
 
-  // Restaura o H2H quando a análise persiste do contexto (ao voltar para a página).
+  // Busca o H2H assim que as duas seleções estão escolhidas — o card de confronto
+  // direto fica disponível ANTES de gerar a análise (e persiste ao voltar à página).
   React.useEffect(() => {
-    if (analysis && homeTeamId && awayTeamId && !h2hData) {
-      api.h2h(homeTeamId, awayTeamId).then(h => setH2hData(h?.metrics ?? null)).catch(() => {});
+    if (homeTeamId && awayTeamId && homeTeamId !== awayTeamId) {
+      api.h2h(homeTeamId, awayTeamId).then(h => setH2hData(h?.metrics ?? null)).catch(() => setH2hData(null));
+    } else {
+      setH2hData(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysis]);
+  }, [homeTeamId, awayTeamId]);
 
   // Modo de análise (mode) e data (matchDate) vêm do contexto (persistem ao navegar).
   const [referee, setReferee] = useState('');
@@ -274,10 +289,6 @@ export default function Previsoes() {
     setErrMsg(null);
     setAnalysis(null);
 
-    api.h2h(homeTeamId, awayTeamId)
-      .then(h2h => setH2hData(h2h?.metrics ?? null))
-      .catch(() => setH2hData(null));
-
     try {
       const a = await analysisApi.create({
         home_team: homeTeamId,
@@ -301,7 +312,12 @@ export default function Previsoes() {
       {homeTeamId && awayTeamId && (
         <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} />
       )}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border/50 rounded-xl p-5">
+      <motion.div
+        layout
+        transition={{ layout: { duration: 0.4, ease: 'easeInOut' } }}
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        className={`bg-card border border-border/50 rounded-xl p-5 mx-auto max-w-full ${mode === 'independente' ? 'w-full' : 'w-fit'}`}
+      >
         <h2 className="text-lg font-heading font-bold mb-4 flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-emerald-500" /> Configuração do Confronto
         </h2>
@@ -311,12 +327,16 @@ export default function Previsoes() {
           <button
             onClick={() => setMode('futura')}
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'futura' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >Selecionar Partida Futura</button>
+          >Selecionar Partida Agendada</button>
           <button
             onClick={() => { setMode('independente'); setMatchDate(undefined); }}
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'independente' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Análise Independente</button>
-          <InfoTooltip text="Partida Futura: reserva 1 crédito e habilita a promoção 'Só Paga se Acertar'. Independente: consome 1 crédito e aceita qualquer par de seleções." href="/como-funciona#partida-futura" />
+          <InfoTooltip
+            text={'Selecionar Partida Agendada: selecione uma partida agendada e reserve um crédito para gerar a análise — elegível para a Oferta "ParcerIA". Análise Independente: escolha duas equipes quaisquer, sem necessariamente haver um jogo marcado entre elas, e utilize um crédito para gerar a análise — não elegível para a Oferta "ParcerIA".'}
+            href="/como-funciona#promocao"
+            linkText='Clique para conhecer a Oferta "ParcerIA" →'
+          />
         </div>
 
         {mode === 'futura' && (
@@ -432,6 +452,12 @@ export default function Previsoes() {
         )}
       </AnimatePresence>
 
+      {homeTeamId && awayTeamId && homeTeamId !== awayTeamId && h2hData && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <H2HCard h2hData={h2hData} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
+        </motion.div>
+      )}
+
       <div className="flex flex-col items-center gap-2">
         {errMsg && (
           <div className="text-sm rounded-md bg-red-500/10 text-red-600 p-3 max-w-md text-center">
@@ -465,114 +491,71 @@ export default function Previsoes() {
               </div>
             )}
 
-            {/* Confronto Direto (esquerda, estreito) + Resultados/Ambas Marcam (direita) */}
-            {(() => {
-              const hasH2H = h2hData && (h2hData.h2h_played ?? 0) > 0;
-              return (
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
-                  {hasH2H && (
-                    <div className="lg:col-span-2 bg-card border border-border/50 rounded-xl p-5 shadow-sm text-center flex flex-col justify-center">
-                      <h3 className="text-sm font-bold uppercase mb-1">Resumo do Confronto Direto</h3>
-                      <p className="text-[10px] text-muted-foreground mb-4">
-                        {h2hData.h2h_played} {h2hData.h2h_played === 1 ? 'jogo' : 'jogos'}
-                        {h2hData.last_date ? ` · último em ${formatDateBR(h2hData.last_date)}` : ''}
-                      </p>
-                      <div className="flex items-start justify-center gap-4 sm:gap-6 mb-5">
-                        {[{ id: homeTeamId, w: h2hData.home_wins }, null, { id: awayTeamId, w: h2hData.away_wins }].map((side) =>
-                          side === null ? (
-                            <div key="draw" className="flex flex-col items-center justify-center pt-7">
-                              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Empates</span>
-                              <span className="text-2xl font-mono font-bold text-muted-foreground">{h2hData.draws}</span>
-                            </div>
-                          ) : (
-                            <div key={side.id} className="flex flex-col items-center w-24">
-                              {teamLogoUrl(teamIds[side.id]) && (
-                                <img src={teamLogoUrl(teamIds[side.id])!} alt="" className="w-9 h-9 object-contain mb-1" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                              )}
-                              <span className="text-xs font-semibold leading-tight">{teamPt(side.id)}</span>
-                              <span className="text-[10px] uppercase tracking-wide text-muted-foreground mt-1">Vitórias</span>
-                              <span className="flex items-center gap-1 text-lg font-mono font-bold">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {side.w}
-                              </span>
-                            </div>
-                          )
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Médias no confronto direto</p>
-                        {[['Gols', 'goals'], ['Chutes', 'shots'], ['Chutes a gol', 'shots_on_target'], ['Escanteios', 'corners'], ['Cartões', 'cards']].map(([label, key]) => (
-                          <div key={key} className="grid grid-cols-3 items-center text-xs py-1 border-t border-border/20">
-                            <span className="font-mono font-semibold text-emerald-400">{h2hData.home_avgs?.[key] ?? '—'}</span>
-                            <span className="text-muted-foreground">{label}</span>
-                            <span className="font-mono font-semibold text-cyan-400">{h2hData.away_avgs?.[key] ?? '—'}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className={`${hasH2H ? 'lg:col-span-3' : 'lg:col-span-5'} space-y-4`}>
-                    {/* RESULTADOS */}
-                    <div className="bg-card border border-border/50 rounded-xl p-6 text-center shadow-sm">
-                      <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">RESULTADOS</p>
-                      <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8">
-                        <div className="text-center w-full sm:w-1/4">
-                          {teamLogoUrl(teamIds[homeTeamId]) && (
-                            <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                          )}
-                          <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
-                          <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[homeTeamId])}</p>
-                        </div>
-                        <div className="text-center w-full sm:w-1/4 border-y sm:border-y-0 sm:border-x border-border/50 py-4 sm:py-0">
-                          <p className="text-sm font-medium text-muted-foreground mb-1">Empate</p>
-                          <p className="text-2xl font-bold font-mono text-muted-foreground">{projection.vencedor.probabilidades["Empate"]}%</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades["Empate"])}</p>
-                        </div>
-                        <div className="text-center w-full sm:w-1/4">
-                          {teamLogoUrl(teamIds[awayTeamId]) && (
-                            <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                          )}
-                          <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
-                          <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[awayTeamId])}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Placar Exato (esquerda) + Ambas Marcam (direita), na mesma linha */}
-                    {projection.ambas_marcam && (
-                      <div className={projection.placar_exato ? 'grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch' : ''}>
-                        {projection.placar_exato && (
-                          <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} />
-                        )}
-                        <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col">
-                          <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                            Ambas Marcam
-                            <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." href="/como-funciona#mercado-btts" />
-                          </h4>
-                          <div className="flex-1 flex flex-wrap items-center justify-center gap-8 text-center">
-                            <div>
-                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
-                              <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
-                              <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
-                              <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
-                              <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+            {/* MERCADOS PRINCIPAIS — Resultados | Ambas Marcam / Dupla Chance | Empate Anula / Placar Exato | Handicaps */}
+            <SectionDivider>MERCADOS PRINCIPAIS</SectionDivider>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+              {/* Resultados (1X2) */}
+              <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col justify-center text-center shadow-sm h-full">
+                <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">Resultados</p>
+                <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+                  <div className="text-center w-[30%] min-w-[82px]">
+                    {teamLogoUrl(teamIds[homeTeamId]) && (
+                      <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     )}
+                    <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
+                    <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(projection.vencedor.probabilidades[homeTeamId])}</p>
+                  </div>
+                  <div className="text-center w-[30%] min-w-[82px] border-x border-border/50">
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Empate</p>
+                    <p className="text-2xl font-bold font-mono text-muted-foreground">{projection.vencedor.probabilidades["Empate"]}%</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(projection.vencedor.probabilidades["Empate"])}</p>
+                  </div>
+                  <div className="text-center w-[30%] min-w-[82px]">
+                    {teamLogoUrl(teamIds[awayTeamId]) && (
+                      <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    )}
+                    <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
+                    <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(projection.vencedor.probabilidades[awayTeamId])}</p>
                   </div>
                 </div>
-              );
-            })()}
+              </div>
 
-            {/* MERCADOS */}
-            <h3 className="text-lg font-heading font-bold mt-8 mb-4 border-b border-border/50 pb-2">MERCADOS</h3>
+              {/* Ambas Marcam (à direita de Resultados) */}
+              {projection.ambas_marcam && (
+                <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                    Ambas Marcam
+                    <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." href="/como-funciona#mercado-btts" />
+                  </h4>
+                  <div className="flex-1 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:gap-x-8 text-center">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
+                      <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
+                      <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dupla Chance (abaixo de Resultados) */}
+              {projection.mercados_derivados && <DuplaChanceCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />}
+              {/* Empate Anula (abaixo de Ambas Marcam) */}
+              {projection.mercados_derivados && <EmpateAnulaCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />}
+              {/* Placar Exato (abaixo de Dupla Chance) */}
+              {projection.placar_exato && <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} />}
+              {/* Handicaps unificado (à direita de Placar Exato) */}
+              {projection.mercados_derivados && <HandicapsCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />}
+            </div>
+
+            {/* MERCADOS SECUNDÁRIOS */}
+            <SectionDivider>MERCADOS SECUNDÁRIOS</SectionDivider>
 
             <div className="space-y-8">
               {/* Gols (mandante/total/visitante, com seletor de tempo) */}
@@ -587,6 +570,14 @@ export default function Previsoes() {
                     <MarketCard title="Gols" subtitle="Totais (Partida)" periods={goalPeriods(projection, 'total')} />
                     <MarketCard title="Gols" subtitle={`Visitante (${teamPt(awayTeamId)})`} periods={goalPeriods(projection, awayTeamId)} />
                   </div>
+                  {projection.mercados_derivados && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                      <ParImparCard d={projection.mercados_derivados} />
+                      <FaixaGolsCard d={projection.mercados_derivados} />
+                      <CleanSheetCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />
+                      <VitoriaSemSofrerCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -650,6 +641,21 @@ export default function Previsoes() {
                     <MarketCard title="Cartões" subtitle={`Mandante (${teamPt(homeTeamId)})`} periods={cardPeriods(projection, homeTeamId)} />
                     <MarketCard title="Cartões" subtitle="Totais (Partida)" periods={cardPeriods(projection, 'total')} />
                     <MarketCard title="Cartões" subtitle={`Visitante (${teamPt(awayTeamId)})`} periods={cardPeriods(projection, awayTeamId)} />
+                  </div>
+                </div>
+              )}
+
+              {/* Impedimentos (mercado novo, exibido cru) */}
+              {projection.impedimentos && projection.impedimentos.total && (
+                <div>
+                  <h4 className="text-sm font-bold uppercase text-foreground mb-3 flex items-center justify-center gap-1.5">
+                    Impedimentos
+                    <InfoTooltip text="Total de impedimentos assinalados na partida." />
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <MarketCard title="Impedimentos" subtitle={`Mandante (${teamPt(homeTeamId)})`} prediction={projection.impedimentos[homeTeamId]} />
+                    <MarketCard title="Impedimentos" subtitle="Totais (Partida)" prediction={projection.impedimentos.total} />
+                    <MarketCard title="Impedimentos" subtitle={`Visitante (${teamPt(awayTeamId)})`} prediction={projection.impedimentos[awayTeamId]} />
                   </div>
                 </div>
               )}

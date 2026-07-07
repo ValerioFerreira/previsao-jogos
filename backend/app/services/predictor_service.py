@@ -261,6 +261,7 @@ def _match_detail_impl(home: str, away: str, date: str) -> dict[str, Any]:
             "minute": t.get("elapsed"), "extra": t.get("extra"),
             "type": e.get("type"), "detail": e.get("detail"),
             "team": (e.get("team") or {}).get("name"),
+            "team_id": (e.get("team") or {}).get("id"),
             "player": (e.get("player") or {}).get("name"),
             "assist": (e.get("assist") or {}).get("name"),
         })

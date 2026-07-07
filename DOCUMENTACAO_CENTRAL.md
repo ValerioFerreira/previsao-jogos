@@ -35,8 +35,11 @@ Tudo é orquestrado por `backend/predictor.py::predict(home, away, neutral, tour
 | Grupo | Mercados | Origem |
 |---|---|---|
 | Resultado | Vencedor 1X2, Ambas Marcam (BTTS), Over/Under 2.5, Total de gols, Gols por equipe, **Placar exato** (top-3 + alerta de desvio) | **matriz conjunta do Dixon-Coles-NB** |
-| Contagem | Finalizações, Finalizações a gol, Escanteios, Cartões — **total, por equipe e por tempo (1º/2º)** | modelos **NB/GP em cascata** |
+| Contagem | Finalizações, Finalizações a gol, Escanteios, Cartões, **Impedimentos** — **total, por equipe e por tempo (1º/2º)** | modelos **NB/GP em cascata** |
+| Derivados | Dupla chance, Empate anula (DNB), Handicap (linhas .5), Clean sheet, Vitória sem sofrer, Gols par/ímpar, Faixas de gols | **cortes exatos da matriz DC / PMFs de gols** |
 | Apoio | Confiabilidade do jogo (cobertura de box-score), Confronto direto (H2H) | derivado |
+
+> **Impedimentos** (`offsides_nb.joblib`, NB, exposto **cru** — a calibração isotônica não passou o gate) e os **mercados derivados** (transformações exatas de distribuições já validadas, sem gate próprio) foram adicionados em 2026-07-06 na fase de expansão de mercados.
 
 Cada mercado de contagem expõe a **PMF completa** (distribuição de probabilidade de massa,
 "fonte de verdade") e, dela, as linhas Over/Under com **odd justa = 1/probabilidade** (sem
@@ -309,8 +312,13 @@ como árbitro empírico de valor.
 1. **Backtest financeiro (ROI/yield) + RPS** — a validação que mais falta. Hoje só temos log-loss/
    ECE/Brier; ROI exige acumular odds de **fechamento** × resultados (coletor de odds é recente,
    poucos snapshots). Deixar `CollectOdds` rodando e usar `value_backtest.py`. **Maior prioridade.**
-2. **Estender a calibração isotônica** já promovida: avaliar mandante/visitante e linhas de meio-tempo
-   sob o mesmo gate; só ativar onde passar (chutes continua fora).
+2. ~~**Estender a calibração isotônica**~~ — **FEITO 2026-07-06.** Avaliados mandante/visitante e
+   meio-tempo sob o mesmo gate walk-forward. **Promovidos (4/4 folds cada):** escanteios-mandante,
+   gols_1t-total, gols_2t-total, cartões_1t (total+mandante+visitante), cartões_2t (total+mandante+
+   visitante) — maior ganho em cartões de meio-tempo (ex.: cartões_1t-visitante ECE 6,8%→2,7%).
+   Reprovados (BLL piora/inconsistente): escanteios-visitante, a-gol e finalizações por lado, gols
+   de meio-tempo por lado. `ou_calibrators.joblib` agora tem 12 chaves `<mercado>_<home|away|total>`;
+   `predictor._half(prefix)` aplica por lado. Chutes segue fora.
 3. **xG denso / dados de tracking** (fora da API-Football) — única fonte plausível de sinal novo
    ortogonal ao Elo; o xG da API é esparso demais (~6%, só elite/2024).
 4. **Ratings dinâmicos** (Dixon-Coles dinâmico / filtro de Kalman de força ataque-defesa evoluindo no
