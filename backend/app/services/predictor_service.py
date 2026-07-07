@@ -428,6 +428,8 @@ def get_recent_matches(team_name: str) -> dict[str, Any]:
     
     matches = []
     for _, row in df_recent.iterrows():
+        def _f(col):
+            return float(row[col]) if col in row and pd.notna(row[col]) else 0.0
         matches.append({
             "date": str(row["date"]),
             "opponent": str(row["opponent"]),
@@ -435,10 +437,14 @@ def get_recent_matches(team_name: str) -> dict[str, Any]:
             "is_home": bool(row["is_home"] == 1),
             "goals_scored": int(row["goals_scored"]),
             "goals_conceded": int(row["goals_conceded"]),
-            "sb_shots": float(row["sb_shots"]) if pd.notna(row["sb_shots"]) else 0.0,
-            "sb_shots_on_target": float(row["sb_shots_on_target"]) if pd.notna(row["sb_shots_on_target"]) else 0.0,
-            "sb_corners": float(row["sb_corners"]) if pd.notna(row["sb_corners"]) else 0.0,
-            "sb_cards": float(row["sb_cards"]) if pd.notna(row["sb_cards"]) else 0.0
+            "sb_shots": _f("sb_shots"),
+            "sb_shots_on_target": _f("sb_shots_on_target"),
+            "sb_corners": _f("sb_corners"),
+            "sb_cards": _f("sb_cards"),
+            "sb_offsides": _f("sb_offsides"),
+            "sb_fouls": _f("sb_fouls"),
+            "sb_possession": _f("sb_possession"),
+            "sb_passes": _f("sb_passes"),
         })
         
     return {"matches": matches, "total_matches": total_matches}
@@ -776,6 +782,72 @@ def get_injuries(team_name: str) -> dict[str, Any]:
     for pl in players:
         pl.pop("_date", None)
     return {"team": team_name, "season": year, "players": players}
+
+
+_COMP_BENCH_MEMO: dict[str, dict] = {}
+# Buckets de torneio do front -> competições cruas na tabela `matches`.
+_COMP_BUCKETS: dict[str, list[str]] = {
+    "Copa do Mundo": ["World Cup"],  # tratado como exato (exclui Qualification)
+    "Amistoso": ["Friendlies"],
+    "Eliminatorias": ["Qualification"],
+    "Liga das Nacoes": ["Nations League"],
+    "Copa America / Euro / Copa Africana": ["Copa America", "Euro Championship",
+                                            "Africa Cup", "Asian Cup", "Gold Cup"],
+}
+
+
+def get_competition_benchmark(tournament: str) -> dict[str, Any]:
+    """Faixa típica de ataque/defesa (gols pró/contra por jogo) das seleções que disputam
+    a competição analisada — usada para desenhar o 'cardume' no gráfico de quadrantes."""
+    key = tournament or "_"
+    if key in _COMP_BENCH_MEMO:
+        return _COMP_BENCH_MEMO[key]
+
+    from app.db.connection import engine
+    empty = {"attack_mean": 0.0, "attack_std": 0.0, "defense_mean": 0.0,
+             "defense_std": 0.0, "n_teams": 0, "scope": "global"}
+    try:
+        df = pd.read_sql("SELECT team, competition, goals_scored, goals_conceded FROM matches", con=engine)
+    except Exception as e:
+        print(f"[ERRO DB] competition_benchmark: {e}")
+        return empty
+    if df.empty:
+        return empty
+
+    patterns = _COMP_BUCKETS.get(tournament)
+    scope = "global"
+    if patterns:
+        if tournament == "Copa do Mundo":
+            mask = df["competition"] == "World Cup"
+        elif tournament == "Eliminatorias":
+            mask = df["competition"].str.contains("Qualification", na=False)
+        else:
+            mask = df["competition"].apply(lambda c: any(p in str(c) for p in patterns))
+        teams_in = set(df.loc[mask, "team"].unique())
+        if len(teams_in) >= 4:
+            scope = "competition"
+        else:
+            teams_in = set(df["team"].unique())
+    else:
+        teams_in = set(df["team"].unique())
+
+    sub = df[df["team"].isin(teams_in)]
+    per = sub.groupby("team").agg(atk=("goals_scored", "mean"),
+                                  dff=("goals_conceded", "mean"),
+                                  n=("goals_scored", "size"))
+    per = per[per["n"] >= 5]
+    if per.empty:
+        return empty
+    out = {
+        "attack_mean": round(float(per["atk"].mean()), 3),
+        "attack_std": round(float(per["atk"].std(ddof=0)), 3),
+        "defense_mean": round(float(per["dff"].mean()), 3),
+        "defense_std": round(float(per["dff"].std(ddof=0)), 3),
+        "n_teams": int(len(per)),
+        "scope": scope,
+    }
+    _COMP_BENCH_MEMO[key] = out
+    return out
 
 
 def get_team_anomalies(team_name: str) -> list[dict[str, Any]]:

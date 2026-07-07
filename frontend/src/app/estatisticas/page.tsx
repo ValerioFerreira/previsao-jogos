@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Label } from '@/components/ui/label';
 import { BarChart3, TrendingUp, Target, Users } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 import { api, TeamHistoryResponse, H2HResponse, MatchDetail as MatchDetailT } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
@@ -15,13 +15,14 @@ import { MatchModePicker } from '@/components/platform/MatchModePicker';
 import { MatchHeader } from '@/components/platform/MatchHeader';
 import { ArrowLeft } from 'lucide-react';
 import StyleRadar from '@/components/platform/StyleRadar';
-import FormAndNarratives from '@/components/platform/FormAndNarratives';
+import DestaquesRecentes from '@/components/platform/DestaquesRecentes';
+import H2HCard from '@/components/platform/H2HCard';
 import GoalTiming from '@/components/platform/GoalTiming';
 import FatorArbitro from '@/components/platform/FatorArbitro';
 import BoletimDesfalques from '@/components/platform/BoletimDesfalques';
 import KeyPlayerMatchup from '@/components/platform/KeyPlayerMatchup';
 import PmfPreview from '@/components/platform/PmfPreview';
-import type { RecentMatch, GoalTimingResponse, InjuriesResponse, ScorersResponse, PmfPreviewResponse } from '@/lib/api';
+import type { RecentMatch, GoalTimingResponse, InjuriesResponse, ScorersResponse, PmfPreviewResponse, CompetitionBenchmarkResponse } from '@/lib/api';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -41,6 +42,7 @@ export default function Estatisticas() {
   const [awayInjuries, setAwayInjuries] = useState<InjuriesResponse | null>(null);
   const [scorers, setScorers] = useState<ScorersResponse | null>(null);
   const [pmf, setPmf] = useState<PmfPreviewResponse | null>(null);
+  const [benchmark, setBenchmark] = useState<CompetitionBenchmarkResponse | null>(null);
 
   // Detalhe de uma partida específica (via ?home=&away=&date= ou seletor de passadas).
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
@@ -93,7 +95,8 @@ export default function Estatisticas() {
         api.recentMatches(awayTeamId).catch(() => null),
         api.goalTiming(homeTeamId).catch(() => null),
         api.goalTiming(awayTeamId).catch(() => null),
-      ]).then(([hHist, aHist, h2hData, hRec, aRec, hTim, aTim]) => {
+        api.competitionBenchmark(competition || 'Copa do Mundo').catch(() => null),
+      ]).then(([hHist, aHist, h2hData, hRec, aRec, hTim, aTim, bench]) => {
         setHomeHistory(hHist);
         setAwayHistory(aHist);
         setH2h(h2hData);
@@ -101,13 +104,14 @@ export default function Estatisticas() {
         setAwayRecent(aRec?.matches || []);
         setHomeTiming(hTim);
         setAwayTiming(aTim);
+        setBenchmark(bench);
         setLoading(false);
       }).catch(err => {
         console.error(err);
         setLoading(false);
       });
     }
-  }, [homeTeamId, awayTeamId, bothSelected]);
+  }, [homeTeamId, awayTeamId, bothSelected, competition]);
 
   // Desfalques só no modo Partida Futura (consulta à API com cache diário — evita
   // gastar cota em análises independentes).
@@ -141,6 +145,24 @@ export default function Estatisticas() {
     }
     return rows;
   }, [homeHistory, awayHistory, homeTeamId, awayTeamId]);
+
+  // Quadrantes: domínios + zonas (melhor/pior) + cardume da competição, a partir do
+  // benchmark (média±desvio de ataque/defesa das seleções da competição analisada).
+  const quadrant = useMemo(() => {
+    const ha = homeHistory?.attack_avg || 0, hd = homeHistory?.defense_avg || 0;
+    const aa = awayHistory?.attack_avg || 0, ad = awayHistory?.defense_avg || 0;
+    const am = benchmark?.attack_mean ?? 1.3, dm = benchmark?.defense_mean ?? 1.3;
+    const asd = benchmark?.attack_std ?? 0.4, dsd = benchmark?.defense_std ?? 0.4;
+    const xMax = Math.max(ha, aa, am + asd, 2.5) * 1.1;
+    const yMax = Math.max(hd, ad, dm + dsd, 2.5) * 1.1;
+    return {
+      xMax: Math.ceil(xMax * 10) / 10, yMax: Math.ceil(yMax * 10) / 10,
+      am, dm,
+      // cardume (média ± 1 desvio), limitado ao domínio
+      cx1: Math.max(0, am - asd), cx2: am + asd,
+      cy1: Math.max(0, dm - dsd), cy2: dm + dsd,
+    };
+  }, [homeHistory, awayHistory, benchmark]);
 
   const eloHistoryData = useMemo(() => {
     if (!homeHistory?.elo_history || !awayHistory?.elo_history) return [];
@@ -200,26 +222,13 @@ export default function Estatisticas() {
       >
         <h2 className="text-lg font-heading font-bold mb-4 flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-cyan-500" />
-          Dashboard Analítico
+          Configuração do Confronto
         </h2>
         <MatchModePicker
-          showReferee={false}
           onModeChange={(m) => { setPickerMode(m); if (m !== 'futura') setMatchDate(undefined); }}
           onSelectFuture={(fx) => setMatchDate(fx.date)}
           onSelectPast={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))}
         />
-        {pickerMode === 'independente' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
-              <TeamSelect value={homeTeamId} onValueChange={setHomeTeamId} teams={teams.filter(t => t !== awayTeamId)} />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Time Visitante</Label>
-              <TeamSelect value={awayTeamId} onValueChange={setAwayTeamId} teams={teams.filter(t => t !== homeTeamId)} />
-            </div>
-          </div>
-        )}
       </motion.div>
 
       {!bothSelected && (
@@ -241,9 +250,19 @@ export default function Estatisticas() {
           transition={{ duration: 0.4 }}
           className="space-y-6"
         >
-          {/* Visão high-level: forma/narrativas + radar de estilo */}
-          <FormAndNarratives home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
-          <StyleRadar home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
+          {/* Confronto direto — primeiro card */}
+          <H2HCard h2hData={h2h?.metrics} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
+
+          {/* Destaques Recentes (2/3) + Radar de Estilo (1/3) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+            <div className="lg:col-span-2">
+              <DestaquesRecentes home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} teamIds={teamIds} />
+            </div>
+            <div className="lg:col-span-1">
+              <StyleRadar home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
+            </div>
+          </div>
+
           <GoalTiming home={homeTeamId} homeData={homeTiming} away={awayTeamId} awayData={awayTiming} />
 
           {/* Central Pré-Jogo (só Partida Futura) */}
@@ -278,7 +297,7 @@ export default function Estatisticas() {
                   />
                   <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />
                   <Line type="monotone" dataKey={homeTeamId} name={teamPt(homeTeamId)} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-                  <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -289,22 +308,32 @@ export default function Estatisticas() {
             <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
               <Target className="w-4 h-4 text-amber-500" />
               Matriz Comparativa de Quadrantes
-              <InfoTooltip text="Gráfico de dispersão posicionando o ataque (gols/chutes feitos) e a defesa (gols/chutes sofridos) de cada seleção frente à média global. Quadrante superior-esquerdo = ataque forte e defesa sólida." />
+              <InfoTooltip text="Ataque (gols/jogo, eixo X) vs defesa (gols sofridos/jogo, eixo Y). A zona VERDE (direita-baixo) é a ideal: marca muito e sofre pouco; a VERMELHA (esquerda-cima) é a pior. A caixa tracejada é a faixa típica das seleções da competição (média ± 1 desvio). Ponto mais à direita e mais abaixo = melhor." />
             </h3>
-            <p className="text-xs text-muted-foreground mb-4">Ataque vs Defesa — Gols por partida nos últimos 20 jogos</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Ataque vs Defesa — média de gols nos últimos 20 jogos
+              {benchmark?.scope === 'competition' && <span> · faixa típica de {benchmark.n_teams} seleções da competição</span>}
+            </p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                  <XAxis type="number" dataKey="attack" name="Ataque" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Ataque (gols/jogo)', position: 'insideBottom', offset: -8, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
-                  <YAxis type="number" dataKey="defense" name="Defesa" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Defesa (gols sofridos/jogo)', angle: -90, position: 'insideLeft', offset: 6, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
+                  <XAxis type="number" dataKey="attack" name="Ataque" domain={[0, quadrant.xMax]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Ataque (gols/jogo) →', position: 'insideBottom', offset: -8, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
+                  <YAxis type="number" dataKey="defense" name="Defesa" domain={[0, quadrant.yMax]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: '← Defesa (gols sofridos/jogo)', angle: -90, position: 'insideLeft', offset: 6, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
+                  {/* Zona ideal (muito ataque, pouca defesa sofrida) e pior zona */}
+                  <ReferenceArea x1={quadrant.am} x2={quadrant.xMax} y1={0} y2={quadrant.dm} fill="#10b981" fillOpacity={0.10} ifOverflow="hidden" />
+                  <ReferenceArea x1={0} x2={quadrant.am} y1={quadrant.dm} y2={quadrant.yMax} fill="#ef4444" fillOpacity={0.10} ifOverflow="hidden" />
+                  {/* Cardume: faixa típica das seleções da competição */}
+                  <ReferenceArea x1={quadrant.cx1} x2={quadrant.cx2} y1={quadrant.cy1} y2={quadrant.cy2} fill="hsl(var(--muted-foreground))" fillOpacity={0.12} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.5} strokeDasharray="4 3" ifOverflow="hidden" />
+                  <ReferenceLine x={quadrant.am} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.4} strokeDasharray="2 4" />
+                  <ReferenceLine y={quadrant.dm} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.4} strokeDasharray="2 4" />
                   <RTooltip
                     contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
-                    formatter={(value: any, name: any) => [Number(value).toFixed(2), name]}
+                    formatter={(value: any, name: any) => [Number(value).toFixed(2), name === 'Ataque' ? 'Ataque (gols/jogo)' : 'Defesa (sofridos/jogo)']}
                   />
                   <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />
-                  <Scatter name={teamPt(homeTeamId)} data={[{ attack: homeHistory.attack_avg || 0, defense: homeHistory.defense_avg || 0 }]} fill="#10b981" opacity={0.7} />
-                  <Scatter name={teamPt(awayTeamId)} data={[{ attack: awayHistory.attack_avg || 0, defense: awayHistory.defense_avg || 0 }]} fill="#06b6d4" opacity={0.7} />
+                  <Scatter name={teamPt(homeTeamId)} data={[{ attack: homeHistory.attack_avg || 0, defense: homeHistory.defense_avg || 0 }]} fill="#10b981" />
+                  <Scatter name={teamPt(awayTeamId)} data={[{ attack: awayHistory.attack_avg || 0, defense: awayHistory.defense_avg || 0 }]} fill="#f97316" />
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
@@ -330,9 +359,9 @@ export default function Estatisticas() {
                     <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Escanteios na partida', position: 'insideBottom', offset: -10, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Nº de jogos', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                     <RTooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
-                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: '11px' }} />
                     <Bar dataKey={homeTeamId} name={teamPt(homeTeamId)} fill="#10b981" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#06b6d4" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#f97316" radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -356,7 +385,7 @@ export default function Estatisticas() {
                     <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Cartões na partida', position: 'insideBottom', offset: -10, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Nº de jogos', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                     <RTooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
-                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                    <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: '11px' }} />
                     <Bar dataKey={homeTeamId} name={teamPt(homeTeamId)} fill="#f59e0b" radius={[2, 2, 0, 0]} />
                     <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#ef4444" radius={[2, 2, 0, 0]} />
                   </BarChart>
@@ -365,29 +394,14 @@ export default function Estatisticas() {
             </div>
           </div>
 
-          {/* H2H */}
-          {h2h && (
+          {/* Resumo textual do confronto (complementa o card H2H no topo) */}
+          {h2h?.summary && (
             <div className="bg-card border border-border/50 rounded-xl p-5">
-              <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-purple-500" />
-                Confrontos Diretos (H2H)
-                <InfoTooltip text="Histórico de confrontos diretos entre as duas seleções." />
+                Leitura do Confronto
+                <InfoTooltip text="Resumo textual do histórico de confrontos diretos entre as duas seleções." />
               </h3>
-              <div className="flex flex-wrap items-center gap-4 mb-4">
-                <span className="text-xs text-muted-foreground">
-                  Jogos: <span className="text-foreground font-semibold">{h2h.metrics.total_matches || h2h.metrics.h2h_played || "N/A"}</span>
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Média de Gols: <span className="text-foreground font-semibold">
-                    {h2h.metrics.avg_total_goals ? Number(h2h.metrics.avg_total_goals).toFixed(2) : "N/A"}
-                  </span>
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Ambas Marcam (BTTS): <span className="text-foreground font-semibold">
-                    {h2h.metrics.btts_percentage ? `${Number(h2h.metrics.btts_percentage).toFixed(1)}%` : "N/A"}
-                  </span>
-                </span>
-              </div>
               <div className="text-sm text-muted-foreground italic p-4 bg-muted/30 rounded-lg">
                 {h2h.summary}
               </div>

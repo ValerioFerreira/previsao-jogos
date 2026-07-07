@@ -52,6 +52,10 @@ class RecentMatch(BaseModel):
     sb_shots_on_target: float
     sb_corners: float
     sb_cards: float
+    sb_offsides: float = 0.0
+    sb_fouls: float = 0.0
+    sb_possession: float = 0.0
+    sb_passes: float = 0.0
 
 
 class RecentMatchesResponse(BaseModel):
@@ -137,6 +141,15 @@ class InjuriesResponse(BaseModel):
     team: str
     season: int | None = None
     players: list[InjuryPlayer]
+
+
+class CompetitionBenchmarkResponse(BaseModel):
+    attack_mean: float
+    attack_std: float
+    defense_mean: float
+    defense_std: float
+    n_teams: int
+    scope: str
 
 
 class PmfPreviewResponse(BaseModel):

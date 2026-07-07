@@ -29,6 +29,28 @@ function profile(ms: RecentMatch[]) {
   };
 }
 
+// Explicação de cada vértice (balão no hover via <title> SVG nativo).
+const EXPLAIN: Record<string, string> = {
+  "Ataque": "Gols marcados por jogo (escala: 2,5 gols = 100).",
+  "Finalização": "Chutes a gol por jogo (escala: 6 = 100).",
+  "Volume ofensivo": "Finalizações totais por jogo (escala: 16 = 100).",
+  "Pressão": "Escanteios por jogo (escala: 7 = 100).",
+  "Solidez defensiva": "Inverso dos gols sofridos por jogo (menos sofre, maior).",
+  "Disciplina": "Inverso dos cartões por jogo (menos cartões, maior).",
+};
+
+function AngleTick({ x, y, cx, cy, payload }: any) {
+  const label: string = payload?.value ?? "";
+  const anchor = x > cx + 6 ? "start" : x < cx - 6 ? "end" : "middle";
+  const dx = x > cx + 6 ? 4 : x < cx - 6 ? -4 : 0;
+  return (
+    <text x={x + dx} y={y} dy={4} textAnchor={anchor} fontSize={9.5} fill="hsl(var(--muted-foreground))" style={{ cursor: "help" }}>
+      <title>{EXPLAIN[label] || label}</title>
+      {label}
+    </text>
+  );
+}
+
 export default function StyleRadar({ home, away, homeMatches, awayMatches }: {
   home: string; away: string; homeMatches: RecentMatch[]; awayMatches: RecentMatch[];
 }) {
@@ -36,21 +58,21 @@ export default function StyleRadar({ home, away, homeMatches, awayMatches }: {
   const ph = profile(homeMatches || []); const pa = profile(awayMatches || []);
   const data = Object.keys(ph).map((k) => ({ metric: k, [home]: Math.round((ph as any)[k]), [away]: Math.round((pa as any)[k]) }));
   return (
-    <div className="bg-card border border-border/50 rounded-xl p-5">
+    <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex flex-col">
       <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
-        Radar de Estilo de Jogo
-        <InfoTooltip text="Perfil comparativo (0–100) das duas seleções nos jogos recentes: ataque (gols), finalização (chutes a gol), volume ofensivo (finalizações), pressão (escanteios), solidez defensiva (inverso de gols sofridos) e disciplina (inverso de cartões). Quanto mais para fora, mais forte naquele quesito." />
+        Radar de Estilo
+        <InfoTooltip text="Perfil comparativo (0–100) das duas seleções nos jogos recentes. Passe o mouse sobre cada vértice para ver o que o indicador mede. Quanto mais para fora, mais forte naquele quesito." />
       </h3>
-      <p className="text-xs text-muted-foreground mb-2">Perfil dos últimos jogos com estatística avançada</p>
-      <div className="h-72">
+      <p className="text-xs text-muted-foreground mb-1">Passe o mouse nos vértices para detalhes</p>
+      <div className="flex-1 min-h-[260px]">
         <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={data} outerRadius="72%">
+          <RadarChart data={data} outerRadius="68%">
             <PolarGrid stroke="hsl(var(--border))" opacity={0.5} />
-            <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-            <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} angle={90} />
+            <PolarAngleAxis dataKey="metric" tick={<AngleTick />} />
+            <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }} angle={90} />
             <Radar name={teamPt(home)} dataKey={home} stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
             <Radar name={teamPt(away)} dataKey={away} stroke="#f97316" fill="#f97316" fillOpacity={0.25} />
-            <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: "12px" }} />
+            <Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: "11px" }} />
             <RTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }} />
           </RadarChart>
         </ResponsiveContainer>

@@ -17,6 +17,7 @@ from app.schemas import (
     RefereeStatsResponse,
     InjuriesResponse,
     PmfPreviewResponse,
+    CompetitionBenchmarkResponse,
 )
 from app.services.predictor_service import (
     allowed_origins,
@@ -30,6 +31,7 @@ from app.services.predictor_service import (
     get_referee_stats,
     get_injuries,
     get_pmf_preview,
+    get_competition_benchmark,
     get_referees,
     get_team_ids,
     get_upcoming_fixtures,
@@ -177,6 +179,11 @@ def referee_stats(name: str) -> RefereeStatsResponse:
 @app.get("/api/team-ids")
 def team_ids() -> dict:
     return get_team_ids()
+
+
+@app.get("/api/competition-benchmark", response_model=CompetitionBenchmarkResponse)
+def competition_benchmark(tournament: str = Query("")) -> CompetitionBenchmarkResponse:
+    return CompetitionBenchmarkResponse(**get_competition_benchmark(tournament))
 
 
 @app.get("/api/fixtures/upcoming")

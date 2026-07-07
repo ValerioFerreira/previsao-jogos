@@ -205,6 +205,19 @@ export type RecentMatch = {
   sb_shots_on_target: number;
   sb_corners: number;
   sb_cards: number;
+  sb_offsides?: number;
+  sb_fouls?: number;
+  sb_possession?: number;
+  sb_passes?: number;
+};
+
+export type CompetitionBenchmarkResponse = {
+  attack_mean: number;
+  attack_std: number;
+  defense_mean: number;
+  defense_std: number;
+  n_teams: number;
+  scope: string;
 };
 
 export type RecentMatchesResponse = {
@@ -313,6 +326,8 @@ export const api = {
     request<PmfPreviewResponse>(`/api/pmf-preview?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&neutral=${neutral}&tournament=${encodeURIComponent(tournament)}`),
   referees: () => request<{ referees: string[] }>("/api/referees"),
   teamIds: () => request<Record<string, number>>("/api/team-ids"),
+  competitionBenchmark: (tournament: string) =>
+    request<CompetitionBenchmarkResponse>(`/api/competition-benchmark?tournament=${encodeURIComponent(tournament)}`),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),
   pastFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/past"),
   matchDetail: (home: string, away: string, date: string) =>
