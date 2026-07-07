@@ -5,6 +5,7 @@ import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import MatchPlayerStats from '@/components/platform/MatchPlayerStats';
+import MatchFlow from '@/components/platform/MatchFlow';
 
 function dBR(s?: string | null): string {
   const d = (s || '').slice(0, 10).split('-');
@@ -302,6 +303,9 @@ export function MatchDetail({ data, fallback }: { data: MD; fallback?: MinFallba
           </div>
         )}
       </div>
+
+      {/* Fluxo da partida (evolução do placar a partir dos gols) */}
+      <MatchFlow data={data} />
 
       {/* Destaques + tabela de estatísticas por jogador (ordenável, drill-down do hover) */}
       <MatchPlayerStats data={data} />
