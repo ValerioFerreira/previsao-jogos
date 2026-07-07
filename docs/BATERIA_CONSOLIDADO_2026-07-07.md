@@ -34,6 +34,9 @@ combinada quando as seleções forem de contagens correlacionadas. Não mexe nos
 Além do goleador já em produção, "Over/Under finalizações do jogador" e "finalização a gol"
 têm AUC 0.74–0.76, bem calibrados (ECE ~1%), com o cruzamento **forma × concessão do adversário**.
 **Ação:** modelo análogo ao `scorer_model` com linhas 0.5/1.5/2.5.
+> **Limite da oportunidade de props:** o momentum de jogador só rende em **ações próprias
+> repetíveis (gols, finalizações)**. Testados e reprovados: **assistência** (AUC 0.64→0.64, depende
+> do companheiro finalizar) e **cartão** (AUC 0.58, depende do árbitro). Não construir esses dois.
 
 > **Saturação do scorer:** EXP 9 (goleiro), 11 (cobrador) e 12 (ofensiva do time) mostram que
 > a `base_scored` (taxa histórica encolhida) já embute o contexto — features extras de time/
