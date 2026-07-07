@@ -16,6 +16,7 @@ vs produção, consistência em folds/segmentos. Cada experimento tem script iso
 | 9 | Goleiro adversário no scorer | 🟡 Negligível | +0.0003 AUC (redundante com opp_gc) |
 | 10 | Correlação 1º×2º tempo | 🟡 Negligível | corr +0.066; NLL −0.0016 (tempos ~independentes) |
 | 11 | Cobrador de pênalti no scorer | 🟡 Marginal | +0.0011 AUC (base já embute) |
+| 12 | Força ofensiva do próprio time no scorer | ❌ Reprovado | −0.0005 AUC (redundante com base_scored) |
 
 ## As DUAS oportunidades claras para produção
 
@@ -31,6 +32,11 @@ combinada quando as seleções forem de contagens correlacionadas. Não mexe nos
 Além do goleador já em produção, "Over/Under finalizações do jogador" e "finalização a gol"
 têm AUC 0.74–0.76, bem calibrados (ECE ~1%), com o cruzamento **forma × concessão do adversário**.
 **Ação:** modelo análogo ao `scorer_model` com linhas 0.5/1.5/2.5.
+
+> **Saturação do scorer:** EXP 9 (goleiro), 11 (cobrador) e 12 (ofensiva do time) mostram que
+> a `base_scored` (taxa histórica encolhida) já embute o contexto — features extras de time/
+> posição dão ganho negligível ou nulo. O scorer atual (base+forma+opp_gc+minutos+mando) está
+> bem especificado.
 
 ## Padrão geral / conclusão
 O núcleo de **resultado/gols agregados está saturado** (Elo domina; ratings dinâmicos, momentum
