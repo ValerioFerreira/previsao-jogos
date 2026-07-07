@@ -20,7 +20,8 @@ import GoalTiming from '@/components/platform/GoalTiming';
 import FatorArbitro from '@/components/platform/FatorArbitro';
 import BoletimDesfalques from '@/components/platform/BoletimDesfalques';
 import KeyPlayerMatchup from '@/components/platform/KeyPlayerMatchup';
-import type { RecentMatch, GoalTimingResponse, InjuriesResponse, ScorersResponse } from '@/lib/api';
+import PmfPreview from '@/components/platform/PmfPreview';
+import type { RecentMatch, GoalTimingResponse, InjuriesResponse, ScorersResponse, PmfPreviewResponse } from '@/lib/api';
 
 export default function Estatisticas() {
   const [teams, setTeams] = React.useState<string[]>([]);
@@ -39,6 +40,7 @@ export default function Estatisticas() {
   const [homeInjuries, setHomeInjuries] = useState<InjuriesResponse | null>(null);
   const [awayInjuries, setAwayInjuries] = useState<InjuriesResponse | null>(null);
   const [scorers, setScorers] = useState<ScorersResponse | null>(null);
+  const [pmf, setPmf] = useState<PmfPreviewResponse | null>(null);
 
   // Detalhe de uma partida específica (via ?home=&away=&date= ou seletor de passadas).
   const [matchParams, setMatchParams] = useState<{ home: string; away: string; date: string } | null>(null);
@@ -111,13 +113,14 @@ export default function Estatisticas() {
   // gastar cota em análises independentes).
   React.useEffect(() => {
     if (!bothSelected || pickerMode !== 'futura') {
-      setHomeInjuries(null); setAwayInjuries(null); setScorers(null);
+      setHomeInjuries(null); setAwayInjuries(null); setScorers(null); setPmf(null);
       return;
     }
     api.injuries(homeTeamId).then(setHomeInjuries).catch(() => setHomeInjuries(null));
     api.injuries(awayTeamId).then(setAwayInjuries).catch(() => setAwayInjuries(null));
     api.scorers(homeTeamId, awayTeamId).then(setScorers).catch(() => setScorers(null));
-  }, [homeTeamId, awayTeamId, bothSelected, pickerMode]);
+    api.pmfPreview(homeTeamId, awayTeamId, !!neutralField, competition || 'Copa do Mundo').then(setPmf).catch(() => setPmf(null));
+  }, [homeTeamId, awayTeamId, bothSelected, pickerMode, neutralField, competition]);
 
   // Tendência de gols marcados nos últimos jogos, alinhada por "jogos atrás" (J-N),
   // já que cada seleção tem datas próprias. Compara ataque recente das duas.
@@ -246,6 +249,7 @@ export default function Estatisticas() {
           {/* Central Pré-Jogo (só Partida Futura) */}
           {pickerMode === 'futura' && (
             <>
+              <PmfPreview data={pmf} />
               <KeyPlayerMatchup data={scorers} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
               <BoletimDesfalques home={homeInjuries} away={awayInjuries} />
               <FatorArbitro />

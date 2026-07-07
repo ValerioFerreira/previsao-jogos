@@ -16,6 +16,7 @@ from app.schemas import (
     GoalTimingResponse,
     RefereeStatsResponse,
     InjuriesResponse,
+    PmfPreviewResponse,
 )
 from app.services.predictor_service import (
     allowed_origins,
@@ -28,6 +29,7 @@ from app.services.predictor_service import (
     get_goal_timing,
     get_referee_stats,
     get_injuries,
+    get_pmf_preview,
     get_referees,
     get_team_ids,
     get_upcoming_fixtures,
@@ -192,6 +194,13 @@ def past_fixtures(limit: int = Query(100000)) -> dict:
 @app.get("/api/match-detail")
 def match_detail(home: str = Query(...), away: str = Query(...), date: str = Query(...)) -> dict:
     return get_match_detail(home, away, date)
+
+
+@app.get("/api/pmf-preview", response_model=PmfPreviewResponse)
+def pmf_preview(home: str = Query(...), away: str = Query(...),
+                neutral: bool = Query(False), tournament: str = Query("Copa do Mundo")) -> PmfPreviewResponse:
+    """Prévia reduzida (grátis) da distribuição de gols + O/U 2.5 + 1X2."""
+    return PmfPreviewResponse(**get_pmf_preview(home, away, neutral=neutral, tournament=tournament))
 
 
 @app.get("/api/scorers")

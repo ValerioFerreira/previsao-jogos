@@ -261,6 +261,20 @@ export type GoalTimingResponse = {
   blocks: GoalTimingBlock[];
 };
 
+export type PmfPreviewResponse = {
+  home: string; away: string;
+  expected_goals: number | null;
+  interval: number[];
+  confidence: string | null;
+  distribution: number[];
+  prob_over_2_5: number | null;
+  odd_over_2_5: number | null;
+  odd_under_2_5: number | null;
+  prob_home: number | null;
+  prob_draw: number | null;
+  prob_away: number | null;
+};
+
 export type InjuryPlayer = { player_id: number | null; name: string | null; reason: string | null; type: string | null };
 export type InjuriesResponse = { team: string; season: number | null; players: InjuryPlayer[] };
 
@@ -295,6 +309,8 @@ export const api = {
   goalTiming: (name: string) => request<GoalTimingResponse>(`/api/teams/${encodeURIComponent(name)}/goal-timing`),
   refereeStats: (name: string) => request<RefereeStatsResponse>(`/api/referees/${encodeURIComponent(name)}/stats`),
   injuries: (name: string) => request<InjuriesResponse>(`/api/teams/${encodeURIComponent(name)}/injuries`),
+  pmfPreview: (home: string, away: string, neutral: boolean, tournament: string) =>
+    request<PmfPreviewResponse>(`/api/pmf-preview?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&neutral=${neutral}&tournament=${encodeURIComponent(tournament)}`),
   referees: () => request<{ referees: string[] }>("/api/referees"),
   teamIds: () => request<Record<string, number>>("/api/team-ids"),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),

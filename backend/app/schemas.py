@@ -137,3 +137,18 @@ class InjuriesResponse(BaseModel):
     team: str
     season: int | None = None
     players: list[InjuryPlayer]
+
+
+class PmfPreviewResponse(BaseModel):
+    home: str
+    away: str
+    expected_goals: float | None = None
+    interval: list[float] = []
+    confidence: str | None = None
+    distribution: list[float] = []
+    prob_over_2_5: float | None = None
+    odd_over_2_5: float | None = None
+    odd_under_2_5: float | None = None
+    prob_home: float | None = None
+    prob_draw: float | None = None
+    prob_away: float | None = None

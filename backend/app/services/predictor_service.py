@@ -706,6 +706,42 @@ def get_referee_stats(referee_name: str) -> dict[str, Any]:
     }
 
 
+_PMF_PREVIEW_MEMO: dict[str, dict] = {}
+
+
+def get_pmf_preview(home: str, away: str, neutral: bool = False,
+                    tournament: str = "Copa do Mundo") -> dict[str, Any]:
+    """Prévia REDUZIDA (grátis) da PMF: só a linha principal — distribuição de gols
+    totais + Over/Under 2.5 + 1X2. Versão completa (todos os mercados) fica na Análise
+    paga. Memoizado por confronto para não recomputar o modelo a cada visita."""
+    predictor = get_predictor()
+    h, a = predictor.norm_team(home), predictor.norm_team(away)
+    key = f"{h}|{a}|{int(bool(neutral))}|{tournament}"
+    if key in _PMF_PREVIEW_MEMO:
+        return _PMF_PREVIEW_MEMO[key]
+
+    raw = predictor.predict(h, a, neutral=neutral, tournament=tournament)
+    gols = raw.get("gols") or {}
+    over = raw.get("over_2_5") or {}
+    venc = (raw.get("vencedor") or {}).get("probabilidades") or {}
+    p_over = float(over.get("prob_sim", 0) or 0) / 100.0
+    out = {
+        "home": h, "away": a,
+        "expected_goals": gols.get("estimativa"),
+        "interval": gols.get("intervalo") or [],
+        "confidence": gols.get("confianca"),
+        "distribution": gols.get("distribuicao") or [],
+        "prob_over_2_5": round(100 * p_over, 1),
+        "odd_over_2_5": round(1 / p_over, 2) if p_over > 0 else None,
+        "odd_under_2_5": round(1 / (1 - p_over), 2) if p_over < 1 else None,
+        "prob_home": venc.get(h),
+        "prob_draw": venc.get("Empate"),
+        "prob_away": venc.get(a),
+    }
+    _PMF_PREVIEW_MEMO[key] = out
+    return out
+
+
 def get_injuries(team_name: str) -> dict[str, Any]:
     """Boletim de desfalques (lesões/suspensões) atual da seleção. Consulta a API
     com cache diário no Neon; deduplica por jogador (registro mais recente)."""
