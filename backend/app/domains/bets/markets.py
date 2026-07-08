@@ -10,6 +10,18 @@ from __future__ import annotations
 MAX_AUTO_LEGS = 4  # nº máximo de seleções numa aposta auto-selecionada
 
 
+def base_market(group: str) -> str:
+    """Mercado-base de um `group` (ex.: 'escanteios_total:8.5' -> 'escanteios',
+    'gols_ou2.5' -> 'gols'). Duas seleções do MESMO mercado-base são interdependentes
+    (correlacionadas/implicadas — ex.: Menos de 1,5 e Menos de 2,5 gols; Mais de 8,5 e
+    Mais de 9,5 escanteios) e NÃO podem entrar juntas numa aposta, como nas casas."""
+    g = group.split(":")[0]
+    for suf in ("_total", "_ou2.5"):
+        if g.endswith(suf):
+            g = g[: -len(suf)]
+    return g
+
+
 def _odd(prob_pct: float | None) -> float | None:
     if not prob_pct or prob_pct <= 0:
         return None
@@ -86,13 +98,14 @@ def auto_select(candidates: dict[str, dict], cap: float) -> list[dict]:
             return
         for j in range(start, len(items)):
             c = items[j]
-            if c["group"] in used:
+            b = base_market(c["group"])
+            if b in used:  # um por mercado-base (evita combinar linhas interdependentes)
                 continue
             np_ = prod * c["odd"]
             if np_ <= cap + 1e-9:
-                chosen.append(c); used.add(c["group"])
+                chosen.append(c); used.add(b)
                 dfs(j + 1, used, np_, chosen)
-                chosen.pop(); used.discard(c["group"])
+                chosen.pop(); used.discard(b)
 
     dfs(0, set(), 1.0, [])
     if not best["sel"]:
@@ -102,15 +115,20 @@ def auto_select(candidates: dict[str, dict], cap: float) -> list[dict]:
 
 
 def resolve_selections(candidates: dict[str, dict], market_keys: list[str]) -> list[dict]:
-    """Valida as market_keys escolhidas pelo usuário -> seleções; sem grupos repetidos."""
+    """Valida as market_keys escolhidas -> seleções; recusa seleções INTERDEPENDENTES
+    (duas do mesmo mercado-base), como fazem as casas de aposta."""
     from fastapi import HTTPException, status
-    chosen, groups = [], set()
+    chosen, bases = [], set()
     for mk in market_keys:
         c = candidates.get(mk)
         if c is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Mercado inválido: {mk}")
-        if c["group"] in groups:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                                detail="Não é possível combinar dois resultados do mesmo mercado.")
-        groups.add(c["group"]); chosen.append(c)
+        b = base_market(c["group"])
+        if b in bases:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Não é possível combinar seleções interdependentes do mesmo mercado "
+                       "(ex.: duas linhas de gols, escanteios ou cartões).",
+            )
+        bases.add(b); chosen.append(c)
     return chosen

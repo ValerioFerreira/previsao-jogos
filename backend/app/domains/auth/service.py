@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -15,13 +16,17 @@ from app.core import security
 from app.core.config import settings
 from app.core.email import EmailSendError, send_otp_email
 from app.domains.auth import schemas
-from app.domains.enums import AuthEventType, OtpPurpose, UserRole, UserStatus
+from app.domains.enums import AuthEventType, CreditTxType, OtpPurpose, UserRole, UserStatus
 from app.domains.users.models import AuthEvent, AuthSession, OtpCode, User
-from app.domains.wallet.service import get_or_create_wallet
+from app.domains.wallet.service import get_or_create_wallet, post_transaction
 
 logger = logging.getLogger("app.auth")
 
 _SETUP_SCOPE = "pw_setup"
+
+# Bônus de boas-vindas: toda conta nova nasce com créditos grátis. Idempotente pela
+# idempotency_key (welcome-bonus:<user_id>) — reativar/repetir não credita de novo.
+WELCOME_CREDITS = Decimal("8")
 
 
 def _utc(dt: datetime | None) -> datetime | None:
@@ -162,7 +167,14 @@ def set_password(db: Session, setup_token: str, password: str, ip: str | None) -
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="E-mail não verificado.")
     user.password_hash = security.hash_password(password)
     user.status = UserStatus.active
-    get_or_create_wallet(db, user.id)   # carteira criada na ativação
+    wallet = get_or_create_wallet(db, user.id)   # carteira criada na ativação
+    # Bônus de boas-vindas (8 créditos grátis) — idempotente por conta.
+    if WELCOME_CREDITS > 0:
+        post_transaction(
+            db, wallet=wallet, tx_type=CreditTxType.bonus, amount=WELCOME_CREDITS,
+            idempotency_key=f"welcome-bonus:{user.id}",
+            description="Bônus de boas-vindas (créditos grátis)",
+        )
     _log(db, AuthEventType.password_set, user.id, ip)
     tokens = _issue_tokens(db, user, ip, None)
     db.commit()
