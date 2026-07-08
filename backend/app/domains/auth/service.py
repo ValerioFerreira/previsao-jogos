@@ -3,6 +3,7 @@ Fluxo: cadastro -> OTP por e-mail -> verificação -> criação de senha -> ativ
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -12,11 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.config import settings
-from app.core.email import send_otp_email
+from app.core.email import EmailSendError, send_otp_email
 from app.domains.auth import schemas
 from app.domains.enums import AuthEventType, OtpPurpose, UserRole, UserStatus
 from app.domains.users.models import AuthEvent, AuthSession, OtpCode, User
 from app.domains.wallet.service import get_or_create_wallet
+
+logger = logging.getLogger("app.auth")
 
 _SETUP_SCOPE = "pw_setup"
 
@@ -60,7 +63,18 @@ def _create_and_send_otp(db: Session, user: User, purpose: OtpPurpose, ip: str |
         expires_at=security.otp_expiry(), max_attempts=settings.otp_max_attempts, created_ip=ip,
     ))
     _log(db, AuthEventType.otp_sent, user.id, ip, meta={"purpose": purpose.value})
-    send_otp_email(user.email, code, purpose.value)
+    try:
+        send_otp_email(user.email, code, purpose.value)
+    except EmailSendError as e:
+        # Levanta ANTES do db.commit() do chamador: a sessão fecha sem persistir o OtpCode,
+        # então o usuário não fica preso no cooldown de reenvio por um código que nunca chegou.
+        # HTTPException (e não exceção crua) porque um 500 não carrega header CORS e o browser
+        # mascara o erro real como falha de CORS.
+        logger.error("Falha ao enviar OTP (%s) para user=%s: %s", purpose.value, user.id, e)
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível enviar o e-mail de verificação. Tente novamente em instantes.",
+        ) from e
 
 
 def _consume_otp(db: Session, user: User, purpose: OtpPurpose, code: str, ip: str | None) -> None:

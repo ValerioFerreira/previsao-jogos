@@ -71,6 +71,13 @@ app.include_router(analysis_router)
 app.include_router(bets_router)
 app.include_router(admin_router)
 
+# Cadastro depende de e-mail entregável + JWT com segredo real. Em APP_ENV=production,
+# uma configuração que quebraria o cadastro derruba o boot aqui, em vez de virar um 502
+# (ou, pior, um 201 silencioso com o OTP no log) na primeira tentativa de um usuário real.
+from app.core.startup import validate_startup_config  # noqa: E402
+
+validate_startup_config()
+
 
 @app.get("/")
 def root() -> dict:
