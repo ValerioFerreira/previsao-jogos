@@ -68,26 +68,26 @@ export function MarketCard({ title, subtitle, prediction, periods, icon }: Marke
 
   return (
     <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-border/30 flex justify-between items-start gap-2">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold flex items-center gap-1.5">
-            {icon}
-            {subtitle ?? title}
-            <InfoTooltip text="Quantidade prevista é o valor esperado. A linha em destaque é a mais próxima dela. A faixa de odd justa vai da odd com 7% de margem até a odd prevista (1/probabilidade)." />
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
+      <div className="p-4 border-b border-border/30">
+        <h3 className="text-sm font-semibold flex items-center justify-center gap-1.5 text-center">
+          {icon}
+          {subtitle ?? title}
+          <InfoTooltip text="Quantidade prevista é o valor esperado. A linha em destaque é a mais próxima dela. A faixa de odd justa vai da odd com 7% de margem até a odd prevista (1/probabilidade)." />
+        </h3>
+        <div className="flex justify-between items-center gap-2 mt-1.5">
+          <p className="text-xs text-muted-foreground">
             Quantidade prevista: <span className="font-bold text-foreground">{mean.toFixed(1)}</span>
           </p>
-        </div>
-        <div className="bg-muted p-1 rounded-md flex text-[10px] font-medium shrink-0">
-          <button
-            onClick={() => setViewMode('prob')}
-            className={`px-3 py-1.5 sm:px-2 sm:py-1 rounded transition-colors text-xs sm:text-[10px] min-h-[28px] sm:min-h-0 ${viewMode === 'prob' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >Prob.</button>
-          <button
-            onClick={() => setViewMode('odd')}
-            className={`px-3 py-1.5 sm:px-2 sm:py-1 rounded transition-colors text-xs sm:text-[10px] min-h-[28px] sm:min-h-0 ${viewMode === 'odd' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >Odd</button>
+          <div className="bg-muted p-1 rounded-md flex text-[10px] font-medium shrink-0">
+            <button
+              onClick={() => setViewMode('prob')}
+              className={`px-3 py-1.5 sm:px-2 sm:py-1 rounded transition-colors text-xs sm:text-[10px] min-h-[28px] sm:min-h-0 ${viewMode === 'prob' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >Prob.</button>
+            <button
+              onClick={() => setViewMode('odd')}
+              className={`px-3 py-1.5 sm:px-2 sm:py-1 rounded transition-colors text-xs sm:text-[10px] min-h-[28px] sm:min-h-0 ${viewMode === 'odd' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >Odd</button>
+          </div>
         </div>
       </div>
 

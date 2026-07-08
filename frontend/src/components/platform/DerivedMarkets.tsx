@@ -84,7 +84,7 @@ export function HandicapsCard({ d, home, away, teamIds }: DProps & { teamIds: Re
     <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
       <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
         Handicaps
-        <InfoTooltip text="Vantagem/desvantagem de gols aplicada a cada equipe (linhas .5, sem empate). Odd justa = 1/probabilidade." />
+        <InfoTooltip text={'O Handicap de Gols é um mercado que adiciona uma vantagem ou desvantagem fictícia a uma equipe antes do início da partida. Após aplicar esse handicap ao placar final, é determinado se a aposta foi vencedora.\n\nExemplo: Brasil -1,5 x Argentina. Se você apostar no Brasil -1,5, ele precisa vencer por 2 ou mais gols de diferença (2x0, 3x1, 4x2...). Se vencer por apenas 1 gol, empatar ou perder, a aposta é perdida. Já quem aposta na Argentina +1,5 vence a aposta se a Argentina empatar, vencer ou perder por apenas 1 gol.'} />
       </h4>
       <div className="grid grid-cols-2 gap-4 flex-1">
         {[home, away].map((team) => (
@@ -94,6 +94,14 @@ export function HandicapsCard({ d, home, away, teamIds }: DProps & { teamIds: Re
               {teamLogoUrl(teamIds[team]) && (
                 <img src={teamLogoUrl(teamIds[team])!} alt="" className="w-6 h-6 object-contain mt-1" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
               )}
+            </div>
+            {/* Cabeçalho das colunas */}
+            <div className="flex items-center justify-between text-[9px] uppercase tracking-wide text-muted-foreground/80 pb-1 border-b border-border/40">
+              <span>Linha</span>
+              <span className="flex items-baseline gap-1.5 shrink-0">
+                <span>Probabilidade</span>
+                <span>Odd Justa</span>
+              </span>
             </div>
             {lines(team).map(({ key, label, o }) => (
               <div key={key} className="flex items-center justify-between text-xs py-1 border-t border-border/20">

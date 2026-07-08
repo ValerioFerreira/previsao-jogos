@@ -27,10 +27,11 @@ const Side = ({ name, id, role, align }: { name: string; id?: number; role: stri
 // Cabeçalho fixo (sticky) da partida selecionada — fica sempre visível no scroll, com
 // leve transparência e fade na borda inferior para não atrapalhar a leitura.
 export function MatchHeader({
-  home, away, teamIds, competition, date, venue, referee, neutral,
+  home, away, teamIds, competition, date, venue, referee, neutral, onEditTeams,
 }: {
   home: string; away: string; teamIds: Record<string, number>;
   competition?: string; date?: string; venue?: string | null; referee?: string | null; neutral?: boolean;
+  onEditTeams?: () => void;
 }) {
   if (!home || !away) return null;
   const meta = [
@@ -43,6 +44,16 @@ export function MatchHeader({
 
   return (
     <div className="sticky top-14 z-30">
+      {onEditTeams && (
+        <div className="flex justify-center mb-1">
+          <button
+            onClick={onEditTeams}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-card/80 backdrop-blur-md border border-border/50 rounded-full px-3 py-1 shadow-sm transition-colors"
+          >
+            ✎ Alterar Equipes
+          </button>
+        </div>
+      )}
       <div className="relative mx-auto w-full sm:max-w-md md:max-w-lg lg:max-w-xl bg-card/80 backdrop-blur-md border border-border/50 rounded-xl px-4 py-2.5 shadow-sm">
         <div className="flex items-center justify-center gap-4 sm:gap-8">
           <div className="flex-1 flex justify-end"><Side name={home} id={teamIds[home]} role="Mandante" align="right" /></div>

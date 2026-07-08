@@ -41,23 +41,28 @@ function Column({ team, players, teamIds }: { team: string; players: ScorerPlaye
   );
 }
 
-export default function ScorersCard({ data, home, away, teamIds }: {
-  data: ScorersResponse; home: string; away: string; teamIds: Record<string, number>;
+export default function ScorersCard({ data, home, away, teamIds, embedded = false }: {
+  data: ScorersResponse; home: string; away: string; teamIds: Record<string, number>; embedded?: boolean;
 }) {
   if (!data?.disponivel) return null;
   const hp = data[home] as ScorerPlayer[] | undefined;
   const ap = data[away] as ScorerPlayer[] | undefined;
   if ((!hp || hp.length === 0) && (!ap || ap.length === 0)) return null;
+  const grid = (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Column team={home} players={hp || []} teamIds={teamIds} />
+      <Column team={away} players={ap || []} teamIds={teamIds} />
+    </div>
+  );
+  // Embutido numa subseção colapsável (que já mostra o título) — sem cabeçalho próprio.
+  if (embedded) return grid;
   return (
     <div className="mt-8">
       <h4 className="text-sm font-bold uppercase text-foreground mb-4 flex items-center justify-center gap-1.5">
         Jogador a Marcar
         <InfoTooltip text="Probabilidade de cada jogador marcar a qualquer momento, se jogar (modelo de goleador: forma recente + defesa do adversário + mando). Candidatos = elenco recente da seleção; refina com a escalação confirmada. Odd justa = 1/probabilidade, sem margem de casa." />
       </h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Column team={home} players={hp || []} teamIds={teamIds} />
-        <Column team={away} players={ap || []} teamIds={teamIds} />
-      </div>
+      {grid}
     </div>
   );
 }

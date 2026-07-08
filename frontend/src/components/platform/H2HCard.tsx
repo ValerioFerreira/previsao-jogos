@@ -27,7 +27,7 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
   const AVG_ROWS: [string, string][] = [["Gols", "goals"], ["Chutes", "shots"], ["Chutes a gol", "shots_on_target"], ["Escanteios", "corners"], ["Cartões", "cards"]];
 
   return (
-    <div className="bg-card border border-border/50 rounded-xl p-5 shadow-sm max-w-3xl mx-auto w-full">
+    <div className="bg-card border border-border/50 rounded-xl p-5 shadow-sm max-w-3xl mx-auto w-full h-full">
       <div className="text-center mb-4">
         <h3 className="text-sm font-bold uppercase mb-1 flex items-center justify-center gap-1.5">
           Resumo do Confronto Direto
