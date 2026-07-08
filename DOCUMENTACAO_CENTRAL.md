@@ -19,7 +19,7 @@ masculino adulto). Não prevê só "quem ganha": entrega a **distribuição de p
 cada mercado, para comparar com odds de casas de aposta e medir valor.
 
 **Monorepo:**
-- **`/frontend`** — Next.js (TypeScript), deploy na **Vercel** (`www.valerioferreira.com.br`).
+- **`/frontend`** — Next.js (TypeScript), deploy na **Vercel** (domínio de produção **`apostainfo.com.br`**).
 - **`/backend`** — FastAPI (Python), deploy no **Render** (`api-previsoes-jogos.onrender.com`),
   venv em `backend/.venv`, porta 8000.
 - **Banco** — **Neon** (PostgreSQL serverless). O disco do Render/Vercel é efêmero → todo o
@@ -328,7 +328,10 @@ como árbitro empírico de valor.
 **Já testado e fechado (não repetir):** GP vs NB de produção; forma de jogador no resultado;
 calibração post-hoc do resultado; posse/passes/faltas; árbitro; XGBoost/LightGBM no λ; cadeia de
 regressão; cópula bivariada; ataque×defesa força-pura; dispersão dinâmica de escanteios; time-decay
-fora de finalizações; remover martj42.
+fora de finalizações; remover martj42; **prop "jogador a levar cartão"** (2026-07-08,
+`scripts/test_player_cards.py`): bem calibrado (ECE 0,6%) e bate a taxa-base 4/4, mas **AUC 0,62**
+(base 0,59) — muito abaixo do padrão do goleador (~0,74). Cartão de jogador é idiossincrático
+(árbitro desconhecido pré-jogo + faltas aleatórias). **Não promovido** — não vale abrir o mercado.
 
 ---
 
@@ -433,3 +436,26 @@ Envio de OTP: implementado (commit `e517740`), verificado contra um ZeptoMail si
 **confirmado em produção em 2026-07-08** — cadastro real concluído no site com o código chegando
 por e-mail. Recebimento de e-mail: **não implementado**, decisão pendente (caixa no Zoho Mail é
 configuração; leitura programática exigiria IMAP ou Zoho Mail API com OAuth2).
+
+### 12.5 Sessão 2026-07-08 (parte 2) — UX da Análise + regras de crédito/aposta
+Produção agora em **`apostainfo.com.br`**; cadastro por e-mail (ZeptoMail) **funcional**.
+
+- **Bônus de boas-vindas:** toda conta nova nasce com **8 créditos grátis** — lançamento `bonus`
+  no ledger na ativação (`auth/service.py::set_password`), idempotente por conta
+  (`welcome-bonus:<user_id>`). Verificado no `verify_signup_flow`.
+- **Persistência da análise (bug corrigido):** o `PredictionContext` agora persiste em
+  `localStorage` (`apostai:prediction:v1`) — a análise sobrevive a **reload cheio**, não só à
+  navegação client-side. Antes um F5/remontagem zerava a análise e forçava gasto de outro crédito.
+- **Aposta — seleções interdependentes bloqueadas:** `bets/markets.py::base_market()` +
+  `resolve_selections`/`auto_select` recusam duas seleções do **mesmo mercado-base** (ex.: Menos
+  de 1,5 + Menos de 2,5 gols; duas linhas de escanteios/cartões), como as casas. Guarda no backend
+  (autoritativa) + no `BetBuilder` (um por mercado-base no toggle).
+- **"Jogador a levar cartão":** testado sob o gate (`scripts/test_player_cards.py`) e **reprovado**
+  (AUC 0,62; ver §9). Mercado não aberto.
+- **Redesign da página de Análise (frontend):** mercados secundários com **colapso individual**
+  (título sempre visível); **"Jogador a Marcar" movido para dentro dos secundários**; cards de
+  mercado com **só o nome da seleção, centralizado**; **Handicaps** com texto explicativo novo +
+  cabeçalhos de coluna; **"Configuração do Confronto" recolhe** ao escolher a partida, com
+  "Alterar Equipes" no cabeçalho flutuante; **FUNÇÕES AVANÇADAS acima do MONTE SUA APOSTA**;
+  **últimos 5 jogos em linhas** num bloco (Resumo do Confronto Direto à esquerda, equipes
+  empilhadas à direita, mesma largura/altura).

@@ -1,9 +1,31 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro.** Resume onde o projeto está e o que fazer a seguir, para retomar
-> exatamente de onde paramos. Última atualização: **2026-07-08**.
+> exatamente de onde paramos. Última atualização: **2026-07-08 (parte 2)**.
 > Docs de apoio: `DOCUMENTACAO_CENTRAL.md` (doc-mestre), `ARCHITECTURE.md` (infra — **§6 é o
 > e-mail transacional**), `docs/ARQUITETURA_MONETIZACAO.md` (desenho da monetização).
+
+---
+
+## 0. Última sessão (2026-07-08, parte 2) — UX da Análise + regras de crédito/aposta
+
+Produção agora em **`apostainfo.com.br`** (Vercel); cadastro por e-mail (ZeptoMail) funcional.
+Detalhes em `DOCUMENTACAO_CENTRAL.md` §12.5. Resumo do que entrou na `main`:
+
+- **8 créditos grátis** em toda conta nova (bônus idempotente na ativação).
+- **Análise persiste em reload** (localStorage no `PredictionContext`) — corrige o bug de a
+  análise sumir e forçar gasto de outro crédito.
+- **Apostas: seleções interdependentes bloqueadas** (um por mercado-base — ex.: não combina
+  Menos de 1,5 com Menos de 2,5 gols) no backend + BetBuilder.
+- **Redesign da página de Análise:** mercados secundários com colapso individual; "Jogador a
+  Marcar" dentro dos secundários; cards com só o nome da seleção centralizado; Handicaps com
+  texto+cabeçalhos; Configuração do Confronto recolhível com cabeçalho flutuante "Alterar
+  Equipes"; Funções Avançadas acima do Monte sua Aposta; últimos 5 jogos em linhas num bloco
+  com o Resumo do Confronto Direto.
+- **"Jogador a levar cartão": testado e REPROVADO** (AUC 0,62 vs goleador ~0,74; idiossincrático/
+  árbitro). `scripts/test_player_cards.py`. Mercado não aberto.
+- **Coleta contínua:** `PrefetchWorldCup` roda com `--all-nations` (preenche as ~185 seleções
+  sem detalhe completo usando a cota ociosa de ~75k/dia). Mantê-la ligada.
 
 ---
 
