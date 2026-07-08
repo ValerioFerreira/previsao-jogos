@@ -60,10 +60,15 @@ def validate_startup_config() -> None:
     problems = _problems()
 
     if not problems:
-        logger.info(
-            "Config OK — app_env=%s email_provider=%s remetente=%s",
-            settings.app_env, settings.email_provider, settings.email_from,
+        # print além do logger: sem handler configurado o root logger descarta INFO
+        # (lastResort só emite >= WARNING), e esta linha é justamente a confirmação
+        # que se procura no log do Render depois de um deploy.
+        linha = (
+            f"[config] OK — app_env={settings.app_env} "
+            f"email_provider={settings.email_provider} remetente={settings.email_from}"
         )
+        logger.info(linha)
+        print(linha, flush=True)
         return
 
     if settings.is_production:

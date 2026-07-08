@@ -6,8 +6,9 @@
 > histórico de desenvolvimento em ordem cronológica** com o resultado de cada tentativa e o
 > motivo de cada aprovação/reprovação. Atualize este arquivo a cada nova sessão.
 >
-> Última atualização: **2026-06-30**. Branch de trabalho: `claude-testing` · produção: `main`.
-> Companheiros mantidos: `README.md` (porta de entrada) e `ARCHITECTURE.md` (infra/banco).
+> Última atualização: **2026-07-08**. Branch de trabalho: `claude-testing` · produção: `main`.
+> Companheiros mantidos: `README.md` (porta de entrada), `ARCHITECTURE.md` (infra/banco/e-mail)
+> e `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` (handoff vivo — **leia primeiro ao retomar**).
 
 ---
 
@@ -384,8 +385,8 @@ cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome
    →  "Monte sua Aposta" (odd ≤2,00, auto ~2,00, imutável)  →  liquidação pós-jogo
       (vence: consome o crédito · perde/anula: estorna)  —  Painel Admin gerindo tudo
 ```
-- **Auth:** argon2, JWT de acesso + refresh rotativo, OTP por e-mail (mock), CPF (dígitos
-  verificadores) + telefone, rate limiting, lockout, auditoria.
+- **Auth:** argon2, JWT de acesso + refresh rotativo, **OTP por e-mail real (ZeptoMail/Zoho)**,
+  CPF (dígitos verificadores) + telefone, rate limiting, lockout, auditoria.
 - **Carteira:** ledger de créditos (saldo só via lançamento, idempotência), disponível/reservado.
 - **Pagamentos:** gateway abstrato (mock; Asaas/MercadoPago/Pagar.me/Stripe plugáveis), webhooks
   idempotentes. 1 crédito = R$1,00.
@@ -403,11 +404,32 @@ cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome
   Persistência da análise no `PredictionContext` (não some ao navegar). Auth no `AuthContext`.
 
 ### 12.2 Estado dos adapters (importante)
-- **E-mail OTP:** modo **mock** — o código aparece no **log do backend**, não vai por e-mail real.
+- **E-mail OTP:** adapter **real implementado** (2026-07-08, commit `e517740`) —
+  `EMAIL_PROVIDER` = `mock` | `zeptomail` | `smtp`. **ZeptoMail** (transacional da Zoho) é o
+  provedor de produção; SMTP do Zoho Mail é o fallback. Em dev o default segue `mock` (OTP no
+  console). Desenho completo em **`ARCHITECTURE.md` §6**.
+  - Provider desconhecido ou credencial ausente **levanta erro** em vez de cair em mock.
+  - Falha de envio → **HTTP 502 + rollback** (nenhum usuário órfão); ver §6.2 do `ARCHITECTURE.md`.
+  - `APP_ENV=production` faz o backend **recusar o boot** com config de e-mail/JWT inválida.
+  - Validar antes de expor a usuários: `cd backend && python -m scripts.send_test_email voce@dominio.com`.
 - **Gateway de pagamento:** modo **mock** — confirmação via `POST /payments/mock/confirm/{id}`.
-- Ambos têm interface pronta; plugar o provedor real é troca de adapter + credenciais.
+  Interface pronta; plugar o provedor real é troca de adapter + credenciais.
 
 ### 12.3 Onde está a documentação
 - Desenho/arquitetura da camada: **`docs/ARQUITETURA_MONETIZACAO.md`**.
 - Infra/deploy/env: **`ARCHITECTURE.md` §5**.
+- **E-mail transacional (Zoho/ZeptoMail):** **`ARCHITECTURE.md` §6** — adapters, o porquê do 502
+  com rollback, validação de boot, env vars e scripts de verificação.
 - Estado atual + próximos passos (handoff vivo): **`ESTADO_ATUAL_E_PROXIMOS_PASSOS.md`** (raiz).
+
+### 12.4 Integração com a Zoho (2026-07-08)
+Decidido: **Zoho entra como cliente de e-mail, não como repositório de dados.** O ledger de
+créditos (`app_credit_transactions`) depende de transação multi-registro e de `idempotency_key`
+com unicidade atômica — garantias que uma API REST de CRM/Creator não oferece; movê-lo para lá
+abriria caminho para gasto duplicado de crédito. O Postgres/Neon segue como system of record
+transacional.
+
+Envio de OTP: implementado (commit `e517740`), verificado contra um ZeptoMail simulado e
+**confirmado em produção em 2026-07-08** — cadastro real concluído no site com o código chegando
+por e-mail. Recebimento de e-mail: **não implementado**, decisão pendente (caixa no Zoho Mail é
+configuração; leitura programática exigiria IMAP ou Zoho Mail API com OAuth2).
