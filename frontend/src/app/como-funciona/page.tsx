@@ -1,6 +1,87 @@
 "use client";
 import React from "react";
-import { BookOpen, Layers, Cpu, Gauge, Wrench, PlayCircle } from "lucide-react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { BookOpen, Layers, Cpu, Gauge, Wrench, PlayCircle, Trophy, Sparkles, ArrowRight, RotateCcw, CheckCircle2 } from "lucide-react";
+
+// Card de destaque da oferta "ParcerIA" — no topo da página, com movimento e fonte diferenciada.
+function ParcerIAHighlight() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="relative overflow-hidden rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-6 sm:p-7 shadow-xl shadow-emerald-500/10"
+    >
+      {/* brilho animado de fundo */}
+      <motion.div
+        aria-hidden
+        animate={{ opacity: [0.25, 0.55, 0.25], scale: [1, 1.15, 1] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        className="pointer-events-none absolute -top-20 -right-16 w-56 h-56 rounded-full bg-emerald-500/25 blur-3xl"
+      />
+      <motion.div
+        aria-hidden
+        animate={{ opacity: [0.15, 0.4, 0.15] }}
+        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+        className="pointer-events-none absolute -bottom-24 -left-10 w-56 h-56 rounded-full bg-cyan-500/20 blur-3xl"
+      />
+
+      <div className="relative">
+        <motion.span
+          animate={{ scale: [1, 1.06, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-300"
+        >
+          <Sparkles className="w-3.5 h-3.5" /> Oferta em destaque
+        </motion.span>
+
+        <h2 className="mt-3 font-heading font-extrabold leading-tight flex items-center gap-2 text-3xl sm:text-4xl">
+          <Trophy className="w-8 h-8 text-amber-400 shrink-0" />
+          <span className="bg-gradient-to-r from-emerald-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">
+            ParcerIA
+          </span>
+        </h2>
+        <p className="mt-1 font-heading text-lg sm:text-xl font-bold text-foreground">Só paga se ganhar.</p>
+
+        <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+          Ao analisar uma <b className="text-foreground">partida oficial agendada</b>, você reserva <b className="text-foreground">1 crédito</b> e
+          monta uma aposta combinando os palpites da própria análise (odd de até <b className="text-foreground">2,00</b>).
+          O desfecho é simples e a seu favor:
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><CheckCircle2 className="w-4 h-4" /> Se acertar</p>
+            <p className="text-xs text-muted-foreground mt-1">O crédito reservado é usado normalmente — você pagou pela análise que acertou.</p>
+          </div>
+          <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-cyan-300"><RotateCcw className="w-4 h-4" /> Se errar</p>
+            <p className="text-xs text-muted-foreground mt-1">O crédito volta <b className="text-foreground">inteiro</b> para a sua carteira. Você não perde nada.</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl bg-background/40 border border-border/50 p-3">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Exemplos</p>
+          <ul className="space-y-1.5 text-sm">
+            <li className="flex items-start gap-2"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /><span><b className="text-foreground">Brasil não perde</b> + <b className="text-foreground">Mais de 2,5 gols</b> — se os dois se confirmarem, o crédito é consumido; senão, estornado.</span></li>
+            <li className="flex items-start gap-2"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /><span><b className="text-foreground">Ambas Marcam: Sim</b> + <b className="text-foreground">Mais de 8,5 escanteios</b> — combine mercados da análise; a odd combinada é calculada de forma justa (até 2,00).</span></li>
+          </ul>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <Link href="/" className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-shadow">
+            Selecionar Partida Agendada <ArrowRight className="w-4 h-4" />
+          </Link>
+          <a href="#promocao" className="text-sm font-medium text-primary hover:underline">Ver as regras completas ↓</a>
+        </div>
+        <p className="mt-3 text-[11px] text-muted-foreground italic">
+          Campanha comercial de estorno de créditos pelo uso da IA — não é aposta, não há pagamento em dinheiro e nenhuma previsão garante resultado.
+        </p>
+      </div>
+    </motion.div>
+  );
+}
 
 // Índice: grupos -> seções (id + título). Os mesmos ids são usados nos links "Saiba mais"
 // espalhados pelo site (InfoTooltip com href="/como-funciona#id").
@@ -94,6 +175,9 @@ export default function ComoFunciona() {
 
       {/* Conteúdo */}
       <div className="space-y-5 max-w-3xl">
+        {/* Destaque da oferta ParcerIA — topo da página */}
+        <ParcerIAHighlight />
+
         <p className="text-sm text-muted-foreground">
           A <b className="text-foreground">ApostaInfo</b> é uma plataforma de <b className="text-foreground">análise
           probabilística</b> de partidas de seleções. Ela não “dá palpites”: estima a <b className="text-foreground">distribuição
