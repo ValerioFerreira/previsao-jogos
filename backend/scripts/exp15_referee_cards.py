@@ -54,20 +54,15 @@ def ece_binary(y, p, nb=10):
 
 
 def fit_lambda(Xtr, ytr, Xte):
-    m = GradientBoostingRegressor(n_estimators=200, max_depth=3, learning_rate=0.05,
-                                  loss="poisson" if _supports_poisson() else "squared_error",
-                                  random_state=42)
+    m = HistGradientBoostingRegressor(loss="poisson", max_depth=3, learning_rate=0.05,
+                                      max_iter=300, random_state=42)
     m.fit(Xtr, ytr)
     lam = np.clip(m.predict(Xte), 0.05, 20)
     return lam
 
 
 def _supports_poisson():
-    try:
-        GradientBoostingRegressor(loss="poisson")
-        return True
-    except Exception:
-        return False
+    return True
 
 
 def metrics(lam, ytrue):

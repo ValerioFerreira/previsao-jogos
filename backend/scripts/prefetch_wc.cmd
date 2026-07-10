@@ -11,3 +11,7 @@ echo ----- rebuild scorer model %DATE% %TIME% ----- >> "data\state\prefetch_wc.l
 ".venv\Scripts\python.exe" "scripts\build_scorer_model.py" >> "data\state\prefetch_wc.log" 2>&1
 echo ----- rebuild shots-prop model %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\build_shots_prop_model.py" >> "data\state\prefetch_wc.log" 2>&1
+REM Cota OCIOSA -> comeca a baixar a Serie A (proxima adicao), em tabela separada.
+REM O prefetch de selecoes ja saturou; isto exaure a cota restante com proposito.
+echo ----- prefetch Serie A %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
+".venv\Scripts\python.exe" "scripts\prefetch_serie_a.py" --max 60000 --margin 150 --from 2026 --to 2015 >> "data\state\prefetch_wc.log" 2>&1
