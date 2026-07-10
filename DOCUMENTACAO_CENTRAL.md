@@ -333,6 +333,12 @@ fora de finalizações; remover martj42; **prop "jogador a levar cartão"** (202
 (base 0,59) — muito abaixo do padrão do goleador (~0,74). Cartão de jogador é idiossincrático
 (árbitro desconhecido pré-jogo + faltas aleatórias). **Não promovido** — não vale abrir o mercado.
 
+> **Padrão dos props de jogador (2026-07-09):** ações **OFENSIVAS** (gols, finalizações) são
+> **previsíveis** (AUC 0,74–0,77) porque refletem o papel no ataque, que é estável → **construídas
+> (goleador + finalizações)**. Ações **defensivas/disciplinares** (cartões AUC 0,62; **faltas AUC
+> 0,58** — `scripts/test_player_fouls.py`; assistência 0,64) são **aleatórias jogo-a-jogo → não
+> passam**. O espaço de props de jogador está **exaurido**: só valem os ofensivos, já em produção.
+
 ---
 
 ## 10. Como rodar / reproduzir
