@@ -74,7 +74,72 @@ def extract_candidates(snapshot: dict, home_team: str, away_team: str) -> dict[s
     return out
 
 
+# --- Cópula gaussiana para apostas COMBINADAS (EXP7/13/14, validado) ---------------
+# As contagens ofensivas partilham um fator latente ("intensidade territorial"): combos
+# de OVERs correlacionados são MAIS prováveis do que a independência assume, então a odd
+# combinada justa é MENOR. Σ = correlações residuais VALIDADAS, encolhidas (conservador).
+# Ordem: [gols, finalizacoes, a_gol, escanteios].
+_COPULA_VARS = {"gols": 0, "chutes": 1, "chutes_a_gol": 2, "escanteios": 3}
+_SIGMA = [
+    [1.00, 0.22, 0.22, 0.05],
+    [0.22, 1.00, 0.55, 0.30],
+    [0.22, 0.55, 1.00, 0.18],
+    [0.05, 0.30, 0.18, 1.00],
+]
+
+
+def _copula_joint_prob(items: list[tuple[int, float, str]]) -> float | None:
+    """P(∩ eventos) de seleções ofensivas via cópula gaussiana. `items` = lista de
+    (idx_var, prob, selection 'over'|'under'). Retorna None se não aplicável."""
+    if len(items) < 2:
+        return None
+    try:
+        import numpy as np
+        from scipy.stats import norm, multivariate_normal
+    except Exception:
+        return None
+    idx = [it[0] for it in items]
+    # sub-matriz Σ das variáveis envolvidas
+    S = np.array([[_SIGMA[i][j] for j in idx] for i in idx], dtype=float)
+    # transforma cada evento em W_i < c_i (flip = -1 p/ over: P(Z>a)=P(-Z<-a))
+    c, flip = [], []
+    for _, p, sel in items:
+        p = min(0.999, max(1e-4, float(p)))
+        if sel == "over":
+            c.append(-norm.ppf(1.0 - p)); flip.append(-1.0)
+        else:
+            c.append(norm.ppf(p)); flip.append(1.0)
+    f = np.array(flip)
+    Sp = S * np.outer(f, f)                      # correlação de W (sinais ajustados)
+    np.fill_diagonal(Sp, 1.0)
+    try:
+        jp = float(multivariate_normal(mean=np.zeros(len(idx)), cov=Sp, allow_singular=True).cdf(np.array(c)))
+    except Exception:
+        return None
+    if not (jp == jp) or jp <= 0:               # NaN/degenerado -> cai na independência
+        return None
+    return jp
+
+
 def combined_odd(selections: list[dict], cap_precision: int = 3) -> float:
+    """Odd combinada. Aplica a cópula gaussiana às seleções ofensivas correlacionadas
+    (gols/finalizações/a-gol/escanteios); os demais mercados multiplicam por independência.
+    Sem seleção ofensiva combinável, é o produto simples (retrocompatível)."""
+    off, other_prob = [], 1.0
+    for s in selections:
+        b = base_market(s["group"])
+        p = 1.0 / float(s["odd"]) if float(s["odd"]) > 0 else 1e-4
+        if b in _COPULA_VARS:
+            off.append((_COPULA_VARS[b], p, s.get("selection", "over")))
+        else:
+            other_prob *= p
+    if len(off) >= 2:
+        jp = _copula_joint_prob(off)
+        if jp is not None:
+            joint = jp * other_prob
+            if joint > 0:
+                return round(1.0 / joint, cap_precision)
+    # fallback: independência (produto das odds)
     prod = 1.0
     for s in selections:
         prod *= float(s["odd"])
