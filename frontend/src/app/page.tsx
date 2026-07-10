@@ -759,7 +759,7 @@ export default function Previsoes() {
 
               {/* Jogador — modelo de goleador (dentro dos secundários, colapso individual) */}
               {scorers?.disponivel && (
-                <CollapsibleMarket title="Jogador a Marcar" tip="Probabilidade de cada jogador marcar a qualquer momento, se jogar (modelo de goleador: forma recente + defesa do adversário + mando). Candidatos = elenco recente da seleção; refina com a escalação confirmada. Odd justa = 1/probabilidade, sem margem de casa.">
+                <CollapsibleMarket title="Jogador" tip="Por jogador do elenco recente, se jogar: probabilidade de marcar a qualquer momento e de dar ≥ 0,5/1,5/2,5 finalizações — modelos de goleador e de finalizações (forma + defesa do adversário + mando + minutos), calibrados. Odd justa = 1/probabilidade, sem margem de casa.">
                   <ScorersCard data={scorers} home={homeTeamId} away={awayTeamId} teamIds={teamIds} embedded />
                 </CollapsibleMarket>
               )}

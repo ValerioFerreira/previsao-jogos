@@ -337,9 +337,13 @@ export const api = {
 };
 
 // Prop "jogador a marcar": P(marca | joga) calibrada + odd justa.
-export type ScorerPlayer = { player_id: number | null; nome: string; pos: string | null; prob: number; odd_justa: number };
+export type PropLine = { prob: number; odd_justa: number };
+export type ScorerPlayer = {
+  player_id: number | null; nome: string; pos: string | null; prob: number; odd_justa: number;
+  finalizar?: Record<string, PropLine>;  // { "0.5": {...}, "1.5": {...}, "2.5": {...} }
+};
 export type ScorersResponse = {
-  disponivel: boolean; motivo?: string; info?: string;
+  disponivel: boolean; motivo?: string; info?: string; finalizar_disponivel?: boolean;
   [team: string]: boolean | string | ScorerPlayer[] | undefined;
 };
 

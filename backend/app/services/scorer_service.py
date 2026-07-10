@@ -46,6 +46,10 @@ def get_scorers(home: str, away: str, top: int = 12, min_recent_year: int = 2023
     model, iso, feats = art["model"], art["calibrator"], art["feats"]
     glob_gc = art["glob_gc"]
 
+    # Prop de finalizações do jogador (mesmo elenco), anexado a cada jogador.
+    from app.services import shots_prop_service
+    shots_ok = shots_prop_service.available()
+
     def side(team_id: int, opp_id: int, is_home: int):
         cand = ps[ps["team_id"] == team_id].copy()
         if cand.empty:
@@ -61,11 +65,21 @@ def get_scorers(home: str, away: str, top: int = 12, min_recent_year: int = 2023
         cal = np.clip(iso.predict(raw), 1e-4, 1 - 1e-4)
         cand["prob"] = cal
         cand = cand.sort_values("prob", ascending=False).head(top)
-        return [{"player_id": int(r.player_id) if r.player_id == r.player_id else None,
-                 "nome": r["name"], "pos": r.get("pos"),
-                 "prob": round(100 * float(r.prob), 1), "odd_justa": _fair_odd(float(r.prob))}
-                for _, r in cand.iterrows()]
+        shots_map = shots_prop_service.shots_probs_by_player(team_id, opp_id, is_home) if shots_ok else {}
+        rows = []
+        for _, r in cand.iterrows():
+            pid = int(r.player_id) if r.player_id == r.player_id else None
+            item = {"player_id": pid, "nome": r["name"], "pos": r.get("pos"),
+                    "prob": round(100 * float(r.prob), 1), "odd_justa": _fair_odd(float(r.prob))}
+            sp = shots_map.get(pid) if pid is not None else None
+            if sp:
+                item["finalizar"] = {line: {"prob": round(100 * p, 1), "odd_justa": _fair_odd(p)}
+                                     for line, p in sp.items()}
+            rows.append(item)
+        return rows
 
     return {"disponivel": True,
-            "info": "P(marca a qualquer momento | joga), calibrada. Candidatos = elenco recente da seleção.",
+            "info": "P(marca a qualquer momento | joga) e P(finalizações ≥ linha | joga), calibradas. "
+                    "Candidatos = elenco recente da seleção.",
+            "finalizar_disponivel": shots_ok,
             home: side(hid, aid, 1), away: side(aid, hid, 0)}

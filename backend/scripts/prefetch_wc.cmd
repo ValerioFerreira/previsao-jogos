@@ -6,6 +6,8 @@ cd /d "C:\Users\operadorsge\Desktop\Projetos\previsao-jogos\backend"
 set PYTHONIOENCODING=utf-8
 echo ===== %DATE% %TIME% ===== >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\prefetch_wc_data.py" --all-nations --max 40000 --margin 100 --floor 2010 >> "data\state\prefetch_wc.log" 2>&1
-REM Reconstroi o modelo de goleador com os dados recem-baixados (estado por jogador atualizado).
+REM Reconstroi os modelos de jogador (goleador + finalizacoes) com os dados recem-baixados.
 echo ----- rebuild scorer model %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\build_scorer_model.py" >> "data\state\prefetch_wc.log" 2>&1
+echo ----- rebuild shots-prop model %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
+".venv\Scripts\python.exe" "scripts\build_shots_prop_model.py" >> "data\state\prefetch_wc.log" 2>&1
