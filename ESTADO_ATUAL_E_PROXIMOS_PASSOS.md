@@ -17,9 +17,13 @@ Detalhes em `DOCUMENTACAO_CENTRAL.md` §12.6. Tudo na `main`.
   têm odd combinada mais justa/menor. `bets/markets.py::combined_odd`.
 - **Card H2H** enriquecido (barra de vitórias, chips, médias) e **equipes lado a lado** no bloco.
 - **Cartão de jogador / Fator Árbitro nos cartões: REPROVADOS** (idiossincráticos). Fechados.
-- **Coleta de seleções SATUROU** (~70k/75k ociosa/dia) → **começou a Série A** (tabela
-  `serie_a_detail_cache`, `scripts/prefetch_serie_a.py`, no cron). Meta: exaurir a cota/dia.
-- **Próxima grande frente: Série A** — modelar quando o cache encher (ver §5).
+- **Coleta de seleções SATUROU** (~70k/75k ociosa/dia; auditoria da API confirma que só resta
+  o re-teste de escalação, sem API nova; xG é muro de dados a 5,3%) → **começou a coleta de
+  CLUBES** em tabela separada `club_match_detail_cache` (`scripts/prefetch_clubs.py`, no cron),
+  prioridade **Brasil→Europa** (Série A/B, Copa do Brasil, depois Premier/La Liga/Serie A/
+  Bundesliga/Ligue 1). Meta: exaurir a cota/dia com propósito.
+- **Próxima grande frente: modelar os CLUBES** quando o cache encher (dataset/Elo por liga,
+  Dixon-Coles + contagens sob o gate §6; props ofensivos devem transferir). Ver §5.
 
 ---
 
