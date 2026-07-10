@@ -80,8 +80,11 @@ export default function BetBuilder({ analysisId, home, away, onConfirmed }: { an
     setErr(null);
     setSelected((prev) => {
       if (prev.includes(o.market_key)) return prev.filter((k) => k !== o.market_key);
-      const sameGroup = options.filter((x) => x.group === o.group).map((x) => x.market_key);
-      return [...prev.filter((k) => !sameGroup.includes(k)), o.market_key];
+      // Um por mercado-base: trocar remove qualquer seleção interdependente do mesmo
+      // mercado (ex.: duas linhas de escanteios/cartões, ou Menos 1,5 + Menos 2,5 gols).
+      const baseKey = marketOf(o.group).key;
+      const sameBase = options.filter((x) => marketOf(x.group).key === baseKey).map((x) => x.market_key);
+      return [...prev.filter((k) => !sameBase.includes(k)), o.market_key];
     });
   };
 
