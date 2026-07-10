@@ -74,12 +74,30 @@ Premier/La Liga/Serie A/Bundesliga/Ligue 1; `scripts/prefetch_clubs.py`, com `le
 **tabela separada** para não contaminar os modelos de seleção, que varrem apenas `match_detail_cache`.
 (A `serie_a_detail_cache` do primeiro dia foi superada por esta, mais geral.)
 
-**Consequência conhecida (em aberto):** os dados de jogo vivem hoje numa **máquina local**, e o
-cache apontado por `fixture_index` é efêmero em hosts serverless (no Render o disco some a cada
-redeploy, fazendo o sistema reconsumir cota da API-Football). Mover esse acervo para
-armazenamento durável na nuvem é um trabalho planejado, **ainda não iniciado** — e o destino
-natural é object storage, não uma tabela de banco. Antes de mover qualquer coisa "para economizar
-Neon", medir de verdade:
+### 3.1 Network Transfer do Neon — otimização (2026-07-10)
+Um pico de **5,58 GB de egress** (com storage de só ~55 MB) veio de **leituras repetidas de
+blobs**: o `match_detail_cache` (raw JSON, 44 MB) era escaneado **inteiro** pelo Fator Árbitro
+(a cada cold start do Render), por-time pela Minutagem, e **2×/dia** pelos rebuilds de modelo.
+Correções (commit da sessão 2026-07-10):
+- **Agregados precomputados** (`app/services/aggregates.py`, `scripts/precompute_aggregates.py`):
+  o job diário faz **1 passada** sobre o bruto e grava tabelas PEQUENAS no Neon —
+  `referee_stats_agg` (264 kB), `goal_timing_agg` (280 kB), `competition_bench_agg` (16 kB),
+  `agg_kv`. Os endpoints `get_referee_stats`/`get_goal_timing`/`get_competition_benchmark` leem
+  **1 linha** (bytes) em vez de escanear 44 MB. Fallback on-the-fly se ainda não precomputado.
+- **Espelho local do bruto** (`app/services/raw_cache.py`, SQLite em `backend/data/raw_cache.sqlite`):
+  os rebuilds de modelo e o precompute leem o bruto do **disco local** (máquina 24h) → **zero
+  egress do Neon** nos jobs. O prefetch grava no espelho junto do Neon.
+- **Column pruning + LIMIT + parametrização** em `anomaly_detector`, `get_team_history`,
+  `get_recent_matches` (também fecha SQLi por f-string).
+- **Frontend:** cache TTL (5 min) + dedup em `frontend/src/lib/api.ts`.
+
+Resultado estimado: **~5,58 GB/mês → < 0,5 GB/mês** (o transfer passa a escalar com ações
+transacionais pequenas, não com blobs). O runtime só lê o bruto do Neon em `/api/match-detail`
+(1 jogo por vez, sob demanda na Estatística → Partida Passada).
+
+**Ainda em aberto (opcional):** tirar o `match_detail_cache` do Neon de vez, deixando o bruto só
+no espelho local + servindo `/api/match-detail` via API interna/túnel — reduziria o storage/egress
+residual a ~zero. Antes de mover qualquer coisa "para economizar Neon", medir de verdade:
 ```sql
 SELECT relname AS tabela, pg_size_pretty(pg_total_relation_size(c.oid)) AS total
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace

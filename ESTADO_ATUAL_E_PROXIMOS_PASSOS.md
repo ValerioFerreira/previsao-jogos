@@ -22,6 +22,12 @@ Detalhes em `DOCUMENTACAO_CENTRAL.md` §12.6. Tudo na `main`.
   CLUBES** em tabela separada `club_match_detail_cache` (`scripts/prefetch_clubs.py`, no cron),
   prioridade **Brasil→Europa** (Série A/B, Copa do Brasil, depois Premier/La Liga/Serie A/
   Bundesliga/Ligue 1). Meta: exaurir a cota/dia com propósito.
+- **Otimização de Network Transfer do Neon (2026-07-10):** um pico de 5,58 GB de egress vinha de
+  escanear o `match_detail_cache` (44 MB) repetidamente. Corrigido: **agregados precomputados**
+  (referee/minutagem/quadrantes em tabelas pequenas), **espelho local do bruto** (SQLite; rebuilds
+  e precompute leem local, zero Neon), **column pruning + LIMIT** e **cache TTL no front**.
+  Estimativa: ~5,58 GB → < 0,5 GB/mês. Detalhes em `ARCHITECTURE.md` §3.1. **Rodar o
+  `precompute_aggregates.py` sempre após o rebuild** (já no cron `prefetch_wc.cmd`).
 - **Próxima grande frente: modelar os CLUBES** quando o cache encher (dataset/Elo por liga,
   Dixon-Coles + contagens sob o gate §6; props ofensivos devem transferir). Ver §5.
 
