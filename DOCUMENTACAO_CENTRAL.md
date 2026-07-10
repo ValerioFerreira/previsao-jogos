@@ -6,7 +6,7 @@
 > histórico de desenvolvimento em ordem cronológica** com o resultado de cada tentativa e o
 > motivo de cada aprovação/reprovação. Atualize este arquivo a cada nova sessão.
 >
-> Última atualização: **2026-07-08**. Branch de trabalho: `claude-testing` · produção: `main`.
+> Última atualização: **2026-07-09**. Branch de trabalho: `claude-testing` · produção: `main`.
 > Companheiros mantidos: `README.md` (porta de entrada), `ARCHITECTURE.md` (infra/banco/e-mail)
 > e `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` (handoff vivo — **leia primeiro ao retomar**).
 
@@ -459,3 +459,25 @@ Produção agora em **`apostainfo.com.br`**; cadastro por e-mail (ZeptoMail) **f
   "Alterar Equipes" no cabeçalho flutuante; **FUNÇÕES AVANÇADAS acima do MONTE SUA APOSTA**;
   **últimos 5 jogos em linhas** num bloco (Resumo do Confronto Direto à esquerda, equipes
   empilhadas à direita, mesma largura/altura).
+
+### 12.6 Sessão 2026-07-09 — props de finalizações, cópula, Série A
+Duas melhorias VALIDADAS foram promovidas, e a coleta de seleções saturou.
+
+- **Mercado "Jogador a finalizar" (PROMOVIDO):** modelo de finalizações do jogador
+  (`scripts/build_shots_prop_model.py` → `model_artifacts/shots_prop_model.joblib`): P(≥0,5/1,5/2,5
+  finalizações | joga), calibrado. Validação temporal (linha ≥2): **AUC 0,773 (base 0,758), ECE
+  1,06%, 4/4 folds** — no padrão do goleador. Serving em `app/services/shots_prop_service.py`;
+  `get_scorers` anexa `finalizar` a cada jogador. Frontend: card **"Jogador"** com colunas
+  **MARCAR | FINALIZAR (0,5/1,5/2,5)** separadas. Rebuild diário no `prefetch_wc.cmd`.
+- **Cópula gaussiana na odd combinada (PROMOVIDO — EXP7/13/14):** `bets/markets.py::combined_odd`
+  aplica a cópula às seleções ofensivas correlacionadas (gols/finalizações/a-gol/escanteios) —
+  overs correlacionados têm odd combinada MENOR (mais justa/conservadora); demais mercados por
+  independência. Σ = correlações residuais validadas, encolhidas. Ex.: over gols + over
+  finalizações 3,60→3,20; over fin + over a-gol 3,61→2,71.
+- **Fator Árbitro no modelo de cartões de EQUIPE (REPROVADO):** `scripts/exp15_referee_cards.py` —
+  `ref_strictness` como feature dá dNLL +0,007 (3/7 folds), inconsistente. Cartão idiossincrático.
+- **Coleta de seleções SATUROU:** o prefetch `--all-nations` parou por "tudo coberto" (todas as
+  ~230 seleções, histórico 2010+). Sobra ~70k/75k de cota ociosa/dia. Por isso, conforme o foco,
+  **começou a coleta do Campeonato Brasileiro Série A** (próxima adição) em tabela SEPARADA
+  `serie_a_detail_cache` (`scripts/prefetch_serie_a.py`, anexado ao cron), sem contaminar os
+  modelos de seleção.

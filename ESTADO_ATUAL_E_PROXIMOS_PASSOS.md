@@ -1,9 +1,25 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro.** Resume onde o projeto está e o que fazer a seguir, para retomar
-> exatamente de onde paramos. Última atualização: **2026-07-08 (parte 2)**.
+> exatamente de onde paramos. Última atualização: **2026-07-09**.
 > Docs de apoio: `DOCUMENTACAO_CENTRAL.md` (doc-mestre), `ARCHITECTURE.md` (infra — **§6 é o
 > e-mail transacional**), `docs/ARQUITETURA_MONETIZACAO.md` (desenho da monetização).
+
+---
+
+## −1. Última sessão (2026-07-09) — props de finalizações, cópula, Série A
+
+Detalhes em `DOCUMENTACAO_CENTRAL.md` §12.6. Tudo na `main`.
+
+- **Mercado "Jogador a finalizar" PROMOVIDO** (AUC 0,773, ECE 1,06%, 4/4): card **"Jogador"**
+  agora com **MARCAR | FINALIZAR (0,5/1,5/2,5)**. Modelo rebuildado no cron.
+- **Cópula gaussiana na odd combinada PROMOVIDA** (EXP7/13/14): combos ofensivos correlacionados
+  têm odd combinada mais justa/menor. `bets/markets.py::combined_odd`.
+- **Card H2H** enriquecido (barra de vitórias, chips, médias) e **equipes lado a lado** no bloco.
+- **Cartão de jogador / Fator Árbitro nos cartões: REPROVADOS** (idiossincráticos). Fechados.
+- **Coleta de seleções SATUROU** (~70k/75k ociosa/dia) → **começou a Série A** (tabela
+  `serie_a_detail_cache`, `scripts/prefetch_serie_a.py`, no cron). Meta: exaurir a cota/dia.
+- **Próxima grande frente: Série A** — modelar quando o cache encher (ver §5).
 
 ---
 

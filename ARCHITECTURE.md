@@ -66,7 +66,11 @@ O que de fato acontece:
 
 Tabelas de dados realmente escritas no Postgres: `matches`, `features_enriched` (a maior — vem de
 um CSV de ~17 MB), `apifootball_match_team_stats`, `fixture_index`, `odds_registry` (cresce a cada
-coleta de odds), `past_fixtures`, `referees`, `team_ids`.
+coleta de odds), `past_fixtures`, `referees`, `team_ids`, `match_detail_cache` (detalhe das
+seleções — alimenta as páginas Estatísticas e os modelos de jogador), `injuries_cache` (desfalques,
+TTL 12h) e **`serie_a_detail_cache`** (detalhe do Brasileirão Série A — coleta iniciada em
+2026-07-09 para a próxima adição ao sistema; **tabela separada** para não contaminar os modelos de
+seleção, que varrem apenas `match_detail_cache`).
 
 **Consequência conhecida (em aberto):** os dados de jogo vivem hoje numa **máquina local**, e o
 cache apontado por `fixture_index` é efêmero em hosts serverless (no Render o disco some a cada
