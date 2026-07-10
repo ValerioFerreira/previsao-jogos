@@ -232,7 +232,7 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onO
   label: string; loading: boolean; teamIds: Record<string, number>; onOpenMatch: (m: RecentMatch) => void;
 }) {
   return (
-    <div className="bg-card border border-border/50 rounded-xl p-4 flex-1 flex flex-col">
+    <div className="bg-card border border-border/50 rounded-xl p-4 h-full flex flex-col">
       <div className="flex items-center justify-center gap-2 mb-2">
         {teamLogoUrl(teamIds[teamId]) && (
           <img src={teamLogoUrl(teamIds[teamId])!} alt="" className="w-6 h-6 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
@@ -559,8 +559,8 @@ export default function Previsoes() {
                     </div>
                   )}
                 </div>
-                {/* DIREITA: equipes empilhadas (últimos 5 jogos em linhas) */}
-                <div className="flex flex-col gap-4">
+                {/* DIREITA: equipes lado a lado (últimos 5 jogos em linhas, cards mais estreitos) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
                   <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
                   <TeamRecentBlock teamId={awayTeamId} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} teamIds={teamIds} onOpenMatch={openMatch(awayTeamId)} />
                 </div>
