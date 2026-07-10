@@ -36,10 +36,14 @@ def detect_anomalies(team_name: str, target_competition: str = "World Cup") -> l
     até 3 anomalias estatisticamente significativas (|Z| > 1.96).
     """
     from app.db.connection import engine
+    from sqlalchemy import text
     try:
-        # 1. Carregar base da tabela matches filtrando pelo time para economizar RAM
-        query = f"SELECT * FROM matches WHERE team = '{team_name}' ORDER BY date DESC"
-        df_team = pd.read_sql(query, con=engine)
+        # 1. Só as 8 colunas usadas e os ~60 jogos mais recentes (a análise usa os últimos
+        #    ~20 de nível similar). Parametrizado (sem f-string) — reduz transfer e fecha SQLi.
+        query = text("SELECT date, competition, goals_scored, goals_conceded, sb_shots, "
+                     "sb_shots_on_target, sb_corners, sb_cards FROM matches "
+                     "WHERE team = :team ORDER BY date DESC LIMIT 60")
+        df_team = pd.read_sql(query, con=engine, params={"team": team_name})
     except Exception as e:
         print(f"[ERRO DB] {e}")
         return []

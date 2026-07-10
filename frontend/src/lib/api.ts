@@ -173,21 +173,53 @@ export type PredictPayload = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
+// Cache em memória (TTL) + deduplicação de chamadas em voo para GETs. Os dados de
+// leitura (histórico, h2h, minutagem, benchmark, goleador…) mudam no máximo 1×/dia, então
+// reservá-los por alguns minutos evita re-consultas ao banco a cada navegação e junta
+// chamadas simultâneas idênticas numa só — reduzindo transfer no Neon e no cliente.
+const CACHE_TTL = 5 * 60 * 1000;
+const _cache = new Map<string, { ts: number; data: unknown }>();
+const _inflight = new Map<string, Promise<unknown>>();
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.detail || `Erro ${response.status} ao falar com a API.`);
+// Invalida o cache (ex.: após uma ação que muda dados). Sem argumento, limpa tudo.
+export function clearApiCache(prefix?: string) {
+  if (!prefix) { _cache.clear(); return; }
+  for (const k of _cache.keys()) if (k.startsWith(prefix)) _cache.delete(k);
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || "GET").toUpperCase();
+  const cacheable = method === "GET";
+
+  if (cacheable) {
+    const hit = _cache.get(path);
+    if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.data as T;
+    const inflight = _inflight.get(path);
+    if (inflight) return inflight as Promise<T>;
   }
 
-  return response.json() as Promise<T>;
+  const doFetch = (async () => {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.detail || `Erro ${response.status} ao falar com a API.`);
+    }
+    return response.json();
+  })();
+
+  if (!cacheable) return doFetch as Promise<T>;
+
+  _inflight.set(path, doFetch);
+  try {
+    const data = await doFetch;
+    _cache.set(path, { ts: Date.now(), data });
+    return data as T;
+  } finally {
+    _inflight.delete(path);
+  }
 }
 
 export type SystemStatusResponse = {

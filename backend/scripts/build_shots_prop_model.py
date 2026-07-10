@@ -34,15 +34,11 @@ FEATS = ["base_shots", "form_shots_5", "form_shots_10", "form_rating_5",
 
 
 def load_from_cache():
-    from app.db.connection import engine
-    from sqlalchemy import text
-    with engine.connect() as c:
-        rows = c.execute(text("SELECT raw FROM match_detail_cache")).fetchall()
+    # Bruto do espelho LOCAL (SQLite) quando disponível — zero egress do Neon no rebuild.
+    from app.services import raw_cache
     pg, team_shots = [], []
-    for (raw,) in rows:
-        try:
-            d = json.loads(raw)
-        except Exception:
+    for d in raw_cache.iter_all_raw():
+        if not d:
             continue
         fx = d.get("fixture") or {}
         date = (fx.get("date") or "")[:10]

@@ -411,13 +411,16 @@ def get_system_status() -> dict[str, str]:
 def get_recent_matches(team_name: str) -> dict[str, Any]:
     """Consulta PostgreSQL e extrai as últimas 5 partidas reais da equipe."""
     from app.db.connection import engine
+    from sqlalchemy import text as _text
     try:
-        query = f"SELECT * FROM matches WHERE team = '{team_name}' ORDER BY date DESC LIMIT 5"
-        df_recent = pd.read_sql(query, con=engine)
-        
-        # Get total matches count efficiently
-        total_query = f"SELECT COUNT(*) as count FROM matches WHERE team = '{team_name}'"
-        total_df = pd.read_sql(total_query, con=engine)
+        # Só as colunas usadas + parametrizado (sem f-string).
+        query = _text("SELECT date, opponent, competition, is_home, goals_scored, goals_conceded, "
+                      "sb_shots, sb_shots_on_target, sb_corners, sb_cards, sb_offsides, sb_fouls, "
+                      "sb_possession, sb_passes FROM matches WHERE team = :team ORDER BY date DESC LIMIT 5")
+        df_recent = pd.read_sql(query, con=engine, params={"team": team_name})
+
+        total_df = pd.read_sql(_text("SELECT COUNT(*) as count FROM matches WHERE team = :team"),
+                               con=engine, params={"team": team_name})
         total_matches = int(total_df.iloc[0]["count"]) if not total_df.empty else 0
     except Exception as e:
         print(f"[ERRO DB] {e}")
@@ -453,10 +456,12 @@ def get_recent_matches(team_name: str) -> dict[str, Any]:
 def get_team_history(team_name: str) -> dict[str, Any]:
     """Extrai histórico do time para os gráficos da página de Estatísticas."""
     from app.db.connection import engine
+    from sqlalchemy import text as _text
     try:
-        # Pega as últimas 20 partidas para calcular tendências de ataque/defesa
-        query = f"SELECT * FROM matches WHERE team = '{team_name}' ORDER BY date ASC"
-        df_team = pd.read_sql(query, con=engine)
+        # Só as colunas usadas (tendências/atk-def/escanteios/cartões) + parametrizado.
+        query = _text("SELECT date, goals_scored, goals_conceded, sb_corners, sb_cards "
+                      "FROM matches WHERE team = :team ORDER BY date ASC")
+        df_team = pd.read_sql(query, con=engine, params={"team": team_name})
     except Exception as e:
         print(f"[ERRO DB] {e}")
         return {"team": team_name, "elo_history": [], "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
@@ -554,6 +559,12 @@ def get_goal_timing(team_name: str) -> dict[str, Any]:
         return empty
 
     from app.db.connection import engine
+    from app.services import aggregates
+    agg = aggregates.read_goal_timing(engine, team_id, team_name)
+    if agg is not None:  # tabela precomputada -> lê bytes, não escaneia o bruto
+        agg.pop("_hit", None)
+        return agg
+
     from sqlalchemy import text as _text
     try:
         # Casa a seleção como mandante (…|TIME|…) ou visitante (…|TIME) na chave do cache.
@@ -685,7 +696,15 @@ def _referee_table() -> dict[str, Any]:
 
 def get_referee_stats(referee_name: str) -> dict[str, Any]:
     """Tendência disciplinar de um árbitro (média de cartões/faltas por jogo) vs a média
-    geral. Agregado do histórico cacheado; zero chamada à API."""
+    geral. Lê a tabela PRECOMPUTADA `referee_stats_agg` (bytes); só cai na varredura do
+    bruto (44 MB) se a precompute ainda não tiver rodado."""
+    from app.db.connection import engine
+    from app.services import aggregates
+    agg = aggregates.read_referee_stats(engine, referee_name)
+    if agg is not None:
+        agg.pop("_hit", None)
+        return agg
+    # Fallback (tabela ainda não precomputada): varredura em processo, memoizada.
     tbl = _referee_table()
     bench = tbl["bench"]
     empty = {
@@ -804,6 +823,13 @@ def get_competition_benchmark(tournament: str) -> dict[str, Any]:
         return _COMP_BENCH_MEMO[key]
 
     from app.db.connection import engine
+    from app.services import aggregates
+    agg = aggregates.read_benchmark(engine, tournament)
+    if agg is not None:  # tabela precomputada -> lê bytes
+        agg.pop("_hit", None)
+        _COMP_BENCH_MEMO[key] = agg
+        return agg
+
     empty = {"attack_mean": 0.0, "attack_std": 0.0, "defense_mean": 0.0,
              "defense_std": 0.0, "n_teams": 0, "scope": "global"}
     try:

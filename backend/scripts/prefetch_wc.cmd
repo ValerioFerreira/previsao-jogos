@@ -11,6 +11,10 @@ echo ----- rebuild scorer model %DATE% %TIME% ----- >> "data\state\prefetch_wc.l
 ".venv\Scripts\python.exe" "scripts\build_scorer_model.py" >> "data\state\prefetch_wc.log" 2>&1
 echo ----- rebuild shots-prop model %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\build_shots_prop_model.py" >> "data\state\prefetch_wc.log" 2>&1
+REM Precompute dos agregados (arbitro/minutagem/quadrantes) -> tabelas pequenas no Neon.
+REM Le o bruto do espelho LOCAL; o site passa a ler bytes em vez de escanear ~44 MB.
+echo ----- precompute agregados %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
+".venv\Scripts\python.exe" "scripts\precompute_aggregates.py" >> "data\state\prefetch_wc.log" 2>&1
 REM Cota OCIOSA -> baixa os CLUBES (proxima adicao), em tabela separada, na ordem de
 REM prioridade Brasil->Europa. As selecoes ja saturaram; isto exaure a cota com proposito.
 echo ----- prefetch Clubes %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"

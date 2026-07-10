@@ -31,14 +31,12 @@ FEATS = ["base_scored", "form_scored_5", "form_scored_10", "form_rating_5", "for
 
 
 def load_from_cache():
-    from app.db.connection import engine
-    from sqlalchemy import text
-    with engine.connect() as c:
-        rows = c.execute(text("SELECT raw FROM match_detail_cache")).fetchall()
+    # Lê o bruto do espelho LOCAL (SQLite) quando disponível — zero egress do Neon nos
+    # rebuilds diários (que rodam na máquina local). Fallback para o Neon.
+    from app.services import raw_cache
     pg, matches = [], []
-    for (raw,) in rows:
-        try: d = json.loads(raw)
-        except Exception: continue
+    for d in raw_cache.iter_all_raw():
+        if not d: continue
         fx = d.get("fixture") or {}; date = (fx.get("date") or "")[:10]
         teams = d.get("teams") or {}; hid = (teams.get("home") or {}).get("id"); aid = (teams.get("away") or {}).get("id")
         goals = d.get("goals") or {}; hg, ag = goals.get("home"), goals.get("away")

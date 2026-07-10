@@ -74,7 +74,13 @@ def main():
             if rem is not None:
                 state["rem"] = rem
             if resp:
-                cache_put(key, fid, resp[0]); state["novos"] += 1
+                cache_put(key, fid, resp[0])           # Neon (on-demand match-detail)
+                try:
+                    from app.services import raw_cache
+                    raw_cache.local_put(key, fid, resp[0])   # espelho local (rebuild/precompute)
+                except Exception:
+                    pass
+                state["novos"] += 1
             else:
                 state["falhas"] += 1
         except Exception as e:
