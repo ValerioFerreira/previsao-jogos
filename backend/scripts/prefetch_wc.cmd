@@ -5,7 +5,8 @@ REM Agendado no Task Scheduler (\PrevisaoJogos\PrefetchWorldCup).
 cd /d "C:\Users\operadorsge\Desktop\Projetos\previsao-jogos\backend"
 set PYTHONIOENCODING=utf-8
 echo ===== %DATE% %TIME% ===== >> "data\state\prefetch_wc.log"
-".venv\Scripts\python.exe" "scripts\prefetch_wc_data.py" --all-nations --max 40000 --margin 100 --floor 2010 >> "data\state\prefetch_wc.log" 2>&1
+echo Coleta WC + Clubes com margem otimizada para usar 75k/dia >> "data\state\prefetch_wc.log"
+".venv\Scripts\python.exe" "scripts\prefetch_wc_data.py" --all-nations --max 70000 --margin 1000 --floor 2010 >> "data\state\prefetch_wc.log" 2>&1
 REM Reconstroi os modelos de jogador (goleador + finalizacoes) com os dados recem-baixados.
 echo ----- rebuild scorer model %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\build_scorer_model.py" >> "data\state\prefetch_wc.log" 2>&1
@@ -17,5 +18,6 @@ echo ----- precompute agregados %DATE% %TIME% ----- >> "data\state\prefetch_wc.l
 ".venv\Scripts\python.exe" "scripts\precompute_aggregates.py" >> "data\state\prefetch_wc.log" 2>&1
 REM Cota OCIOSA -> baixa os CLUBES (proxima adicao), em tabela separada, na ordem de
 REM prioridade Brasil->Europa. As selecoes ja saturaram; isto exaure a cota com proposito.
+REM OTIMIZADO: --max 65000 --margin 1000 para garantir uso de ~75k/dia completo
 echo ----- prefetch Clubes %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
-".venv\Scripts\python.exe" "scripts\prefetch_clubs.py" --max 60000 --margin 150 --from 2026 --to 2015 >> "data\state\prefetch_wc.log" 2>&1
+".venv\Scripts\python.exe" "scripts\prefetch_clubs.py" --max 65000 --margin 1000 --from 2026 --to 2015 >> "data\state\prefetch_wc.log" 2>&1

@@ -18,6 +18,7 @@ Agendável diariamente (Task Scheduler).
 """
 import argparse
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -33,6 +34,8 @@ def get(path, **params):
     """GET que devolve (response, remaining_int_or_None)."""
     r = httpx.get(BASE + path, headers={"x-apisports-key": _key()}, params=params, timeout=30)
     r.raise_for_status()
+    # Throttle: 450 req/min = 7.5 req/seg = 0.15s entre requests.
+    time.sleep(0.15)
     rem = r.headers.get("x-ratelimit-requests-remaining")
     try:
         rem = int(rem) if rem is not None else None

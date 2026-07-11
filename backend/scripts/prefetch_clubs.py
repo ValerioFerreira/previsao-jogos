@@ -17,11 +17,18 @@ Uso: python scripts/prefetch_clubs.py [--max 60000] [--margin 200] [--from 2026]
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import text
 from app.services.fixture_fetch import _get
+
+def _get_throttled(path, **params):
+    """_get() com throttle: 450 req/min = 0.15s entre requests."""
+    result = _get(path, **params)
+    time.sleep(0.15)
+    return result
 
 # (league_id, nome) na ordem de prioridade: Brasil -> Europa.
 LEAGUES = [
@@ -93,7 +100,7 @@ def main():
             if not budget_ok():
                 break
             try:
-                fxs, rem = _get("/fixtures", league=league_id, season=season)
+                fxs, rem = _get_throttled("/fixtures", league=league_id, season=season)
                 state["calls"] += 1
                 if rem is not None:
                     state["rem"] = int(rem)
@@ -109,7 +116,7 @@ def main():
                 if not fid:
                     continue
                 try:
-                    resp, rem = _get("/fixtures", id=fid)
+                    resp, rem = _get_throttled("/fixtures", id=fid)
                     state["calls"] += 1
                     if rem is not None:
                         state["rem"] = int(rem)
