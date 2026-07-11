@@ -1,13 +1,51 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
-> está e o que fazer a seguir. Última atualização: **2026-07-10**.
+> está e o que fazer a seguir. Última atualização: **2026-07-11**.
 > Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
-> não repetir**), `ARCHITECTURE.md` (infra — **§3.1 Neon, §6 e-mail**), `docs/ARQUITETURA_MONETIZACAO.md`.
+> não repetir**, **§12 = monetização**), `ARCHITECTURE.md` (infra — **§3.1 Neon, §5 monetização, §6
+> e-mail**), `docs/ARQUITETURA_MONETIZACAO.md`.
 
 ---
 
-## −1. Última sessão (2026-07-09) — props de finalizações, cópula, Série A
+## −1. Última sessão (2026-07-11) — Monetização completa (7 fases) + branch `monetization`
+
+Implementadas as 7 fases do plano de monetização de conversão, todas testadas ponta a ponta contra
+o Neon real (não é código não-testado). Branch **`monetization`** (a partir da `main`), commits
+`13a6954` (throttle de coleta, pendência da sessão anterior) e `aacc67f` (monetização). Detalhes
+completos em `DOCUMENTACAO_CENTRAL.md` §12.7.
+
+- **Gateway Mercado Pago real** (Checkout Pro) substitui o `MockGateway` — `PAYMENT_PROVIDER=
+  mercadopago` ativa; webhook valida assinatura HMAC (`x-signature`); `mockConfirm` só roda com
+  `PAYMENT_PROVIDER=mock`. **Ainda sem credenciais reais** — ver checklist no §2 abaixo.
+- **Cupons** tipados (percentual/fixo/créditos bônus), validados no checkout, resgatados só no
+  pagamento confirmado. **Carteira redesenhada**: banner promocional, pacotes com selos ("mais
+  vendido"/"melhor oferta"/"oferta limitada") e % de economia, campo de cupom, pacote recomendado
+  (heurística de consumo), recuperação de PIX pendente, "Minhas compras".
+- **Afiliados/influenciadores**: domínio novo (`app/domains/affiliates/`) com portal próprio
+  (`/afiliado`), atribuição por link (`?ref=código`, janela de dias configurável) **independente**
+  de cupom, comissão calculada no pagamento confirmado.
+- **Campanhas** (`app/domains/campaigns/`): entidade guarda-chuva (banner+pacotes+cupons+afiliados+
+  prioridade) + scaffold de A/B testing (`assign_variant()` determinístico por hash de usuário).
+- **Analytics** (`app/domains/analytics/`): eventos de funil (signup/checkout/compra/etc.) +
+  `GET /admin/analytics/dashboard` (faturamento, ticket médio, conversão, créditos vendidos/usados).
+- **Notificações** (`app/domains/notifications/`) e **suporte** (`app/domains/support/`): domínios
+  novos, mínimos — notificação `payment_approved` disparada automaticamente; tickets com CRUD admin.
+- **Nota fiscal:** hook `NoopInvoiceProvider` (`app/domains/payments/invoicing.py`) roda após todo
+  pagamento confirmado, pronto para trocar por emissor real (NFE.io/Focus NFe/Asaas).
+- **Painel admin** ganhou 6 abas novas: Dashboard, Cupons, Pacotes, Afiliados, Banners,
+  Configurações — além das 4 que já existiam.
+- 4 migrations Alembic novas aplicadas no Neon (13 tabelas `app_*` novas: cupons ganharam campos
+  tipados; pacotes ganharam selo/ordem; pedidos ganharam cupom/afiliação/nota fiscal; +
+  `app_events`, `app_affiliates`, `app_affiliate_attributions`, `app_affiliate_commissions`,
+  `app_campaigns` e associações, `app_experiments`, `app_experiment_variants`,
+  `app_notifications`, `app_support_tickets`).
+- **Efeito colateral corrigido:** `backend/app/services/fixture_fetch.py` tinha um `import time`
+  órfão de uma tentativa de throttle já revertida (sessão anterior) — removido.
+
+---
+
+## −2. Sessão anterior (2026-07-09) — props de finalizações, cópula, Série A
 
 Detalhes em `DOCUMENTACAO_CENTRAL.md` §12.6. Tudo na `main`.
 
@@ -138,12 +176,41 @@ ponta a ponta.
 ## 2. Estado atual (produção)
 - **Backend no ar:** `https://api-previsoes-jogos.onrender.com/health` → `200` (checado 2026-07-08).
 - **Motor de previsão:** inalterado (Dixon-Coles NB / NB cascata / GP) + calibração O/U promovida.
-- **Camada de monetização:** funcional ponta a ponta, validada ao vivo no Neon.
+- **Camada de monetização:** funcional ponta a ponta, validada ao vivo no Neon. **7 fases de
+  conversão implementadas na branch `monetization`** (§−1) — ainda **não mergeada na `main`** nem
+  em produção.
 - **Cadastro: FUNCIONANDO em produção.** Env vars configuradas no Render; um cadastro real no site
   foi concluído com o código OTP chegando por e-mail (confirmado pelo dono em 2026-07-08).
   Logo, `EMAIL_PROVIDER=zeptomail` está setado e o domínio está verificado na Zoho.
-- **Gateway de pagamento:** ainda em **mock** (`POST /payments/mock/confirm/{id}`).
+- **Gateway de pagamento:** adapter Mercado Pago **implementado** (`backend/app/domains/payments/
+  gateways/mercadopago.py`), mas continua rodando em **mock** em produção — faltam as credenciais
+  reais (`MP_ACCESS_TOKEN`/`MP_WEBHOOK_SECRET`) e o merge/deploy da branch `monetization`.
 - **Conta demo:** `demo.apostai@gmail.com` / `Demo1234` (admin, com créditos).
+
+## 2.1 O que falta para a monetização vender de verdade (checklist)
+
+Nada disto é código pendente — são decisões/credenciais que só o dono pode prover. A arquitetura
+já está pronta para receber cada item sem refatoração (troca de adapter/credencial/conteúdo):
+
+1. **Credenciais reais do Mercado Pago** — `MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY`,
+   `MP_WEBHOOK_SECRET` (sandbox primeiro, depois produção), e `PAYMENT_PROVIDER=mercadopago` no
+   Render. Configurar a *notification URL* do MP apontando para
+   `https://<backend>/payments/webhook/mercadopago`. Sem isso o gateway continua em mock.
+2. **Merge da branch `monetization` na `main`** (após revisão) + deploy no Render/Vercel.
+3. **Textos jurídicos revisados por advogado** — Termos de Uso, Privacidade/LGPD, Política de
+   Créditos, Regulamento de Promoção. Hoje são **templates** em `legal_documents`
+   (`app/domains/legal/service.py`), com a marca `(Template inicial — substituir...)`. Publicar via
+   `POST /admin/legal/publish` depois de prontos.
+4. **Emissor de nota fiscal** — decidir com o contador (NFE.io/Focus NFe/Asaas) e trocar
+   `NoopInvoiceProvider` por um adapter real em `app/domains/payments/invoicing.py` (mesmo padrão
+   do gateway de pagamento — troca de adapter, sem mexer no fluxo).
+5. **Regime tributário / CNPJ** — já existe CNPJ (confirmado com o dono), mas o enquadramento
+   fiscal para emissão de NF sobre venda de créditos ainda não foi decidido com o contador.
+6. **Popular dados reais no admin** — hoje os pacotes/cupons/banners/afiliados são os defaults de
+   dev (`_DEFAULT_PACKAGES` em `payments/service.py`). Revisar preços/selos antes de anunciar.
+7. **(Opcional, não bloqueia vendas)** Primeiro afiliado real cadastrado, primeira campanha
+   configurada, primeiro teste A/B ligado (`app_experiments`) — a infraestrutura está pronta, falta
+   só o conteúdo de negócio.
 
 ## 3. Pendência pequena, mas vale fechar
 **Confirmar se `APP_ENV=production` está setado no Render.** O cadastro funcionar prova que o
@@ -180,8 +247,9 @@ cd backend && python -m scripts.verify_signup_flow
 cd backend && python scripts/make_admin.py email@dominio.com
 cd backend && python scripts/settle_bets.py
 ```
-Mapa do código: `backend/app/domains/{users,legal,wallet,payments,analysis,bets,promotions,admin}`
-(`models/schemas/service/router` cada); `backend/app/core/{config,email,startup,security,rate_limit}.py`;
+Mapa do código: `backend/app/domains/{users,legal,wallet,payments,analysis,bets,promotions,admin,
+affiliates,campaigns,analytics,notifications,support}` (`models/schemas/service/router` cada);
+`backend/app/core/{config,email,startup,security,rate_limit}.py`;
 `frontend/src/app/*` (páginas) + `frontend/src/lib/*` (`authApi`, `monetizationApi`, `adminApi`,
 `AuthContext`, `PredictionContext`). O frontend já tem as 4 chamadas do cadastro em
 `lib/authApi.ts` e o `raw()` propaga `body.detail` — a mensagem do 502 chega na tela.
@@ -198,16 +266,18 @@ Mapa do código: `backend/app/domains/{users,legal,wallet,payments,analysis,bets
 3. **Corpo HTML nos e-mails** — hoje só `textbody`. O `Protocol EmailSender` teria de ganhar um
    parâmetro opcional; nenhum caller precisa mudar.
 
-### Para ir a produção de verdade (monetização)
-4. **Gateway de pagamento real:** escolher (Asaas/MercadoPago/Pagar.me/Stripe), implementar o
-   adapter em `app/domains/payments/gateways/` + webhook assinado, setar `PAYMENT_PROVIDER`.
+### Para ir a produção de verdade (monetização) — ver checklist completo em §2.1
+4. ~~Gateway de pagamento real~~ **implementado** (Mercado Pago, branch `monetization`) — falta só
+   credenciais reais + merge/deploy. Ver §2.1.1-2.
 5. **Agendar a liquidação:** cron chamando `scripts/settle_bets.py` ou
    `POST /api/cron/settle-bets?token=$CRON_TOKEN` (a cada ~30 min). Definir `CRON_TOKEN`.
 6. **Revisar textos legais** (Termos/Privacidade/LGPD/Créditos/Regulamento) — hoje são **templates**
    (`app/domains/legal/service.py`); publicar as versões reais via `POST /admin/legal/publish`.
+   Ver §2.1.3.
+7. **Nota fiscal + regime tributário** — ver §2.1.4-5.
 
 ### Dados de jogo na nuvem — planejado, NÃO iniciado
-7. Os dados de jogo vivem hoje numa **máquina local**. O dono quer movê-los para a nuvem, mas
+8. Os dados de jogo vivem hoje numa **máquina local**. O dono quer movê-los para a nuvem, mas
    **adiou explicitamente** esse trabalho. Antes de começar, ler `ARCHITECTURE.md` §3: a medição
    feita em 2026-07-08 mostra que `matches.parquet` tem **101 KB** e que o
    `historico_completo.json` de **205 MB nunca entrou no Neon** — o gargalo não é o que parece.
@@ -217,17 +287,20 @@ Mapa do código: `backend/app/domains/{users,legal,wallet,payments,analysis,bets
    depende de transação multi-registro + `idempotency_key UNIQUE` atômica.
 
 ### Refinos
-8. **Rate limit é em memória** (`app/core/rate_limit.py` já documenta). Com mais de um worker no
+9. **Rate limit é em memória** (`app/core/rate_limit.py` já documenta). Com mais de um worker no
    Render, o limite passa a ser por processo. Não bloqueia o lançamento — o lockout por conta é
    persistido no banco e segue íntegro. Trocar por Redis mantendo a interface `hit()`.
-9. **Testes automatizados** — `scripts/verify_signup_flow.py` é o primeiro do repo; não há runner
-   (pytest não está nas deps). Os demais checks desta jornada rodaram em scratchpad e se perderam.
-10. **Nomes de seleções restantes:** ~77 entidades sem `team_id` são não-FIFA/históricas
+10. **Testes automatizados** — `scripts/verify_signup_flow.py` é o primeiro do repo; não há runner
+    (pytest não está nas deps). Os demais checks desta jornada rodaram em scratchpad e se perderam.
+11. **Nomes de seleções restantes:** ~77 entidades sem `team_id` são não-FIFA/históricas
     (Abkhazia, Catalonia, Padania…), ausentes da API-Football — sem solução via API.
+12. **`promotions`/`campaigns` sem UI pública fora do admin/Carteira** — o portal do afiliado e a
+    Carteira já consomem os endpoints certos, mas ninguém ainda testou um fluxo real de campanha
+    com banner+cupom+afiliado juntos em produção.
 
 ### Analytics (motor de previsão) — janelas abertas (ver `DOCUMENTACAO_CENTRAL.md` §9)
-11. **Backtest financeiro (ROI/yield) + RPS** — a validação que mais falta (acumular odds de fechamento).
-12. **xG denso / tracking** — única fonte plausível de sinal novo ortogonal ao Elo.
+13. **Backtest financeiro (ROI/yield) + RPS** — a validação que mais falta (acumular odds de fechamento).
+14. **xG denso / tracking** — única fonte plausível de sinal novo ortogonal ao Elo.
 > Já fechado/não repetir: forma de jogador no resultado, GP vs NB, calibração do resultado,
 > posse/passes, XGBoost/LightGBM, cadeia de regressão, cópula, ataque×defesa, dispersão dinâmica.
 

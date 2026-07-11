@@ -388,7 +388,8 @@ descrita e a odd mínima 1.00 na exibição).
 
 ### 12.1 O que existe
 Backend **modular por domínio** (`backend/app/domains/*`), ORM 2.0 + **Alembic** (só tabelas
-`app_*`, isoladas do pipeline de dados), **23 tabelas** já criadas no Neon. Fluxo completo:
+`app_*`, isoladas do pipeline de dados), **36 tabelas** já criadas no Neon (23 originais + 13 da
+monetização de conversão, §12.7). Fluxo completo:
 ```
 cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome/reserva 1 crédito)
    →  "Monte sua Aposta" (odd ≤2,00, auto ~2,00, imutável)  →  liquidação pós-jogo
@@ -397,20 +398,26 @@ cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome
 - **Auth:** argon2, JWT de acesso + refresh rotativo, **OTP por e-mail real (ZeptoMail/Zoho)**,
   CPF (dígitos verificadores) + telefone, rate limiting, lockout, auditoria.
 - **Carteira:** ledger de créditos (saldo só via lançamento, idempotência), disponível/reservado.
-- **Pagamentos:** gateway abstrato (mock; Asaas/MercadoPago/Pagar.me/Stripe plugáveis), webhooks
-  idempotentes. 1 crédito = R$1,00.
+- **Pagamentos:** gateway abstrato — **Mercado Pago (Checkout Pro) implementado** (branch
+  `monetization`, §12.7), mock segue disponível para dev; webhooks idempotentes com verificação de
+  assinatura HMAC. 1 crédito = R$1,00. Cupons de desconto/bônus e comissão de afiliado aplicados no
+  checkout, independentes entre si.
 - **Análise:** grava **snapshot imutável** + versão do algoritmo/dados; independente consome 1
   crédito, partida futura reserva 1.
 - **Aposta ("Monte sua Aposta"):** combina mercados da análise (O/U em colunas Acima/Abaixo),
   odd combinada **≤ 2,00**, **auto-seleção ~2,00** se o usuário não escolher, imutável.
 - **Liquidação:** worker `scripts/settle_bets.py` / `POST /api/cron/settle-bets` — pós-jogo via
   API-Football, consome (venceu) ou estorna (perdeu/indeterminável) — promoção "Só Paga se Acertar".
-- **Admin (backend + UI):** usuários (bloquear, creditar), financeiro, promoções, documentos
-  legais versionados, settings/banners, **auditoria completa**.
+- **Admin (backend + UI):** usuários (bloquear, creditar), financeiro, promoções, **cupons,
+  pacotes, afiliados, banners, configurações, suporte** (§12.7), documentos legais versionados,
+  **auditoria completa**.
+- **Afiliados, campanhas, analytics, notificações, suporte** (§12.7): domínios novos da
+  monetização de conversão.
 - **Frontend:** página única **Análise** (`/`) com config → gerar (crédito) → previsão completa →
   **Construção da Aposta** (Monte sua Aposta + Explorador de Linha + Value Betting/De-Vig);
-  `/carteira`, `/perfil`, `/admin`, `/documentos/[type]`, **`/como-funciona`** (doc interativo).
-  Persistência da análise no `PredictionContext` (não some ao navegar). Auth no `AuthContext`.
+  `/carteira` (redesenhada, §12.7), `/perfil`, `/admin`, `/afiliado` (portal), `/documentos/[type]`,
+  **`/como-funciona`** (doc interativo). Persistência da análise no `PredictionContext` (não some
+  ao navegar). Auth no `AuthContext`.
 
 ### 12.2 Estado dos adapters (importante)
 - **E-mail OTP:** adapter **real implementado** (2026-07-08, commit `e517740`) —
@@ -421,8 +428,12 @@ cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome
   - Falha de envio → **HTTP 502 + rollback** (nenhum usuário órfão); ver §6.2 do `ARCHITECTURE.md`.
   - `APP_ENV=production` faz o backend **recusar o boot** com config de e-mail/JWT inválida.
   - Validar antes de expor a usuários: `cd backend && python -m scripts.send_test_email voce@dominio.com`.
-- **Gateway de pagamento:** modo **mock** — confirmação via `POST /payments/mock/confirm/{id}`.
-  Interface pronta; plugar o provedor real é troca de adapter + credenciais.
+- **Gateway de pagamento:** adapter **Mercado Pago implementado** (`payments/gateways/
+  mercadopago.py`, branch `monetization`) — falta só `MP_ACCESS_TOKEN`/`MP_WEBHOOK_SECRET` reais e
+  `PAYMENT_PROVIDER=mercadopago` para sair do mock. `POST /payments/mock/confirm/{id}` continua
+  disponível, mas só funciona quando `PAYMENT_PROVIDER=mock` (guarda de segurança). Ver §12.7.
+- **Nota fiscal:** adapter **noop** (`payments/invoicing.py`) — marca `invoice_status="pending"`
+  sem emitir nada; trocar por NFE.io/Focus NFe/Asaas quando decidido com o contador.
 
 ### 12.3 Onde está a documentação
 - Desenho/arquitetura da camada: **`docs/ARQUITETURA_MONETIZACAO.md`**.
@@ -487,3 +498,78 @@ Duas melhorias VALIDADAS foram promovidas, e a coleta de seleções saturou.
   **começou a coleta do Campeonato Brasileiro Série A** (próxima adição) em tabela SEPARADA
   `serie_a_detail_cache` (`scripts/prefetch_serie_a.py`, anexado ao cron), sem contaminar os
   modelos de seleção.
+
+### 12.7 Sessão 2026-07-11 — Monetização de conversão completa (7 fases), branch `monetization`
+
+Objetivo: transformar a plataforma numa venda de créditos pronta para produção, com foco em
+conversão (estilo e-commerce). Todas as 7 fases foram implementadas **reaproveitando** a
+arquitetura existente (wallet ledger, `payment_orders`, `AdminAuditLog`) e testadas ponta a ponta
+contra o Neon real — não é código não-verificado. Confirmado antes de implementar: o modelo é **só
+consumo** (créditos gastos em análises, sem saque de dinheiro), o que evita a barreira de outorga
+de apostas de quota fixa (Lei 14.790/2023) — a plataforma é ferramenta de análise paga por crédito,
+não uma casa de apostas licenciada.
+
+**Fase 1 — Gateway Mercado Pago real:** `payments/gateways/mercadopago.py` implementa o mesmo
+`Protocol` do `MockGateway` (Checkout Pro — redirect, evita escopo de PCI compliance). Webhook
+(`POST /payments/webhook/mercadopago`) valida assinatura HMAC (`x-signature`) contra
+`MP_WEBHOOK_SECRET`; sem ela, a notificação é rejeitada. `confirm_mock` (usado só em dev) já era
+gated por `payment_provider == "mock"` — nenhuma mudança necessária ali, mas o frontend foi
+corrigido para só chamá-lo em modo mock; com gateway real, redireciona para o `init_point` do
+Checkout Pro e faz polling do saldo ao voltar (`?status=success|pending|failure`).
+
+**Fase 2 — Cupons + Carteira redesenhada:** `Coupon` (`app_coupons`) ganhou campos tipados
+(`discount_type: percentage|fixed|bonus_credits`, `discount_value`, `bonus_credits`,
+`min_purchase_brl`, `package_id`, `valid_from/valid_to`). Novo `promotions/service.py`:
+`validate_coupon()` (preview, não incrementa uso) + `mark_redeemed()` (só quando o pagamento
+confirma). `PaymentOrder` ganhou `coupon_id`. Carteira (`/carteira`) reorganizada: banner
+promocional → pacotes com selos (`featured_badge`: mais_vendido/melhor_oferta/oferta_limitada) e
+% de economia → campo de cupom → resumo de saldo → histórico. `CreditPackage` ganhou
+`featured_badge`/`sort_order`.
+
+**Fase 3 — Analytics:** domínio novo `analytics/` — tabela `app_events` (signup, login,
+checkout_started, coupon_applied, credit_purchase, payment_failed, analysis_started/finished, etc.)
+instrumentada inline nos services existentes (`auth`, `payments`, `analysis`), sem reescrever esses
+fluxos. `GET /admin/analytics/dashboard` agrega faturamento hoje/mês/ano, ticket médio, receita por
+pacote, créditos vendidos/promocionais/usados, funil de conversão, usuários ativos/pagantes — via
+queries SQL diretas (padrão de `aggregates.py`), sem pipeline novo.
+
+**Fase 4 — Afiliados + Portal + Campanhas:** domínio novo `affiliates/` — `Affiliate` (código,
+comissão % ou fixa), `AffiliateAttribution` (clique/cadastro, janela de dias configurável via
+`app_platform_settings`, chave `affiliate_attribution_days`), `AffiliateCommission` (calculada só
+quando o pagamento confirma, hook em `_credit_if_paid`). **Cupom e afiliado são independentes**:
+`PaymentOrder.coupon_id` (benefício ao usuário) e `affiliate_attribution_id` (comissão ao
+influenciador) coexistem sem se afetar — um pedido pode ter os dois, um só, ou nenhum. Portal
+próprio em `/afiliado` (link exclusivo, cliques, cadastros, compradores, faturamento, comissão
+devida/paga). Domínio novo `campaigns/` — `Campaign` (banner+pacotes+cupons+afiliados+prioridade,
+entidade guarda-chuva para não espalhar configuração de promoção entre módulos) + scaffold de A/B
+testing (`Experiment`/`ExperimentVariant`, `assign_variant()` determinístico por hash de
+`user_id`+`experiment_key` — mesmo usuário sempre cai na mesma variante).
+
+**Fase 5 — Painel admin expandido:** `frontend/src/app/admin/page.tsx` ganhou 6 abas novas
+(Dashboard, Cupons, Pacotes, Afiliados, Banners, Configurações), além das 4 que já existiam
+(Usuários, Financeiro, Promoções, Auditoria). Endpoints admin novos delegam para os services dos
+domínios novos, sem duplicar regra de negócio (`app/domains/admin/service.py`).
+
+**Fase 6 — Histórico, PIX pendente, notificações, suporte:** `GET /wallet/transactions` ganhou
+filtros (`type`/`status`/`since`/`until`). `PaymentOrder.raw_payload` agora persiste o checkout
+(init_point/QR) na criação do pedido — antes só era gravado na confirmação, o que impedia
+recuperar um PIX pendente; `GET /payments/orders/pending` alimenta o banner "Continuar pagamento"
+na Carteira, `GET /payments/orders` alimenta "Minhas compras". Domínios novos `notifications/`
+(`app_notifications`, disparada automaticamente em `payment_approved`) e `support/`
+(`app_support_tickets`, `POST /support/tickets` + CRUD admin).
+
+**Fase 7 — Nota fiscal, recomendação, A/B, UX:** `payments/invoicing.py` — `NoopInvoiceProvider`
+roda após todo pagamento confirmado (best-effort, nunca bloqueia a liberação do crédito), marca
+`invoice_status="pending"`; trocar por adapter real (NFE.io/Focus NFe/Asaas) é troca de classe, sem
+mexer no fluxo de pagamento. `recommend_package()` em `payments/service.py` — heurística (não-ML):
+consumo médio dos últimos 90 dias → pacote mais próximo; sem histórico, sugere o de maior % de
+bônus. `GET /campaigns/experiments/{key}/variant` expõe `assign_variant()` para o frontend.
+
+**Migrations aplicadas no Neon** (nesta ordem): `7a1f3c9e2b40` (cupons/pacotes/pedidos),
+`9c2e5a7b1d33` (`app_events`), `3f7d9b2c4e11` (afiliados+campanhas, 9 tabelas),
+`5e8a1f4c7d22` (notificações+suporte). Total: **+13 tabelas `app_*`** (23→36).
+
+**O que falta para vender de verdade** — não é código, são decisões/credenciais do dono:
+credenciais reais do Mercado Pago, merge da branch `monetization` + deploy, revisão jurídica dos
+documentos legais (ainda são templates), decisão do emissor de nota fiscal com o contador. Detalhe
+completo em `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` §2.1.

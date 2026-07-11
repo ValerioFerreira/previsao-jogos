@@ -139,6 +139,16 @@ JWT_SECRET=dev-insecure-change-me
 EMAIL_PROVIDER=mock
 EMAIL_FROM=no-reply@seudominio.com
 ZEPTOMAIL_TOKEN=
+
+# Gateway de pagamento (§5) — PAYMENT_PROVIDER=mock (dev) | mercadopago (produção).
+# Sem MP_ACCESS_TOKEN/MP_WEBHOOK_SECRET reais, o backend continua em mock mesmo se
+# PAYMENT_PROVIDER=mercadopago (create_checkout falha com RuntimeError explícito).
+PAYMENT_PROVIDER=mock
+FRONTEND_BASE_URL=http://localhost:3000
+MP_ACCESS_TOKEN=
+MP_PUBLIC_KEY=
+MP_WEBHOOK_SECRET=
+MP_WEBHOOK_URL=
 ```
 > O `backend/.env` é lido diretamente pelo `app/core/config.py` (via `env_file`). Variáveis de
 > ambiente reais (Render) têm precedência sobre o arquivo. Ver §6.4.
@@ -154,32 +164,47 @@ pipeline de dados/previsão (que segue intacto).
   as tabelas de dados (`matches`, `fixture_index`, `odds_registry`…) não são tocadas.
   Aplicar/atualizar: `cd backend && .venv/Scripts/python -m alembic upgrade head`.
 - **Estrutura modular por domínio:** `backend/app/domains/{users,legal,wallet,payments,analysis,
-  bets,promotions,admin}` — cada um com `models.py`/`schemas.py`/`service.py`/`router.py`.
-  Config central em `backend/app/core/config.py` (pydantic-settings). Segurança em
-  `app/core/security.py` (argon2 + JWT + OTP), validação CPF/telefone em `app/core/validators.py`.
-- **23 tabelas `app_*`** no Neon (já criadas em produção): usuários/OTP/sessões/auditoria,
-  carteira + **ledger** de créditos (saldo só via lançamento, idempotência), pagamentos, análises
-  com snapshot imutável, apostas + liquidação, promoções e suporte ao admin.
+  bets,promotions,admin,affiliates,campaigns,analytics,notifications,support}` — cada um com
+  `models.py`/`schemas.py`/`service.py`/`router.py`. Os 5 últimos (afiliados, campanhas,
+  analytics, notificações, suporte) entraram em 2026-07-11 (monetização de conversão, branch
+  `monetization` — ver `DOCUMENTACAO_CENTRAL.md` §12.7). Config central em
+  `backend/app/core/config.py` (pydantic-settings). Segurança em `app/core/security.py`
+  (argon2 + JWT + OTP), validação CPF/telefone em `app/core/validators.py`.
+- **36 tabelas `app_*`** no Neon (já criadas em produção): usuários/OTP/sessões/auditoria,
+  carteira + **ledger** de créditos (saldo só via lançamento, idempotência), pagamentos (com
+  cupom/afiliação/nota fiscal por pedido), análises com snapshot imutável, apostas + liquidação,
+  promoções/cupons, afiliados/atribuição/comissão, campanhas/experimentos A-B, eventos de
+  analytics, notificações, tickets de suporte, e suporte ao admin.
 - **Adapters trocáveis:**
   - **E-mail (OTP):** `app/core/email.py` — adapters `mock` | `zeptomail` | `smtp`, escolhidos por
     `EMAIL_PROVIDER`. **ZeptoMail** (o produto transacional da Zoho) é o provedor de produção;
     SMTP (`smtp.zoho.com:587`) é o fallback. Detalhes na **§6**.
   - **Gateway de pagamento:** `app/domains/payments/gateways/` — adapter `mock` (confirmação via
-    `POST /payments/mock/confirm/{id}`). Asaas/MercadoPago/Pagar.me/Stripe plugam via `PAYMENT_PROVIDER`.
+    `POST /payments/mock/confirm/{id}`, só ativo quando `PAYMENT_PROVIDER=mock`) e **`mercadopago`
+    implementado** (Checkout Pro, webhook com assinatura HMAC) — falta só credencial real
+    (`MP_ACCESS_TOKEN`/`MP_WEBHOOK_SECRET`) para ativar em produção. Asaas/Pagar.me/Stripe plugam
+    pela mesma interface (`PaymentGateway` Protocol em `gateways/base.py`).
+  - **Nota fiscal:** `app/domains/payments/invoicing.py` — adapter `NoopInvoiceProvider` (marca
+    `invoice_status="pending"`, não emite nada); trocar por NFE.io/Focus NFe/Asaas é troca de
+    classe, sem mexer no fluxo de pagamento.
 - **Env vars novas (defaults de dev):** `APP_ENV`, `JWT_SECRET` (obrigatório em produção),
-  `EMAIL_PROVIDER` + credenciais (§6), `PAYMENT_PROVIDER`, TTLs de token/OTP,
+  `EMAIL_PROVIDER` + credenciais (§6), `PAYMENT_PROVIDER` + `MP_ACCESS_TOKEN`/`MP_PUBLIC_KEY`/
+  `MP_WEBHOOK_SECRET`/`MP_WEBHOOK_URL`/`FRONTEND_BASE_URL`, TTLs de token/OTP,
   `CRON_TOKEN` (protege liquidação).
 - **Validação de configuração no boot:** `app/core/startup.py::validate_startup_config()`, chamado
   no import de `app.main`. Com `APP_ENV=production` o processo **se recusa a subir** se a
   configuração quebraria o cadastro (§6.3). Em `development`, apenas avisos.
 - **Liquidação de apostas:** worker `backend/scripts/settle_bets.py` (ou `POST /api/cron/settle-bets`)
   agendável — pós-jogo, consulta a API-Football, consome/estorna o crédito reservado.
-- **Frontend:** rotas novas `/entrar`, `/cadastro`, `/carteira`, `/perfil`, `/admin`,
-  `/documentos/[type]`, `/como-funciona`; auth via `lib/AuthContext.tsx` + `lib/authApi.ts`
-  (JWT no localStorage + refresh automático). `NEXT_PUBLIC_API_URL` deve apontar para o backend.
+- **Frontend:** rotas novas `/entrar`, `/cadastro`, `/carteira` (redesenhada — banner, selos de
+  pacote, cupom, PIX pendente, minhas compras), `/perfil`, `/admin` (10 abas), `/afiliado`
+  (portal), `/documentos/[type]`, `/como-funciona`; auth via `lib/AuthContext.tsx` +
+  `lib/authApi.ts` (JWT no localStorage + refresh automático). Atribuição de afiliado capturada em
+  qualquer página via `?ref=código` (`components/platform/ReferralCapture.tsx`).
+  `NEXT_PUBLIC_API_URL` deve apontar para o backend.
 
 Detalhes completos (domínios, fluxos, promoção, admin) em `docs/ARQUITETURA_MONETIZACAO.md` e
-`DOCUMENTACAO_CENTRAL.md`.
+`DOCUMENTACAO_CENTRAL.md` §12 (§12.7 = monetização de conversão, 2026-07-11).
 
 ## 6. E-mail transacional (Zoho / ZeptoMail)
 
