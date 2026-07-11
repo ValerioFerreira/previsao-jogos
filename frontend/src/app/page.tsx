@@ -24,6 +24,7 @@ import BetBuilder from '@/components/platform/BetBuilder';
 import { DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard } from '@/components/platform/DerivedMarkets';
 import H2HCard from '@/components/platform/H2HCard';
 import ScorersCard from '@/components/platform/ScorersCard';
+import ScreenshotGuard from '@/components/platform/ScreenshotGuard';
 import type { ScorersResponse } from '@/lib/api';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
@@ -559,10 +560,15 @@ export default function Previsoes() {
                     </div>
                   )}
                 </div>
-                {/* DIREITA: equipes lado a lado (últimos 5 jogos em linhas, cards mais estreitos) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
-                  <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
-                  <TeamRecentBlock teamId={awayTeamId} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} teamIds={teamIds} onOpenMatch={openMatch(awayTeamId)} />
+                {/* DIREITA: mandante e visitante empilhados (juntos ocupam a altura do confronto direto;
+                    crescem além disso se necessário para não cortar dados dos jogos anteriores) */}
+                <div className="flex flex-col gap-4 h-full">
+                  <div className="flex-1">
+                    <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
+                  </div>
+                  <div className="flex-1">
+                    <TeamRecentBlock teamId={awayTeamId} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} teamIds={teamIds} onOpenMatch={openMatch(awayTeamId)} />
+                  </div>
                 </div>
               </motion.div>
             );
@@ -604,6 +610,8 @@ export default function Previsoes() {
       <AnimatePresence>
         {projection && !loading && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+          <ScreenshotGuard page="analise-resultado">
+          <div className="space-y-6">
 
             {/* Badge de confiabilidade do jogo (cobertura de dados refinados) */}
             {projection.confiabilidade && (
@@ -813,6 +821,8 @@ export default function Previsoes() {
               </p>
             )}
 
+          </div>
+          </ScreenshotGuard>
           </motion.div>
         )}
       </AnimatePresence>

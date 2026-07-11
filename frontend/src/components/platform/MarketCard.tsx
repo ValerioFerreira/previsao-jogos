@@ -37,7 +37,7 @@ function overProb(dist: number[], line: number): number {
 }
 
 export function MarketCard({ title, subtitle, prediction, periods, icon }: MarketCardProps) {
-  const [viewMode, setViewMode] = useState<'prob' | 'odd'>('odd');
+  const [viewMode, setViewMode] = useState<'prob' | 'odd'>('prob');
   const [isExpanded, setIsExpanded] = useState(false);
   const periodKeys = periods ? Object.keys(periods).filter(k => periods[k]) : [];
   const [period, setPeriod] = useState<string>(periodKeys[0] ?? '');

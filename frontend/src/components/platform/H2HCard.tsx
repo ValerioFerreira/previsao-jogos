@@ -32,14 +32,16 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
 
   const AVG_ROWS: [string, string][] = [["Gols", "goals"], ["Chutes", "shots"], ["Chutes a gol", "shots_on_target"], ["Escanteios", "corners"], ["Cartões", "cards"]];
 
-  // Métricas-resumo (chips) — preenchem a área central com mais informação.
+  // Métricas-resumo (chips) — Gols/jogo, Ambas marcam e Média de gols sempre na mesma linha.
   const chips: { label: string; value: string }[] = [
+    {
+      label: "Gols/jogo (M–V)",
+      value: h2hData.home_avgs?.goals != null && h2hData.away_avgs?.goals != null
+        ? `${h2hData.home_avgs.goals}–${h2hData.away_avgs.goals}` : "—",
+    },
     { label: "Ambas marcam", value: `${pct(bttsCount)}%` },
     { label: "Média de gols", value: `${h2hData.avg_total_goals ?? "—"}` },
   ];
-  if (h2hData.home_avgs?.goals != null && h2hData.away_avgs?.goals != null)
-    chips.push({ label: "Gols/jogo (M–V)", value: `${h2hData.home_avgs.goals}–${h2hData.away_avgs.goals}` });
-  if (gdMean != null) chips.push({ label: "Saldo médio (mandante)", value: `${gdMean > 0 ? "+" : ""}${gdMean.toFixed(1)}` });
 
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5 shadow-sm w-full h-full flex flex-col">
@@ -82,15 +84,21 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
         <div style={{ width: `${pct(aw)}%` }} className="bg-cyan-500" title={`${teamPt(away)} ${pct(aw)}%`} />
       </div>
 
-      {/* chips de métricas do confronto */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
+      {/* chips de métricas do confronto — sempre na mesma linha */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
         {chips.map((c) => (
-          <div key={c.label} className="rounded-lg bg-muted/50 border border-border/40 px-2.5 py-1.5 text-center">
+          <div key={c.label} className="rounded-lg bg-muted/50 border border-border/40 px-2 py-1.5 text-center">
             <p className="text-[9px] uppercase tracking-wide text-muted-foreground leading-tight">{c.label}</p>
             <p className="text-sm font-mono font-bold text-foreground leading-tight">{c.value}</p>
           </div>
         ))}
       </div>
+      {gdMean != null && (
+        <div className="rounded-lg bg-muted/50 border border-border/40 px-2.5 py-1.5 text-center mb-3">
+          <p className="text-[9px] uppercase tracking-wide text-muted-foreground leading-tight">Saldo médio (mandante)</p>
+          <p className="text-sm font-mono font-bold text-foreground leading-tight">{gdMean > 0 ? "+" : ""}{gdMean.toFixed(1)}</p>
+        </div>
+      )}
 
       {/* médias no confronto direto (por equipe) */}
       <div className="mb-3">

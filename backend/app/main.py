@@ -62,6 +62,7 @@ from app.domains.legal.router import router as legal_router  # noqa: E402
 from app.domains.analysis.router import router as analysis_router  # noqa: E402
 from app.domains.bets.router import router as bets_router  # noqa: E402
 from app.domains.admin.router import router as admin_router  # noqa: E402
+from app.domains.security.router import router as security_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(wallet_router)
@@ -70,6 +71,7 @@ app.include_router(legal_router)
 app.include_router(analysis_router)
 app.include_router(bets_router)
 app.include_router(admin_router)
+app.include_router(security_router)
 
 # Cadastro depende de e-mail entregável + JWT com segredo real. Em APP_ENV=production,
 # uma configuração que quebraria o cadastro derruba o boot aqui, em vez de virar um 502

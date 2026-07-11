@@ -51,6 +51,25 @@ function AngleTick({ x, y, cx, cy, payload }: any) {
   );
 }
 
+// Balão custom da tooltip: aparece ao passar o mouse sobre um vértice do radar,
+// com o nome do indicador, sua explicação curta e o valor de cada seleção.
+function VertexTooltip({ active, payload, home, away }: any) {
+  if (!active || !payload || !payload.length) return null;
+  const metric: string = payload[0]?.payload?.metric ?? "";
+  return (
+    <div className="rounded-lg border border-border bg-popover shadow-xl p-2.5 text-xs max-w-[220px]">
+      <p className="font-semibold mb-1">{metric}</p>
+      {EXPLAIN[metric] && <p className="text-muted-foreground mb-1.5 leading-snug">{EXPLAIN[metric]}</p>}
+      {payload.map((p: any) => (
+        <p key={p.dataKey} className="flex items-center justify-between gap-3">
+          <span style={{ color: p.color }}>{teamPt(p.dataKey === home ? home : away)}</span>
+          <span className="font-mono font-bold" style={{ color: p.color }}>{p.value}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export default function StyleRadar({ home, away, homeMatches, awayMatches }: {
   home: string; away: string; homeMatches: RecentMatch[]; awayMatches: RecentMatch[];
 }) {
@@ -70,10 +89,10 @@ export default function StyleRadar({ home, away, homeMatches, awayMatches }: {
             <PolarGrid stroke="hsl(var(--border))" opacity={0.5} />
             <PolarAngleAxis dataKey="metric" tick={<AngleTick />} />
             <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }} angle={90} />
-            <Radar name={teamPt(home)} dataKey={home} stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
-            <Radar name={teamPt(away)} dataKey={away} stroke="#f97316" fill="#f97316" fillOpacity={0.25} />
+            <Radar name={teamPt(home)} dataKey={home} stroke="#10b981" fill="#10b981" fillOpacity={0.3} dot={{ r: 3, fill: "#10b981", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
+            <Radar name={teamPt(away)} dataKey={away} stroke="#f97316" fill="#f97316" fillOpacity={0.25} dot={{ r: 3, fill: "#f97316", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
             <Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: "11px" }} />
-            <RTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }} />
+            <RTooltip content={<VertexTooltip home={home} away={away} />} />
           </RadarChart>
         </ResponsiveContainer>
       </div>

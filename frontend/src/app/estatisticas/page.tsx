@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Label } from '@/components/ui/label';
-import { BarChart3, TrendingUp, Target, Users } from 'lucide-react';
+import { BarChart3, TrendingUp, Target } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 import { api, TeamHistoryResponse, H2HResponse, MatchDetail as MatchDetailT } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
@@ -393,20 +393,6 @@ export default function Estatisticas() {
               </div>
             </div>
           </div>
-
-          {/* Resumo textual do confronto (complementa o card H2H no topo) */}
-          {h2h?.summary && (
-            <div className="bg-card border border-border/50 rounded-xl p-5">
-              <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-purple-500" />
-                Leitura do Confronto
-                <InfoTooltip text="Resumo textual do histórico de confrontos diretos entre as duas seleções." />
-              </h3>
-              <div className="text-sm text-muted-foreground italic p-4 bg-muted/30 rounded-lg">
-                {h2h.summary}
-              </div>
-            </div>
-          )}
         </motion.div>
       )}
     </div>

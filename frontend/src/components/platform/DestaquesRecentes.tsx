@@ -60,23 +60,23 @@ function TeamPanel({ team, matches, teamIds, accent }: { team: string; matches: 
   const hl = highlights(team, ms);
   return (
     <div className="px-4 first:pl-0 last:pr-0">
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center justify-center gap-2 mb-3">
         {teamLogoUrl(teamIds[team]) && <img src={teamLogoUrl(teamIds[team])!} alt="" className="w-6 h-6 object-contain" loading="lazy" onError={hideOnError} />}
         <span className="text-sm font-semibold" style={{ color: accent }}>{teamPt(team)}</span>
       </div>
 
       {/* Últimos 5 adversários */}
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Últimos jogos</p>
-      <div className="space-y-1 mb-3">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5 text-center">Últimos jogos</p>
+      <div className="space-y-1 mb-3 flex flex-col items-center">
         {ms.map((m, i) => {
           const r = res(m);
           return (
-            <div key={i} className="group relative flex items-center gap-2 text-xs">
+            <div key={i} className="group relative flex items-center justify-center gap-2 text-xs w-full max-w-[220px]">
               <span className={`w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0 ${PILL[r]}`}>{r}</span>
               <span className="text-muted-foreground text-[10px] shrink-0">{m.is_home ? "vs" : "@"}</span>
-              <span className="flex-1 truncate">{teamPt(m.opponent)}</span>
+              <span className="truncate max-w-[100px]">{teamPt(m.opponent)}</span>
               <span className="font-mono font-semibold shrink-0">{m.goals_scored}–{m.goals_conceded}</span>
-              <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block z-30 w-max max-w-[190px]">
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 hidden group-hover:block z-30 w-max max-w-[190px]">
                 <div className="rounded-lg border border-border/60 bg-popover shadow-xl p-2 text-[10px] text-muted-foreground">
                   {fmtBR(m.date)}{m.competition ? ` · ${competitionPt(m.competition)}` : ""}{m.is_home ? " · mandante" : " · visitante"}
                 </div>
@@ -87,10 +87,10 @@ function TeamPanel({ team, matches, teamIds, accent }: { team: string; matches: 
         {ms.length === 0 && <span className="text-xs text-muted-foreground italic">sem jogos</span>}
       </div>
 
-      {/* Médias das principais estatísticas */}
+      {/* Médias das principais estatísticas — título centralizado, dados à esquerda */}
       {ms.length > 0 && (
         <>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Médias (últimos {ms.length})</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 text-center">Médias (últimos {ms.length})</p>
           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mb-3">
             {STAT_ROWS.map((s) => (
               <div key={s.label} className="flex items-center justify-between text-[11px] border-b border-border/15 py-0.5">
@@ -102,10 +102,10 @@ function TeamPanel({ team, matches, teamIds, accent }: { team: string; matches: 
         </>
       )}
 
-      {/* Principais Destaques */}
+      {/* Principais Destaques — título centralizado, dados à esquerda */}
       {hl.length > 0 && (
         <>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Principais Destaques</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 text-center">Principais Destaques</p>
           <ul className="space-y-1">
             {hl.map((h, i) => (
               <li key={i} className="flex items-start gap-1.5 text-[11px]">
