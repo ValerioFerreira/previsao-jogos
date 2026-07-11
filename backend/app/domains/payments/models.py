@@ -10,7 +10,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, 
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, JSONB, TimestampMixin, UUIDPrimaryKeyMixin, enum_type
-from app.domains.enums import PaymentProvider, PaymentStatus
+from app.domains.enums import PackageBadge, PaymentProvider, PaymentStatus
 
 _MONEY = Numeric(18, 2)
 
@@ -25,6 +25,11 @@ class CreditPackage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     bonus_credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # Vitrine/conversão (Carteira redesenhada): selo de destaque + ordem de exibição.
+    # Preço-por-crédito e % de economia são derivados no frontend (price_brl/total_credits).
+    featured_badge: Mapped[PackageBadge | None] = mapped_column(enum_type(PackageBadge), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
 
 class PaymentOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "app_payment_orders"
@@ -35,6 +40,16 @@ class PaymentOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     package_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_credit_packages.id", ondelete="SET NULL"), nullable=True
     )
+    # Cupom (benefício ao usuário) e afiliado (comissão ao influenciador) são
+    # independentes — um pedido pode ter os dois, um só, ou nenhum (ver Fase 4).
+    coupon_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_coupons.id", ondelete="SET NULL"), nullable=True
+    )
+    affiliate_attribution_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, nullable=True  # FK lógica p/ app_affiliate_attributions (domínio affiliates, Fase 4)
+    )
+    invoice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    invoice_status: Mapped[str | None] = mapped_column(String(30), nullable=True)  # pending|issued|failed
     amount_brl: Mapped[Decimal] = mapped_column(_MONEY, nullable=False)
     credits: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[PaymentStatus] = mapped_column(

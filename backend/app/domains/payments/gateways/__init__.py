@@ -8,5 +8,8 @@ from app.domains.payments.gateways.mock import MockGateway
 
 def get_gateway() -> PaymentGateway:
     provider = (settings.payment_provider or "mock").lower()
-    # Adapters reais (asaas/mercadopago/pagarme/stripe) entram aqui pela mesma interface.
+    if provider == "mercadopago":
+        from app.domains.payments.gateways.mercadopago import MercadoPagoGateway
+        return MercadoPagoGateway()
+    # Outros adapters reais (asaas/pagarme/stripe) entram aqui pela mesma interface.
     return MockGateway()

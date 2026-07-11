@@ -32,4 +32,33 @@ export const adminApi = {
     authFetch(`/admin/promotions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   audit: (limit = 50) => authFetch<{ items: AuditEntry[]; total: number }>(`/admin/audit?limit=${limit}`),
+
+  dashboard: () => authFetch<Record<string, unknown>>("/admin/analytics/dashboard"),
+
+  coupons: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/coupons"),
+  createCoupon: (body: Record<string, unknown>) =>
+    authFetch("/admin/coupons", { method: "POST", body: JSON.stringify(body) }),
+  patchCoupon: (id: string, body: Record<string, unknown>) =>
+    authFetch(`/admin/coupons/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  packages: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/packages"),
+  patchPackage: (id: string, body: Record<string, unknown>) =>
+    authFetch(`/admin/packages/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  affiliates: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/affiliates"),
+  createAffiliate: (body: Record<string, unknown>) =>
+    authFetch("/admin/affiliates", { method: "POST", body: JSON.stringify(body) }),
+  patchAffiliate: (id: string, body: Record<string, unknown>) =>
+    authFetch(`/admin/affiliates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  banners: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/banners"),
+  createBanner: (body: Record<string, unknown>) =>
+    authFetch("/admin/banners", { method: "POST", body: JSON.stringify(body) }),
+
+  settings: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/settings"),
+  setSetting: (key: string, body: { value: Record<string, unknown>; description?: string }) =>
+    authFetch(`/admin/settings/${key}`, { method: "PUT", body: JSON.stringify(body) }),
+
+  publishLegal: (body: { type: string; title: string; body_md: string }) =>
+    authFetch("/admin/legal/publish", { method: "POST", body: JSON.stringify(body) }),
 };

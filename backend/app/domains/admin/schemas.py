@@ -57,6 +57,64 @@ class PromotionPatch(BaseModel):
     active: bool | None = None
 
 
+# ---------- cupons ----------
+class CouponRequest(BaseModel):
+    promotion_id: str
+    code: str
+    discount_type: str  # percentage | fixed | bonus_credits
+    discount_value: Decimal | None = None
+    bonus_credits: int | None = None
+    min_purchase_brl: Decimal | None = None
+    package_id: str | None = None
+    usage_limit: int | None = None
+    per_user_limit: int | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    active: bool = True
+
+
+class CouponPatch(BaseModel):
+    discount_type: str | None = None
+    discount_value: Decimal | None = None
+    bonus_credits: int | None = None
+    min_purchase_brl: Decimal | None = None
+    package_id: str | None = None
+    usage_limit: int | None = None
+    per_user_limit: int | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    active: bool | None = None
+
+
+# ---------- afiliados ----------
+class AffiliateRequest(BaseModel):
+    name: str
+    code: str
+    user_id: str | None = None
+    commission_pct: Decimal | None = None
+    commission_fixed_brl: Decimal | None = None
+    notes: str | None = None
+
+
+class AffiliatePatch(BaseModel):
+    name: str | None = None
+    commission_pct: Decimal | None = None
+    commission_fixed_brl: Decimal | None = None
+    status: str | None = None  # active | paused
+    notes: str | None = None
+
+
+# ---------- pacotes de crédito ----------
+class PackagePatch(BaseModel):
+    name: str | None = None
+    credits: int | None = None
+    price_brl: Decimal | None = None
+    bonus_credits: int | None = None
+    featured_badge: str | None = None  # mais_vendido | melhor_oferta | oferta_limitada | null p/ remover
+    sort_order: int | None = None
+    active: bool | None = None
+
+
 # ---------- settings / banners ----------
 class SettingRequest(BaseModel):
     value: dict

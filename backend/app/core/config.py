@@ -79,6 +79,13 @@ class Settings(BaseSettings):
 
     # --- Gateway de pagamento ---
     payment_provider: str = "mock"         # mock | asaas | mercadopago | pagarme | stripe
+    frontend_base_url: str = "http://localhost:3000"  # back_urls do checkout (produção: https://apostainfo.com.br)
+
+    # Mercado Pago (Checkout Pro)
+    mp_access_token: str = ""              # Access Token de produção/sandbox (server-side, secreto)
+    mp_public_key: str = ""                # Public Key (uso opcional no client)
+    mp_webhook_secret: str = ""            # "Assinatura secreta" configurada no webhook do MP
+    mp_webhook_url: str = ""               # URL pública do endpoint /payments/webhook/mercadopago (opcional; MP também aceita configurar no painel)
 
     @property
     def is_production(self) -> bool:

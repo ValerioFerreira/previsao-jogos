@@ -1,6 +1,8 @@
 """Rotas da carteira: saldo (disponível/reservado) e histórico de movimentações."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -29,14 +31,24 @@ def transactions(
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    type: str | None = None,
+    status: str | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
 ):
     wallet = get_or_create_wallet(db, user.id)
-    total = db.execute(
-        select(func.count(CreditTransaction.id)).where(CreditTransaction.wallet_id == wallet.id)
-    ).scalar_one()
+    stmt = select(CreditTransaction).where(CreditTransaction.wallet_id == wallet.id)
+    if type:
+        stmt = stmt.where(CreditTransaction.type == type)
+    if status:
+        stmt = stmt.where(CreditTransaction.status == status)
+    if since:
+        stmt = stmt.where(CreditTransaction.created_at >= since)
+    if until:
+        stmt = stmt.where(CreditTransaction.created_at <= until)
+    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
     rows = db.execute(
-        select(CreditTransaction).where(CreditTransaction.wallet_id == wallet.id)
-        .order_by(CreditTransaction.created_at.desc()).limit(limit).offset(offset)
+        stmt.order_by(CreditTransaction.created_at.desc()).limit(limit).offset(offset)
     ).scalars().all()
     db.commit()
     items = [schemas.TransactionItem(

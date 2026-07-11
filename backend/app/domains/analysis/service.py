@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.domains.analysis import schemas
 from app.domains.analysis.models import Analysis
+from app.domains.analytics import service as analytics_service
 from app.domains.enums import AnalysisStatus, AnalysisType, CreditTxType
 from app.domains.users.models import User
 from app.domains.wallet.service import get_or_create_wallet, post_transaction
@@ -76,6 +77,7 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
                             detail="Créditos insuficientes. Compre créditos para gerar a análise.")
 
+    analytics_service.track(db, "analysis_started", user_id=user.id, type=req.type, tournament=req.tournament)
     snapshot, home, away = _generate_snapshot(req)
     data_version, model_hash = _model_fingerprint()
     atype = AnalysisType(req.type)
@@ -107,6 +109,7 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
         consumed, reserved = 0, 1
 
     analysis.credit_tx_id = tx.id
+    analytics_service.track(db, "analysis_finished", user_id=user.id, analysis_id=str(analysis.id))
     db.commit()
 
     return schemas.AnalysisResponse(

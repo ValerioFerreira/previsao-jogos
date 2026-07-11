@@ -11,7 +11,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, 
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, JSONB, TimestampMixin, UUIDPrimaryKeyMixin, enum_type
-from app.domains.enums import PromotionType
+from app.domains.enums import CouponDiscountType, PromotionType
 
 
 class Promotion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -54,6 +54,20 @@ class Coupon(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     per_user_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     redemptions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Campos tipados (a atribuição de afiliado é INDEPENDENTE do cupom — ver
+    # PaymentOrder.affiliate_attribution_id no domínio payments/affiliates).
+    discount_type: Mapped[CouponDiscountType | None] = mapped_column(
+        enum_type(CouponDiscountType), nullable=True
+    )
+    discount_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    bonus_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    min_purchase_brl: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    package_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_credit_packages.id", ondelete="SET NULL"), nullable=True
+    )
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Referral(UUIDPrimaryKeyMixin, TimestampMixin, Base):

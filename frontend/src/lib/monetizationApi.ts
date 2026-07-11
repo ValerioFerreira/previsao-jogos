@@ -9,7 +9,19 @@ export type CreditPackage = {
   price_brl: string;
   bonus_credits: number;
   total_credits: number;
+  featured_badge?: "mais_vendido" | "melhor_oferta" | "oferta_limitada" | null;
 };
+
+export type CouponPreview = {
+  coupon_id: string;
+  code: string;
+  discount_type: string | null;
+  original_amount_brl: string;
+  final_amount_brl: string;
+  bonus_credits: number;
+};
+
+export type Banner = { id: string; title: string; body: string | null; type: string };
 
 export type Transaction = {
   id: string;
@@ -25,7 +37,8 @@ export type Transaction = {
 
 export const paymentsApi = {
   packages: () => authFetch<CreditPackage[]>("/payments/packages"),
-  checkout: (body: { package_id?: string; credits?: number }) =>
+  recommended: () => authFetch<CreditPackage | null>("/payments/packages/recommended"),
+  checkout: (body: { package_id?: string; credits?: number; coupon_code?: string }) =>
     authFetch<{ order_id: string; provider: string; status: string; amount_brl: string; credits: number; checkout: Record<string, unknown> }>(
       "/payments/checkout",
       { method: "POST", body: JSON.stringify(body) },
@@ -38,10 +51,42 @@ export const paymentsApi = {
 };
 
 export const walletApiFull = {
-  transactions: (limit = 50, offset = 0) =>
-    authFetch<{ items: Transaction[]; total: number; limit: number; offset: number }>(
-      `/wallet/transactions?limit=${limit}&offset=${offset}`,
-    ),
+  transactions: (limit = 50, offset = 0, filters?: { type?: string; status?: string }) => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (filters?.type) params.set("type", filters.type);
+    if (filters?.status) params.set("status", filters.status);
+    return authFetch<{ items: Transaction[]; total: number; limit: number; offset: number }>(
+      `/wallet/transactions?${params.toString()}`,
+    );
+  },
+};
+
+export type OrderListItem = {
+  order_id: string;
+  provider: string;
+  method: string | null;
+  status: string;
+  amount_brl: string;
+  credits: number;
+  checkout: Record<string, unknown> | null;
+  invoice_url: string | null;
+  invoice_status: string | null;
+  created_at: string;
+  paid_at: string | null;
+};
+
+export const ordersApi = {
+  mine: () => authFetch<OrderListItem[]>("/payments/orders"),
+  pending: () => authFetch<OrderListItem[]>("/payments/orders/pending"),
+};
+
+export const promotionsApi = {
+  validateCoupon: (body: { code: string; amount_brl: string | number; credits: number; package_id?: string }) =>
+    authFetch<CouponPreview>("/promotions/coupons/validate", { method: "POST", body: JSON.stringify(body) }),
+};
+
+export const bannersApi = {
+  active: () => authFetch<{ items: Banner[] }>("/banners/active"),
 };
 
 // ---------------- análise ----------------

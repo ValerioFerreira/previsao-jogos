@@ -25,6 +25,23 @@ def checkout(data: schemas.CheckoutRequest, user: User = Depends(get_current_use
     return service.create_order(db, user, data)
 
 
+@router.get("/packages/recommended", response_model=schemas.PackageItem | None)
+def recommended_package(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.recommend_package(db, user)
+
+
+@router.get("/orders", response_model=list[schemas.OrderListItem])
+def orders(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Minhas compras."""
+    return service.list_orders(db, user)
+
+
+@router.get("/orders/pending", response_model=list[schemas.OrderListItem])
+def pending_orders(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Pagamentos pendentes (recuperação de PIX) — banner na Carteira."""
+    return service.list_orders(db, user, only_pending=True)
+
+
 @router.post("/mock/confirm/{order_id}", response_model=schemas.OrderResponse)
 def mock_confirm(order_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """DEV: simula o pagamento (provider mock) e credita a carteira."""

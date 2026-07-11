@@ -108,6 +108,18 @@ class SettlementOutcome(str, enum.Enum):
     void = "void"
 
 
+class CouponDiscountType(str, enum.Enum):
+    percentage = "percentage"
+    fixed = "fixed"
+    bonus_credits = "bonus_credits"
+
+
+class PackageBadge(str, enum.Enum):
+    mais_vendido = "mais_vendido"
+    melhor_oferta = "melhor_oferta"
+    oferta_limitada = "oferta_limitada"
+
+
 class PromotionType(str, enum.Enum):
     refund_if_lose = "refund_if_lose"   # "Só Paga se Acertar"
     bonus_credit = "bonus_credit"

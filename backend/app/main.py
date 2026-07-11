@@ -63,6 +63,13 @@ from app.domains.analysis.router import router as analysis_router  # noqa: E402
 from app.domains.bets.router import router as bets_router  # noqa: E402
 from app.domains.admin.router import router as admin_router  # noqa: E402
 from app.domains.security.router import router as security_router  # noqa: E402
+from app.domains.promotions.router import router as promotions_router  # noqa: E402
+from app.domains.promotions.router import banners_router  # noqa: E402
+from app.domains.analytics.router import router as analytics_router  # noqa: E402
+from app.domains.affiliates.router import router as affiliates_router  # noqa: E402
+from app.domains.campaigns.router import router as campaigns_router  # noqa: E402
+from app.domains.notifications.router import router as notifications_router  # noqa: E402
+from app.domains.support.router import router as support_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(wallet_router)
@@ -72,6 +79,13 @@ app.include_router(analysis_router)
 app.include_router(bets_router)
 app.include_router(admin_router)
 app.include_router(security_router)
+app.include_router(promotions_router)
+app.include_router(banners_router)
+app.include_router(analytics_router)
+app.include_router(affiliates_router)
+app.include_router(campaigns_router)
+app.include_router(notifications_router)
+app.include_router(support_router)
 
 # Cadastro depende de e-mail entregável + JWT com segredo real. Em APP_ENV=production,
 # uma configuração que quebraria o cadastro derruba o boot aqui, em vez de virar um 502

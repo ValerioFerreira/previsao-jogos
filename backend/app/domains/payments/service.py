@@ -7,14 +7,19 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.domains.enums import CreditTxType, PaymentProvider, PaymentStatus
 from app.domains.payments import schemas
 from app.domains.payments.gateways import get_gateway
+from app.domains.affiliates import service as affiliates_service
+from app.domains.analytics import service as analytics_service
+from app.domains.notifications import service as notifications_service
+from app.domains.payments.invoicing import issue_invoice
 from app.domains.payments.models import CreditPackage, PaymentOrder, PaymentWebhook
+from app.domains.promotions import service as promotions_service
 from app.domains.users.models import User
 from app.domains.wallet.service import get_or_create_wallet, post_transaction
 
@@ -45,6 +50,7 @@ def list_packages(db: Session) -> list[schemas.PackageItem]:
 
 
 def create_order(db: Session, user: User, data: schemas.CheckoutRequest) -> schemas.CheckoutResponse:
+    analytics_service.track(db, "checkout_started", user_id=user.id, package_id=data.package_id, credits=data.credits)
     if data.package_id:
         pkg = db.get(CreditPackage, uuid.UUID(data.package_id))
         if pkg is None or not pkg.active:
@@ -57,10 +63,22 @@ def create_order(db: Session, user: User, data: schemas.CheckoutRequest) -> sche
         amount = (Decimal(credits) * Decimal(str(settings.credit_unit_price_brl))).quantize(Decimal("0.01"))
         package_id = None
 
+    coupon_id = None
+    if data.coupon_code:
+        from app.domains.promotions import schemas as promo_schemas
+        preview = promotions_service.validate_coupon(db, user.id, promo_schemas.CouponValidateRequest(
+            code=data.coupon_code, amount_brl=amount, credits=credits,
+            package_id=str(package_id) if package_id else None,
+        ))
+        coupon_id = uuid.UUID(preview.coupon_id)
+        amount = preview.final_amount_brl
+        credits += preview.bonus_credits
+        analytics_service.track(db, "coupon_applied", user_id=user.id, code=data.coupon_code)
+
     gateway = get_gateway()
     order = PaymentOrder(
         user_id=user.id, provider=PaymentProvider(gateway.name), package_id=package_id,
-        amount_brl=amount, credits=credits, status=PaymentStatus.created,
+        coupon_id=coupon_id, amount_brl=amount, credits=credits, status=PaymentStatus.created,
         idempotency_key=f"order:{uuid.uuid4().hex}",
     )
     db.add(order)
@@ -70,6 +88,7 @@ def create_order(db: Session, user: User, data: schemas.CheckoutRequest) -> sche
                                   description=f"{credits} créditos", customer_email=user.email)
     order.provider_order_id = res.provider_order_id
     order.status = PaymentStatus.pending
+    order.raw_payload = res.checkout  # permite reabrir o checkout (PIX pendente) depois
     db.commit()
 
     return schemas.CheckoutResponse(
@@ -92,6 +111,14 @@ def _credit_if_paid(db: Session, order: PaymentOrder, raw: dict | None) -> None:
         idempotency_key=f"payment:{order.id}", reference_type="payment_order",
         reference_id=order.id, description=f"Compra de {order.credits} créditos",
     )
+    if order.coupon_id is not None:
+        promotions_service.mark_redeemed(db, order.coupon_id)
+    affiliates_service.commission_for_order(db, order)
+    analytics_service.track(db, "credit_purchase", user_id=order.user_id,
+                            order_id=str(order.id), amount_brl=str(order.amount_brl), credits=order.credits)
+    notifications_service.notify(db, order.user_id, "payment_approved", "Pagamento aprovado",
+                                 f"+{order.credits} créditos adicionados à sua carteira.")
+    issue_invoice(db, order)
 
 
 def confirm_mock(db: Session, user: User, order_id: str) -> schemas.OrderResponse:
@@ -107,6 +134,59 @@ def confirm_mock(db: Session, user: User, order_id: str) -> schemas.OrderRespons
     return schemas.OrderResponse(order_id=str(order.id), status=order.status.value,
                                  amount_brl=order.amount_brl, credits=order.credits,
                                  available_balance=wallet.available_balance)
+
+
+def recommend_package(db: Session, user: User) -> schemas.PackageItem | None:
+    """Heurística (não-ML): olha o consumo médio mensal de créditos do usuário e sugere
+    o pacote cujo total de créditos fica mais próximo, arredondando para cima. Usuário
+    sem histórico suficiente recebe o pacote de melhor custo-benefício (mais bônus
+    proporcional) como default."""
+    from datetime import datetime, timedelta, timezone
+    from app.domains.wallet.models import CreditTransaction, Wallet
+    from app.domains.enums import CreditTxType
+
+    packages = list_packages(db)
+    if not packages:
+        return None
+
+    wallet = db.execute(select(Wallet).where(Wallet.user_id == user.id)).scalar_one_or_none()
+    monthly_consumption = None
+    if wallet is not None:
+        since = datetime.now(timezone.utc) - timedelta(days=90)
+        total_consumed = db.execute(
+            select(func.coalesce(func.sum(CreditTransaction.amount), 0)).where(
+                CreditTransaction.wallet_id == wallet.id,
+                CreditTransaction.type == CreditTxType.consumption,
+                CreditTransaction.created_at >= since,
+            )
+        ).scalar_one()
+        if total_consumed:
+            monthly_consumption = abs(Decimal(total_consumed)) / Decimal(3)
+
+    if monthly_consumption and monthly_consumption > 0:
+        best = min(packages, key=lambda p: abs(Decimal(p.total_credits) - monthly_consumption))
+        return best
+
+    # Sem histórico: melhor custo-benefício = maior % de crédito bônus sobre o total.
+    def bonus_ratio(p):
+        return (p.bonus_credits / p.total_credits) if p.total_credits else 0
+    return max(packages, key=bonus_ratio)
+
+
+def list_orders(db: Session, user: User, only_pending: bool = False) -> list[schemas.OrderListItem]:
+    """Minhas compras (Fase 6) — se only_pending, filtra pedidos PIX/pendentes para o
+    banner de recuperação de pagamento (reabre o QR/copia-e-cola salvo em raw_payload)."""
+    stmt = select(PaymentOrder).where(PaymentOrder.user_id == user.id)
+    if only_pending:
+        stmt = stmt.where(PaymentOrder.status == PaymentStatus.pending)
+    rows = db.execute(stmt.order_by(PaymentOrder.created_at.desc()).limit(50)).scalars().all()
+    return [schemas.OrderListItem(
+        order_id=str(o.id), provider=o.provider.value, method=o.method, status=o.status.value,
+        amount_brl=o.amount_brl, credits=o.credits,
+        checkout=o.raw_payload if o.status == PaymentStatus.pending else None,
+        invoice_url=o.invoice_url, invoice_status=o.invoice_status,
+        created_at=o.created_at.isoformat(), paid_at=o.paid_at.isoformat() if o.paid_at else None,
+    ) for o in rows]
 
 
 def handle_webhook(db: Session, provider: str, payload: dict, headers: dict, body: bytes) -> dict:
@@ -135,6 +215,9 @@ def handle_webhook(db: Session, provider: str, payload: dict, headers: dict, bod
     )).scalar_one_or_none()
     if order is not None and event.status == "paid":
         _credit_if_paid(db, order, event.raw)
+    elif order is not None and event.status == "failed":
+        order.status = PaymentStatus.failed
+        analytics_service.track(db, "payment_failed", user_id=order.user_id, order_id=str(order.id))
     wh.processed_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "processed"}

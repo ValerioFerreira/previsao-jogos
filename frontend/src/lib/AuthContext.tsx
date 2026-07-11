@@ -1,6 +1,7 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { authApi, walletApi, tokens, type UserPublic, type Wallet, type TokenResponse } from "@/lib/authApi";
+import { attachSignupIfReferred } from "@/lib/affiliatesApi";
 
 type AuthState = {
   user: UserPublic | null;
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       tokens.set(t);
       setUser(t.user);
       await refreshWallet();
+      attachSignupIfReferred();
     },
     [refreshWallet],
   );

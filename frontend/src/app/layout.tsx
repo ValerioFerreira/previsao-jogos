@@ -7,6 +7,7 @@ import Footer from "@/components/platform/Footer";
 import { Toaster } from "@/components/ui/toaster";
 import { PredictionProvider } from "@/lib/PredictionContext";
 import { AuthProvider } from "@/lib/AuthContext";
+import ReferralCapture from "@/components/platform/ReferralCapture";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,6 +30,7 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-screen bg-background font-sans antialiased text-foreground selection:bg-primary/20 selection:text-primary`}>
         <ThemeProvider>
           <AuthProvider>
+            <ReferralCapture />
             <PredictionProvider>
               <div className="relative flex min-h-screen flex-col">
                 <Header />

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import settings
 from app.core.email import EmailSendError, send_otp_email
+from app.domains.analytics import service as analytics_service
 from app.domains.auth import schemas
 from app.domains.enums import AuthEventType, CreditTxType, OtpPurpose, UserRole, UserStatus
 from app.domains.users.models import AuthEvent, AuthSession, OtpCode, User
@@ -130,6 +131,7 @@ def register(db: Session, data: schemas.RegisterRequest, ip: str | None) -> None
         db.add(user)
         db.flush()
         _log(db, AuthEventType.register, user.id, ip)
+        analytics_service.track(db, "signup", user_id=user.id)
 
     _create_and_send_otp(db, user, OtpPurpose.email_verify, ip)
     db.commit()
@@ -224,6 +226,7 @@ def login(db: Session, email: str, password: str, ip: str | None, ua: str | None
     if security.needs_rehash(user.password_hash):
         user.password_hash = security.hash_password(password)
     _log(db, AuthEventType.login_success, user.id, ip, ua)
+    analytics_service.track(db, "login", user_id=user.id)
     tokens = _issue_tokens(db, user, ip, ua)
     db.commit()
     return tokens

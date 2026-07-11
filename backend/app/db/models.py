@@ -18,5 +18,10 @@ from app.domains.promotions import models as promotions_models  # noqa: F401
 from app.domains.bets import models as bets_models  # noqa: F401
 from app.domains.admin import models as admin_models  # noqa: F401
 from app.domains.security import models as security_models  # noqa: F401
+from app.domains.analytics import models as analytics_models  # noqa: F401
+from app.domains.affiliates import models as affiliates_models  # noqa: F401
+from app.domains.campaigns import models as campaigns_models  # noqa: F401
+from app.domains.notifications import models as notifications_models  # noqa: F401
+from app.domains.support import models as support_models  # noqa: F401
 
 __all__ = ["Base"]

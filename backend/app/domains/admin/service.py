@@ -9,14 +9,20 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timedelta, timezone
+
 from app.domains.admin import schemas
 from app.domains.admin.models import AdminAuditLog, Banner, PlatformSetting
+from app.domains.affiliates.models import Affiliate, AffiliateCommission
 from app.domains.analysis.models import Analysis
+from app.domains.analytics.models import Event
 from app.domains.bets.models import Bet
-from app.domains.enums import CreditTxType, UserStatus
+from app.domains.enums import CreditTxType, PaymentStatus, UserStatus
 from app.domains.legal import service as legal_service
-from app.domains.payments.models import PaymentOrder
-from app.domains.promotions.models import Promotion
+from app.domains.payments.models import CreditPackage, PaymentOrder
+from app.domains.promotions.models import Coupon, Promotion
+from app.domains.support import schemas as support_schemas
+from app.domains.support import service as support_service
 from app.domains.users.models import User
 from app.domains.wallet.models import CreditTransaction, Wallet
 from app.domains.wallet.service import get_or_create_wallet, post_transaction
@@ -189,6 +195,227 @@ def list_promotions(db: Session) -> dict:
     return {"items": [{"id": str(p.id), "code": p.code, "name": p.name, "type": p.type.value,
                        "active": p.active, "max_odd": str(p.max_odd) if p.max_odd else None,
                        "config": p.config} for p in rows]}
+
+
+# --------------------------------------------------------------- cupons
+def _coupon_out(c: Coupon) -> dict:
+    return {"id": str(c.id), "promotion_id": str(c.promotion_id), "code": c.code,
+           "discount_type": c.discount_type.value if c.discount_type else None,
+           "discount_value": str(c.discount_value) if c.discount_value is not None else None,
+           "bonus_credits": c.bonus_credits, "min_purchase_brl": str(c.min_purchase_brl) if c.min_purchase_brl else None,
+           "package_id": str(c.package_id) if c.package_id else None,
+           "usage_limit": c.usage_limit, "per_user_limit": c.per_user_limit, "redemptions": c.redemptions,
+           "valid_from": c.valid_from.isoformat() if c.valid_from else None,
+           "valid_to": c.valid_to.isoformat() if c.valid_to else None, "active": c.active}
+
+
+def create_coupon(db: Session, admin: User, data: schemas.CouponRequest, ip) -> dict:
+    from app.domains.enums import CouponDiscountType
+    try:
+        dtype = CouponDiscountType(data.discount_type)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Tipo de desconto inválido.")
+    if db.execute(select(Coupon).where(Coupon.code == data.code)).scalar_one_or_none():
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Código de cupom já existe.")
+    c = Coupon(
+        promotion_id=uuid.UUID(data.promotion_id), code=data.code.strip().upper(), discount_type=dtype,
+        discount_value=data.discount_value, bonus_credits=data.bonus_credits,
+        min_purchase_brl=data.min_purchase_brl,
+        package_id=uuid.UUID(data.package_id) if data.package_id else None,
+        usage_limit=data.usage_limit, per_user_limit=data.per_user_limit,
+        valid_from=data.valid_from, valid_to=data.valid_to, active=data.active,
+    )
+    db.add(c); db.flush()
+    audit(db, admin, "coupon_create", "coupon", c.id, after={"code": c.code}, ip=ip)
+    db.commit()
+    return _coupon_out(c)
+
+
+def patch_coupon(db: Session, admin: User, coupon_id: str, data: schemas.CouponPatch, ip) -> dict:
+    from app.domains.enums import CouponDiscountType
+    try:
+        c = db.get(Coupon, uuid.UUID(coupon_id))
+    except ValueError:
+        c = None
+    if c is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Cupom não encontrado.")
+    before = _coupon_out(c)
+    if data.discount_type is not None: c.discount_type = CouponDiscountType(data.discount_type)
+    if data.discount_value is not None: c.discount_value = data.discount_value
+    if data.bonus_credits is not None: c.bonus_credits = data.bonus_credits
+    if data.min_purchase_brl is not None: c.min_purchase_brl = data.min_purchase_brl
+    if data.package_id is not None: c.package_id = uuid.UUID(data.package_id) if data.package_id else None
+    if data.usage_limit is not None: c.usage_limit = data.usage_limit
+    if data.per_user_limit is not None: c.per_user_limit = data.per_user_limit
+    if data.valid_from is not None: c.valid_from = data.valid_from
+    if data.valid_to is not None: c.valid_to = data.valid_to
+    if data.active is not None: c.active = data.active
+    audit(db, admin, "coupon_update", "coupon", c.id, before=before, after=_coupon_out(c), ip=ip)
+    db.commit()
+    return _coupon_out(c)
+
+
+def list_coupons(db: Session) -> dict:
+    rows = db.execute(select(Coupon).order_by(Coupon.created_at.desc())).scalars().all()
+    return {"items": [_coupon_out(c) for c in rows]}
+
+
+# --------------------------------------------------------------- afiliados
+def _affiliate_out(a: Affiliate, db: Session) -> dict:
+    due = db.execute(select(func.coalesce(func.sum(AffiliateCommission.amount_brl), 0)).where(
+        AffiliateCommission.affiliate_id == a.id, AffiliateCommission.status == "devida")).scalar_one()
+    paid = db.execute(select(func.coalesce(func.sum(AffiliateCommission.amount_brl), 0)).where(
+        AffiliateCommission.affiliate_id == a.id, AffiliateCommission.status == "paga")).scalar_one()
+    return {"id": str(a.id), "name": a.name, "code": a.code, "user_id": str(a.user_id) if a.user_id else None,
+           "commission_pct": str(a.commission_pct) if a.commission_pct else None,
+           "commission_fixed_brl": str(a.commission_fixed_brl) if a.commission_fixed_brl else None,
+           "status": a.status, "notes": a.notes,
+           "commission_due_brl": str(due), "commission_paid_brl": str(paid)}
+
+
+def create_affiliate(db: Session, admin: User, data: schemas.AffiliateRequest, ip) -> dict:
+    if db.execute(select(Affiliate).where(Affiliate.code == data.code)).scalar_one_or_none():
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Código de afiliado já existe.")
+    a = Affiliate(name=data.name, code=data.code.strip().lower(),
+                 user_id=uuid.UUID(data.user_id) if data.user_id else None,
+                 commission_pct=data.commission_pct, commission_fixed_brl=data.commission_fixed_brl,
+                 notes=data.notes)
+    db.add(a); db.flush()
+    audit(db, admin, "affiliate_create", "affiliate", a.id, after={"code": a.code}, ip=ip)
+    db.commit()
+    return _affiliate_out(a, db)
+
+
+def patch_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.AffiliatePatch, ip) -> dict:
+    try:
+        a = db.get(Affiliate, uuid.UUID(affiliate_id))
+    except ValueError:
+        a = None
+    if a is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Afiliado não encontrado.")
+    before = {"status": a.status, "commission_pct": str(a.commission_pct) if a.commission_pct else None}
+    if data.name is not None: a.name = data.name
+    if data.commission_pct is not None: a.commission_pct = data.commission_pct
+    if data.commission_fixed_brl is not None: a.commission_fixed_brl = data.commission_fixed_brl
+    if data.status is not None: a.status = data.status
+    if data.notes is not None: a.notes = data.notes
+    audit(db, admin, "affiliate_update", "affiliate", a.id, before=before,
+          after={"status": a.status}, ip=ip)
+    db.commit()
+    return _affiliate_out(a, db)
+
+
+def list_affiliates(db: Session) -> dict:
+    rows = db.execute(select(Affiliate).order_by(Affiliate.created_at.desc())).scalars().all()
+    return {"items": [_affiliate_out(a, db) for a in rows]}
+
+
+# --------------------------------------------------------------- pacotes de crédito
+def list_packages_admin(db: Session) -> dict:
+    rows = db.execute(select(CreditPackage).order_by(CreditPackage.sort_order, CreditPackage.credits)).scalars().all()
+    return {"items": [{"id": str(p.id), "name": p.name, "credits": p.credits, "price_brl": str(p.price_brl),
+                       "bonus_credits": p.bonus_credits, "featured_badge": p.featured_badge.value if p.featured_badge else None,
+                       "sort_order": p.sort_order, "active": p.active} for p in rows]}
+
+
+def patch_package(db: Session, admin: User, package_id: str, data: schemas.PackagePatch, ip) -> dict:
+    from app.domains.enums import PackageBadge
+    try:
+        p = db.get(CreditPackage, uuid.UUID(package_id))
+    except ValueError:
+        p = None
+    if p is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pacote não encontrado.")
+    before = {"name": p.name, "price_brl": str(p.price_brl), "featured_badge": p.featured_badge.value if p.featured_badge else None}
+    if data.name is not None: p.name = data.name
+    if data.credits is not None: p.credits = data.credits
+    if data.price_brl is not None: p.price_brl = data.price_brl
+    if data.bonus_credits is not None: p.bonus_credits = data.bonus_credits
+    if "featured_badge" in data.model_fields_set:
+        p.featured_badge = PackageBadge(data.featured_badge) if data.featured_badge else None
+    if data.sort_order is not None: p.sort_order = data.sort_order
+    if data.active is not None: p.active = data.active
+    audit(db, admin, "package_update", "credit_package", p.id, before=before,
+          after={"name": p.name, "price_brl": str(p.price_brl)}, ip=ip)
+    db.commit()
+    return {"id": str(p.id), "name": p.name, "active": p.active}
+
+
+# --------------------------------------------------------------- dashboard executivo
+def analytics_dashboard(db: Session) -> dict:
+    now = datetime.now(timezone.utc)
+    today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month0 = today0.replace(day=1)
+    year0 = today0.replace(month=1, day=1)
+
+    def revenue_since(since: datetime) -> Decimal:
+        return db.execute(select(func.coalesce(func.sum(PaymentOrder.amount_brl), 0)).where(
+            PaymentOrder.status == PaymentStatus.paid, PaymentOrder.paid_at >= since,
+        )).scalar_one()
+
+    paid_stmt = select(PaymentOrder).where(PaymentOrder.status == PaymentStatus.paid)
+    total_paid_orders = db.execute(select(func.count()).select_from(paid_stmt.subquery())).scalar_one()
+    total_revenue = db.execute(select(func.coalesce(func.sum(PaymentOrder.amount_brl), 0)).where(
+        PaymentOrder.status == PaymentStatus.paid)).scalar_one()
+    ticket_medio = (total_revenue / total_paid_orders) if total_paid_orders else Decimal(0)
+
+    by_package = db.execute(
+        select(CreditPackage.name, func.count(PaymentOrder.id), func.coalesce(func.sum(PaymentOrder.amount_brl), 0))
+        .join(PaymentOrder, PaymentOrder.package_id == CreditPackage.id)
+        .where(PaymentOrder.status == PaymentStatus.paid)
+        .group_by(CreditPackage.name).order_by(func.count(PaymentOrder.id).desc())
+    ).all()
+
+    credit_totals = dict(db.execute(
+        select(CreditTransaction.type, func.coalesce(func.sum(CreditTransaction.amount), 0))
+        .group_by(CreditTransaction.type)
+    ).all())
+
+    checkout_started = db.execute(select(func.count(Event.id)).where(Event.event_type == "checkout_started")).scalar_one()
+    credit_purchase = db.execute(select(func.count(Event.id)).where(Event.event_type == "credit_purchase")).scalar_one()
+    conversion_rate = (credit_purchase / checkout_started) if checkout_started else None
+    abandon_rate = (1 - conversion_rate) if conversion_rate is not None else None
+
+    active_users_30d = db.execute(select(func.count(func.distinct(Event.user_id))).where(
+        Event.created_at >= now - timedelta(days=30), Event.user_id.is_not(None))).scalar_one()
+    paying_users = db.execute(select(func.count(func.distinct(PaymentOrder.user_id))).where(
+        PaymentOrder.status == PaymentStatus.paid)).scalar_one()
+
+    return {
+        "revenue": {
+            "today_brl": str(revenue_since(today0)), "month_brl": str(revenue_since(month0)),
+            "year_brl": str(revenue_since(year0)), "total_brl": str(total_revenue),
+            "ticket_medio_brl": str(ticket_medio),
+        },
+        "by_package": [{"name": n, "orders": c, "revenue_brl": str(r)} for n, c, r in by_package],
+        "credits": {
+            "vendidos": str(credit_totals.get(CreditTxType.purchase, 0)),
+            "promocionais": str(credit_totals.get(CreditTxType.promo_credit, 0) + credit_totals.get(CreditTxType.bonus, 0)),
+            "usados": str(abs(credit_totals.get(CreditTxType.consumption, 0))),
+        },
+        "funnel": {
+            "checkout_started": checkout_started, "credit_purchase": credit_purchase,
+            "conversion_rate": conversion_rate, "abandon_rate": abandon_rate,
+        },
+        "users": {"active_30d": active_users_30d, "paying_total": paying_users},
+    }
+
+
+# --------------------------------------------------------------- suporte
+def list_tickets(db: Session, status_filter: str | None) -> dict:
+    rows = support_service.list_all(db, status_filter)
+    return {"items": [{"id": str(t.id), "user_id": str(t.user_id), "category": t.category,
+                       "subject": t.subject, "message": t.message, "status": t.status,
+                       "order_id": str(t.order_id) if t.order_id else None, "admin_notes": t.admin_notes,
+                       "created_at": t.created_at.isoformat(),
+                       "resolved_at": t.resolved_at.isoformat() if t.resolved_at else None} for t in rows]}
+
+
+def patch_ticket(db: Session, admin: User, ticket_id: str, data: support_schemas.TicketPatch, ip) -> dict:
+    t = support_service.patch_ticket(db, uuid.UUID(ticket_id), data)
+    audit(db, admin, "support_ticket_update", "support_ticket", t.id, after={"status": t.status}, ip=ip)
+    db.commit()
+    return {"id": str(t.id), "status": t.status}
 
 
 # --------------------------------------------------------------- documentos legais

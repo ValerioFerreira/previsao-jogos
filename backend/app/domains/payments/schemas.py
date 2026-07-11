@@ -18,6 +18,7 @@ class PackageItem(BaseModel):
 class CheckoutRequest(BaseModel):
     package_id: str | None = None
     credits: int | None = Field(default=None, ge=1, le=100000)
+    coupon_code: str | None = None
 
     @model_validator(mode="after")
     def _one_of(self):
@@ -41,3 +42,17 @@ class OrderResponse(BaseModel):
     amount_brl: Decimal
     credits: int
     available_balance: Decimal | None = None
+
+
+class OrderListItem(BaseModel):
+    order_id: str
+    provider: str
+    method: str | None
+    status: str
+    amount_brl: Decimal
+    credits: int
+    checkout: dict | None = None
+    invoice_url: str | None = None
+    invoice_status: str | None = None
+    created_at: str
+    paid_at: str | None
