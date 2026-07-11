@@ -1,9 +1,9 @@
 # Estado atual e próximos passos (handoff)
 
-> **Leia isto primeiro.** Resume onde o projeto está e o que fazer a seguir, para retomar
-> exatamente de onde paramos. Última atualização: **2026-07-09**.
-> Docs de apoio: `DOCUMENTACAO_CENTRAL.md` (doc-mestre), `ARCHITECTURE.md` (infra — **§6 é o
-> e-mail transacional**), `docs/ARQUITETURA_MONETIZACAO.md` (desenho da monetização).
+> **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
+> está e o que fazer a seguir. Última atualização: **2026-07-10**.
+> Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
+> não repetir**), `ARCHITECTURE.md` (infra — **§3.1 Neon, §6 e-mail**), `docs/ARQUITETURA_MONETIZACAO.md`.
 
 ---
 
