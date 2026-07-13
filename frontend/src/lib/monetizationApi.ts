@@ -71,6 +71,7 @@ export type OrderListItem = {
   checkout: Record<string, unknown> | null;
   invoice_url: string | null;
   invoice_status: string | null;
+  invoice_requested_at: string | null;
   created_at: string;
   paid_at: string | null;
 };
@@ -78,6 +79,8 @@ export type OrderListItem = {
 export const ordersApi = {
   mine: () => authFetch<OrderListItem[]>("/payments/orders"),
   pending: () => authFetch<OrderListItem[]>("/payments/orders/pending"),
+  requestInvoice: (orderId: string) =>
+    authFetch<OrderListItem>(`/payments/orders/${orderId}/request-invoice`, { method: "POST" }),
 };
 
 export const promotionsApi = {

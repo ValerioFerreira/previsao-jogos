@@ -50,6 +50,7 @@ class PaymentOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     invoice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     invoice_status: Mapped[str | None] = mapped_column(String(30), nullable=True)  # pending|issued|failed
+    invoice_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     amount_brl: Mapped[Decimal] = mapped_column(_MONEY, nullable=False)
     credits: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[PaymentStatus] = mapped_column(

@@ -54,5 +54,6 @@ class OrderListItem(BaseModel):
     checkout: dict | None = None
     invoice_url: str | None = None
     invoice_status: str | None = None
+    invoice_requested_at: str | None = None
     created_at: str
     paid_at: str | None

@@ -173,6 +173,17 @@ def recommend_package(db: Session, user: User) -> schemas.PackageItem | None:
     return max(packages, key=bonus_ratio)
 
 
+def _to_order_list_item(o: PaymentOrder) -> schemas.OrderListItem:
+    return schemas.OrderListItem(
+        order_id=str(o.id), provider=o.provider.value, method=o.method, status=o.status.value,
+        amount_brl=o.amount_brl, credits=o.credits,
+        checkout=o.raw_payload if o.status == PaymentStatus.pending else None,
+        invoice_url=o.invoice_url, invoice_status=o.invoice_status,
+        invoice_requested_at=o.invoice_requested_at.isoformat() if o.invoice_requested_at else None,
+        created_at=o.created_at.isoformat(), paid_at=o.paid_at.isoformat() if o.paid_at else None,
+    )
+
+
 def list_orders(db: Session, user: User, only_pending: bool = False) -> list[schemas.OrderListItem]:
     """Minhas compras (Fase 6) — se only_pending, filtra pedidos PIX/pendentes para o
     banner de recuperação de pagamento (reabre o QR/copia-e-cola salvo em raw_payload)."""
@@ -180,13 +191,31 @@ def list_orders(db: Session, user: User, only_pending: bool = False) -> list[sch
     if only_pending:
         stmt = stmt.where(PaymentOrder.status == PaymentStatus.pending)
     rows = db.execute(stmt.order_by(PaymentOrder.created_at.desc()).limit(50)).scalars().all()
-    return [schemas.OrderListItem(
-        order_id=str(o.id), provider=o.provider.value, method=o.method, status=o.status.value,
-        amount_brl=o.amount_brl, credits=o.credits,
-        checkout=o.raw_payload if o.status == PaymentStatus.pending else None,
-        invoice_url=o.invoice_url, invoice_status=o.invoice_status,
-        created_at=o.created_at.isoformat(), paid_at=o.paid_at.isoformat() if o.paid_at else None,
-    ) for o in rows]
+    return [_to_order_list_item(o) for o in rows]
+
+
+def request_invoice(db: Session, user: User, order_id: str) -> schemas.OrderListItem:
+    """Nota fiscal sob demanda: a emissão já roda automática em `_credit_if_paid` (best-effort,
+    para todo pedido pago — mantém a declaração fiscal íntegra mesmo se o cliente nunca pedir);
+    aqui só marcamos que o cliente pediu para VER/receber a nota, e tentamos emitir de novo caso
+    a tentativa automática ainda esteja pendente/tenha falhado."""
+    try:
+        oid = uuid.UUID(order_id)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+    order = db.get(PaymentOrder, oid)
+    if order is None or order.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+    if order.status != PaymentStatus.paid:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Nota fiscal só pode ser pedida para pedidos pagos.")
+
+    if order.invoice_requested_at is None:
+        order.invoice_requested_at = datetime.now(timezone.utc)
+    if order.invoice_status != "issued":
+        issue_invoice(db, order)
+    db.commit()
+    db.refresh(order)
+    return _to_order_list_item(order)
 
 
 def handle_webhook(db: Session, provider: str, payload: dict, headers: dict, body: bytes) -> dict:

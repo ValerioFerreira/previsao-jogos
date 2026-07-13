@@ -163,6 +163,19 @@ export default function CarteiraPage() {
     if (initPoint) window.location.href = initPoint;
   }
 
+  async function requestInvoice(o: OrderListItem) {
+    setBusyId(o.order_id);
+    setErr(null);
+    try {
+      const updated = await ordersApi.requestInvoice(o.order_id);
+      setMyOrders((prev) => prev.map((x) => (x.order_id === updated.order_id ? updated : x)));
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (loading || !user) {
     return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -333,7 +346,18 @@ export default function CarteiraPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {o.invoice_url && <a href={o.invoice_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Nota fiscal</a>}
+                    {o.status === "paid" && !o.invoice_requested_at && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busyId === o.order_id}
+                              onClick={() => requestInvoice(o)}>
+                        {busyId === o.order_id ? "Solicitando…" : "Solicitar nota fiscal"}
+                      </Button>
+                    )}
+                    {o.invoice_requested_at && o.invoice_url && (
+                      <a href={o.invoice_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Nota fiscal</a>
+                    )}
+                    {o.invoice_requested_at && !o.invoice_url && (
+                      <span className="text-xs text-muted-foreground">Nota fiscal solicitada — em processamento</span>
+                    )}
                     <span className={`text-xs px-2 py-0.5 rounded ${o.status === "paid" ? "bg-emerald-500/10 text-emerald-600" : o.status === "pending" ? "bg-amber-500/10 text-amber-600" : "bg-muted text-muted-foreground"}`}>
                       {o.status === "paid" ? "Pago" : o.status === "pending" ? "Pendente" : o.status}
                     </span>
