@@ -433,7 +433,9 @@ cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome
   `PAYMENT_PROVIDER=mercadopago` para sair do mock. `POST /payments/mock/confirm/{id}` continua
   disponível, mas só funciona quando `PAYMENT_PROVIDER=mock` (guarda de segurança). Ver §12.7.
 - **Nota fiscal:** adapter **noop** (`payments/invoicing.py`) — marca `invoice_status="pending"`
-  sem emitir nada; trocar por NFE.io/Focus NFe/Asaas quando decidido com o contador.
+  sem emitir nada; trocar por NFE.io/Focus NFe quando decidido com o contador. **Emissão automática
+  mantida para toda venda paga** (best-effort); desde 2026-07-13 a **exibição ao cliente é sob
+  demanda** (`invoice_requested_at` + botão "Solicitar nota fiscal" na Carteira) — ver §12.8.
 
 ### 12.3 Onde está a documentação
 - Desenho/arquitetura da camada: **`docs/ARQUITETURA_MONETIZACAO.md`**.
@@ -570,6 +572,37 @@ bônus. `GET /campaigns/experiments/{key}/variant` expõe `assign_variant()` par
 `5e8a1f4c7d22` (notificações+suporte). Total: **+13 tabelas `app_*`** (23→36).
 
 **O que falta para vender de verdade** — não é código, são decisões/credenciais do dono:
-credenciais reais do Mercado Pago, merge da branch `monetization` + deploy, revisão jurídica dos
+credenciais reais do Mercado Pago, deploy + migração em produção, revisão jurídica dos
 documentos legais (ainda são templates), decisão do emissor de nota fiscal com o contador. Detalhe
 completo em `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` §2.1.
+
+### 12.8 Sessão 2026-07-13 — merge da `monetization` na `main` + nota fiscal sob demanda
+
+**Merge:** a branch `monetization` e a `main` compartilhavam o mesmo merge-base — a branch era
+literalmente `main` + os 3 commits da §12.7 (mais o throttle de coleta `13a6954`). Fast-forward
+puro, sem conflitos, com push para `origin/main`. A partir daqui, tudo descrito em §12.7 está na
+`main` — só falta **deploy** (Render/Vercel) e rodar `alembic upgrade head` em produção.
+
+**Nota fiscal sob demanda:** o dono pediu para o cliente só ver/receber a nota quando pedir
+explicitamente, em vez de expor automaticamente para toda compra. Decisão de arquitetura adotada
+(mais segura do ponto de vista fiscal): a emissão em si **continua automática** em
+`_credit_if_paid` (best-effort, via `issue_invoice`) — o documento fiscal existe para 100% das
+vendas, evitando faturamento sem nota. O que passou a ser sob demanda é só a **exposição ao
+cliente**: nova coluna `app_payment_orders.invoice_requested_at` (migração `b4d6e1f8a9c2`), novo
+`payments/service.py::request_invoice()` (idempotente — marca o pedido do cliente e tenta emitir
+de novo se ainda não `issued`), rota `POST /payments/orders/{id}/request-invoice`, e botão
+"Solicitar nota fiscal" na Carteira (`carteira/page.tsx`) que só aparece para pedidos pagos sem
+`invoice_requested_at`.
+
+Por quê essa decisão e não emissão 100% sob demanda: no Brasil, a obrigação de emitir NFS-e por
+venda de serviço normalmente **independe** de o cliente pedir uma cópia — a prefeitura em geral
+exige o documento para toda venda concluída, para fins de ISS/declaração de faturamento. "Só
+emitir se o cliente pedir" arriscaria configurar faturamento sem nota fiscal para o resto das
+vendas. Um texto foi preparado e enviado ao contador do dono para confirmar isso especificamente
+para o município/CNAE dele — se ele confirmar que dá para declarar por outra via, a mudança para
+emissão 100% sob demanda é trivial (só mover a chamada de `issue_invoice()` de `_credit_if_paid`
+para dentro do `request_invoice()`).
+
+**Fora de escopo (deliberado):** escolha do emissor real (NFE.io vs Focus NFe) — aguardando
+resposta do contador sobre CNAE/Fator R/regime tributário (sócio único, sem funcionários CLT,
+pró-labore conta para o Fator R). `NoopInvoiceProvider` segue em uso.

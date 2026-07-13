@@ -1,14 +1,39 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
-> está e o que fazer a seguir. Última atualização: **2026-07-11**.
+> está e o que fazer a seguir. Última atualização: **2026-07-13**.
 > Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
 > não repetir**, **§12 = monetização**), `ARCHITECTURE.md` (infra — **§3.1 Neon, §5 monetização, §6
 > e-mail**), `docs/ARQUITETURA_MONETIZACAO.md`.
 
 ---
 
-## −1. Última sessão (2026-07-11) — Monetização completa (7 fases) + branch `monetization`
+## 0. Sessão atual (2026-07-13) — merge da `monetization` na `main` + nota fiscal sob demanda
+
+- **Merge da branch `monetization` → `main`, com push.** A branch estava exatamente 3 commits à
+  frente da `main` (mesmo merge-base) — fast-forward puro, sem conflitos. Os commits `13a6954`
+  (throttle de coleta), `aacc67f` (monetização completa) e `42c4175` (docs) agora estão em
+  `origin/main`. **Deploy no Render/Vercel e `alembic upgrade head` em produção ainda não foram
+  confirmados** — depende do dono rodar/checar (ver §2).
+- **Nota fiscal sob demanda:** a emissão automática continua rodando (best-effort, via
+  `NoopInvoiceProvider`) para **toda** venda paga — mantém a declaração fiscal íntegra mesmo que o
+  cliente nunca peça. O que mudou é a **exposição ao cliente**: nova coluna
+  `invoice_requested_at`, endpoint `POST /payments/orders/{id}/request-invoice` e botão "Solicitar
+  nota fiscal" na Carteira — o link/aviso só aparece depois que o cliente pede. Detalhes em
+  `DOCUMENTACAO_CENTRAL.md` §12.8. Migração `b4d6e1f8a9c2` **ainda não aplicada em produção**.
+- **Conta admin:** tentativa de promover `valerioeducfin@gmail.com` a admin **não pôde ser
+  executada** neste ambiente — não há `backend/.env`/credencial do Neon disponível aqui. Comando
+  repassado ao dono: `cd backend && python scripts/make_admin.py valerioeducfin@gmail.com`
+  (a conta precisa já existir/estar ativa).
+- **Contador:** texto preparado e enviado nesta sessão cobrindo CNAE (6319-4/00 vs 6203-1/00 +
+  6311-9/00), Fator R com pró-labore de sócio único (sem CLT), e a obrigatoriedade de emitir NFS-e
+  por venda independente do cliente pedir cópia. **Resposta do contador ainda pendente** — decide
+  o CNAE final, o emissor (NFE.io vs Focus NFe) e se a emissão pode mesmo ser condicionada ao
+  pedido do cliente ou só a exibição.
+
+---
+
+## −1. Sessão 2026-07-11 — Monetização completa (7 fases), branch `monetization` (já mergeada — ver §0)
 
 Implementadas as 7 fases do plano de monetização de conversão, todas testadas ponta a ponta contra
 o Neon real (não é código não-testado). Branch **`monetization`** (a partir da `main`), commits
@@ -177,8 +202,10 @@ ponta a ponta.
 - **Backend no ar:** `https://api-previsoes-jogos.onrender.com/health` → `200` (checado 2026-07-08).
 - **Motor de previsão:** inalterado (Dixon-Coles NB / NB cascata / GP) + calibração O/U promovida.
 - **Camada de monetização:** funcional ponta a ponta, validada ao vivo no Neon. **7 fases de
-  conversão implementadas na branch `monetization`** (§−1) — ainda **não mergeada na `main`** nem
-  em produção.
+  conversão** (§−1) + **nota fiscal sob demanda** (§0) já **mergeadas e publicadas em
+  `origin/main`** (2026-07-13). **Deploy no Render/Vercel e `alembic upgrade head` em produção
+  ainda pendentes de confirmação do dono** — sem isso as tabelas/colunas novas não existem no
+  banco de produção.
 - **Cadastro: FUNCIONANDO em produção.** Env vars configuradas no Render; um cadastro real no site
   foi concluído com o código OTP chegando por e-mail (confirmado pelo dono em 2026-07-08).
   Logo, `EMAIL_PROVIDER=zeptomail` está setado e o domínio está verificado na Zoho.
@@ -196,14 +223,17 @@ já está pronta para receber cada item sem refatoração (troca de adapter/cred
    `MP_WEBHOOK_SECRET` (sandbox primeiro, depois produção), e `PAYMENT_PROVIDER=mercadopago` no
    Render. Configurar a *notification URL* do MP apontando para
    `https://<backend>/payments/webhook/mercadopago`. Sem isso o gateway continua em mock.
-2. **Merge da branch `monetization` na `main`** (após revisão) + deploy no Render/Vercel.
+2. ~~Merge da branch `monetization` na `main`~~ **feito (2026-07-13, §0)** — falta só o **deploy**
+   no Render/Vercel e rodar `alembic upgrade head` em produção (inclui a migração
+   `b4d6e1f8a9c2` da nota fiscal sob demanda).
 3. **Textos jurídicos revisados por advogado** — Termos de Uso, Privacidade/LGPD, Política de
    Créditos, Regulamento de Promoção. Hoje são **templates** em `legal_documents`
    (`app/domains/legal/service.py`), com a marca `(Template inicial — substituir...)`. Publicar via
    `POST /admin/legal/publish` depois de prontos.
-4. **Emissor de nota fiscal** — decidir com o contador (NFE.io/Focus NFe/Asaas) e trocar
+4. **Emissor de nota fiscal** — decidir com o contador (NFE.io vs Focus NFe) e trocar
    `NoopInvoiceProvider` por um adapter real em `app/domains/payments/invoicing.py` (mesmo padrão
-   do gateway de pagamento — troca de adapter, sem mexer no fluxo).
+   do gateway de pagamento — troca de adapter, sem mexer no fluxo). **A camada de opt-in do
+   cliente já está pronta** (§0) — falta só o emissor de fato responder as chamadas.
 5. **Regime tributário / CNPJ** — já existe CNPJ (confirmado com o dono), mas o enquadramento
    fiscal para emissão de NF sobre venda de créditos ainda não foi decidido com o contador.
 6. **Popular dados reais no admin** — hoje os pacotes/cupons/banners/afiliados são os defaults de
@@ -267,8 +297,8 @@ affiliates,campaigns,analytics,notifications,support}` (`models/schemas/service/
    parâmetro opcional; nenhum caller precisa mudar.
 
 ### Para ir a produção de verdade (monetização) — ver checklist completo em §2.1
-4. ~~Gateway de pagamento real~~ **implementado** (Mercado Pago, branch `monetization`) — falta só
-   credenciais reais + merge/deploy. Ver §2.1.1-2.
+4. ~~Gateway de pagamento real~~ **implementado e já na `main`** (Mercado Pago) — falta só
+   credenciais reais + deploy/migração. Ver §2.1.1-2.
 5. **Agendar a liquidação:** cron chamando `scripts/settle_bets.py` ou
    `POST /api/cron/settle-bets?token=$CRON_TOKEN` (a cada ~30 min). Definir `CRON_TOKEN`.
 6. **Revisar textos legais** (Termos/Privacidade/LGPD/Créditos/Regulamento) — hoje são **templates**

@@ -166,8 +166,8 @@ pipeline de dados/previsão (que segue intacto).
 - **Estrutura modular por domínio:** `backend/app/domains/{users,legal,wallet,payments,analysis,
   bets,promotions,admin,affiliates,campaigns,analytics,notifications,support}` — cada um com
   `models.py`/`schemas.py`/`service.py`/`router.py`. Os 5 últimos (afiliados, campanhas,
-  analytics, notificações, suporte) entraram em 2026-07-11 (monetização de conversão, branch
-  `monetization` — ver `DOCUMENTACAO_CENTRAL.md` §12.7). Config central em
+  analytics, notificações, suporte) entraram em 2026-07-11 (monetização de conversão — ver
+  `DOCUMENTACAO_CENTRAL.md` §12.7) e já estão na `main` desde 2026-07-13 (§12.8). Config central em
   `backend/app/core/config.py` (pydantic-settings). Segurança em `app/core/security.py`
   (argon2 + JWT + OTP), validação CPF/telefone em `app/core/validators.py`.
 - **36 tabelas `app_*`** no Neon (já criadas em produção): usuários/OTP/sessões/auditoria,
@@ -185,8 +185,11 @@ pipeline de dados/previsão (que segue intacto).
     (`MP_ACCESS_TOKEN`/`MP_WEBHOOK_SECRET`) para ativar em produção. Asaas/Pagar.me/Stripe plugam
     pela mesma interface (`PaymentGateway` Protocol em `gateways/base.py`).
   - **Nota fiscal:** `app/domains/payments/invoicing.py` — adapter `NoopInvoiceProvider` (marca
-    `invoice_status="pending"`, não emite nada); trocar por NFE.io/Focus NFe/Asaas é troca de
-    classe, sem mexer no fluxo de pagamento.
+    `invoice_status="pending"`, não emite nada); trocar por NFE.io/Focus NFe é troca de classe, sem
+    mexer no fluxo de pagamento. Emissão roda automática (best-effort) para toda venda paga; desde
+    2026-07-13 a **exibição ao cliente é sob demanda** — coluna `invoice_requested_at` + rota
+    `POST /payments/orders/{id}/request-invoice` + botão na Carteira (ver
+    `DOCUMENTACAO_CENTRAL.md` §12.8).
 - **Env vars novas (defaults de dev):** `APP_ENV`, `JWT_SECRET` (obrigatório em produção),
   `EMAIL_PROVIDER` + credenciais (§6), `PAYMENT_PROVIDER` + `MP_ACCESS_TOKEN`/`MP_PUBLIC_KEY`/
   `MP_WEBHOOK_SECRET`/`MP_WEBHOOK_URL`/`FRONTEND_BASE_URL`, TTLs de token/OTP,

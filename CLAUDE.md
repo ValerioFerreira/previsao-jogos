@@ -13,7 +13,8 @@ deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
   jurídicos, nota fiscal — nada é código pendente).
 - **`DOCUMENTACAO_CENTRAL.md`** — doc-mestre. Modelos, mercados, métricas, **§6 gate de validação**,
   **§8/§9 histórico e TESTES já feitos (não repetir)**, **§12 monetização (§12.7 = conversão
-  completa, gateway MP/cupons/afiliados/analytics/admin, 2026-07-11)**.
+  completa, gateway MP/cupons/afiliados/analytics/admin, 2026-07-11; §12.8 = merge na `main` +
+  nota fiscal sob demanda, 2026-07-13)**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**.
 - **`docs/ARQUITETURA_MONETIZACAO.md`** — desenho original da monetização (créditos/apostas/admin).
@@ -30,8 +31,11 @@ deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 - `app/services/scorer_service.py` + `shots_prop_service.py` — props de jogador (Marcar/Finalizar).
 - `app/services/fixture_fetch.py` — API-Football (cache `match_detail_cache`, `/injuries`).
 - `app/domains/{auth,wallet,payments,analysis,bets,promotions,admin,affiliates,campaigns,analytics,
-  notifications,support}` — monetização (ORM 2.0 + Alembic). Gateway real: `payments/gateways/
-  mercadopago.py` (falta credencial, ver handoff §2.1). Nota fiscal: `payments/invoicing.py` (noop).
+  notifications,support}` — monetização (ORM 2.0 + Alembic, já na `main`). Gateway real: `payments/
+  gateways/mercadopago.py` (falta credencial, ver handoff §2.1). Nota fiscal: emissão automática via
+  `payments/invoicing.py` (`NoopInvoiceProvider` — falta o emissor real), mas a **exibição ao
+  cliente é sob demanda** (`invoice_requested_at` + `POST /payments/orders/{id}/request-invoice` +
+  botão "Solicitar nota fiscal" na Carteira).
 - `app/core/{config,email,startup,security,rate_limit}.py` — config/JWT/OTP/e-mail/guarda de boot.
 - `app/db/connection.py` — engine SQLAlchemy (Neon) + `truncate_and_append`.
 - `model_artifacts/*.joblib` — modelos em produção (DC, NB/GP, `scorer_model`, `shots_prop_model`, calibradores).
