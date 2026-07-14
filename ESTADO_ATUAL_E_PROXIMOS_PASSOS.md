@@ -1,14 +1,51 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
-> está e o que fazer a seguir. Última atualização: **2026-07-11**.
+> está e o que fazer a seguir. Última atualização: **2026-07-14**.
 > Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
 > não repetir**, **§12 = monetização**), `ARCHITECTURE.md` (infra — **§3.1 Neon, §5 monetização, §6
 > e-mail**), `docs/ARQUITETURA_MONETIZACAO.md`.
 
 ---
 
-## −1. Última sessão (2026-07-11) — Monetização completa (7 fases) + branch `monetization`
+## −1. Última sessão (2026-07-14) — coleta de clubes travava havia 1 semana (causa raiz + fix)
+
+**Sintoma:** desde 07/07, o cron diário (`prefetch_wc.cmd`) nunca chegava nas etapas de
+rebuild/precompute/`prefetch_clubs.py` — só a etapa de seleções rodava. `club_match_detail_cache`
+não recebia registro novo há dias, mesmo sobrando ~70k requisições ociosas/dia.
+
+**Causa raiz:** `app/db/connection.py` criava o engine do Neon sem `connect_timeout`/
+`statement_timeout`. Quando o pooler do Neon derruba a conexão silenciosamente (comum, aparece
+em todo log diário como `psycopg2.OperationalError: server closed the connection unexpectedly`),
+o psycopg2 não tem timeout por padrão — o processo trava indefinidamente no `connect()`/query
+seguinte em vez de levantar exceção (que o código já trata com try/except). Como `cache_get()` é
+chamado por fixture (milhares de vezes por execução), bastava UMA queda de conexão no momento
+errado para travar o job inteiro sem nenhum log adicional.
+
+**Fix:**
+1. `connect_args={"connect_timeout": 10, "options": "-c statement_timeout=20000"}` no engine
+   (`app/db/connection.py`) — trava no máximo ~20s e levanta exceção, que já é tratada.
+2. `prefetch_wc.cmd` reordenado: **clubes primeiro**, seleções depois. Seleções já saturou
+   (~24,3k jogos, só entram dezenas novas/dia de jogos reais) e sempre para sozinha via
+   "FIM (tudo coberto)" bem antes do limite diário — rodar depois não tira cota de ninguém.
+   Clubes (prioridade atual, backlog grande em Brasil→Europa) passa a pegar a fatia grande da
+   cota diária primeiro.
+
+**Status da coleta de clubes ao investigar (ver commit):** só uma rodada MANUAL na noite de
+10/07→11/07 avançou algo — cobriu Brasileirão A, Brasileirão B, Copa do Brasil, Premier League e
+La Liga por completo (2015-2026), começou Serie A (Itália) e parou no meio da temporada 2025 sem
+log de conclusão (também travou). **Bundesliga e Ligue 1 (2 das 8 ligas-alvo) ainda não foram
+tocadas.** Nada avançou via cron automático desde 07/07.
+
+**Próxima validação:** conferir `data/state/prefetch_wc.log` no dia seguinte — deve aparecer
+`----- prefetch Clubes -----` seguido de `>> Clubs: N novos ...` e, depois, `----- prefetch
+Selecoes -----`, `----- rebuild scorer model -----` etc., todos na mesma execução (sem gap de
+dias). Se ainda travar, o próximo suspeito é o Task Scheduler matando a instância anterior antes
+dela terminar (verificar config "Do not start a new instance" / limite de duração da tarefa).
+
+---
+
+## −2. Sessão (2026-07-11) — Monetização completa (7 fases) + branch `monetization`
 
 Implementadas as 7 fases do plano de monetização de conversão, todas testadas ponta a ponta contra
 o Neon real (não é código não-testado). Branch **`monetization`** (a partir da `main`), commits
@@ -45,7 +82,7 @@ completos em `DOCUMENTACAO_CENTRAL.md` §12.7.
 
 ---
 
-## −2. Sessão anterior (2026-07-09) — props de finalizações, cópula, Série A
+## −3. Sessão anterior (2026-07-09) — props de finalizações, cópula, Série A
 
 Detalhes em `DOCUMENTACAO_CENTRAL.md` §12.6. Tudo na `main`.
 
@@ -284,36 +321,4 @@ affiliates,campaigns,analytics,notifications,support}` (`models/schemas/service/
    O problema real é que o cache apontado por `fixture_index` é **efêmero no Render** (some a cada
    redeploy → o sistema reconsome cota da API-Football). Destino natural: **object storage**, não
    tabela de banco. **Não** mover o ledger (`app_credit_transactions`) para fora do Postgres: ele
-   depende de transação multi-registro + `idempotency_key UNIQUE` atômica.
-
-### Refinos
-9. **Rate limit é em memória** (`app/core/rate_limit.py` já documenta). Com mais de um worker no
-   Render, o limite passa a ser por processo. Não bloqueia o lançamento — o lockout por conta é
-   persistido no banco e segue íntegro. Trocar por Redis mantendo a interface `hit()`.
-10. **Testes automatizados** — `scripts/verify_signup_flow.py` é o primeiro do repo; não há runner
-    (pytest não está nas deps). Os demais checks desta jornada rodaram em scratchpad e se perderam.
-11. **Nomes de seleções restantes:** ~77 entidades sem `team_id` são não-FIFA/históricas
-    (Abkhazia, Catalonia, Padania…), ausentes da API-Football — sem solução via API.
-12. **`promotions`/`campaigns` sem UI pública fora do admin/Carteira** — o portal do afiliado e a
-    Carteira já consomem os endpoints certos, mas ninguém ainda testou um fluxo real de campanha
-    com banner+cupom+afiliado juntos em produção.
-
-### Analytics (motor de previsão) — janelas abertas (ver `DOCUMENTACAO_CENTRAL.md` §9)
-13. **Backtest financeiro (ROI/yield) + RPS** — a validação que mais falta (acumular odds de fechamento).
-14. **xG denso / tracking** — única fonte plausível de sinal novo ortogonal ao Elo.
-> Já fechado/não repetir: forma de jogador no resultado, GP vs NB, calibração do resultado,
-> posse/passes, XGBoost/LightGBM, cadeia de regressão, cópula, ataque×defesa, dispersão dinâmica.
-
-## 6. Notas / gotchas
-- **`EMAIL_PROVIDER` sem valor = `mock` = cadastro silenciosamente quebrado.** É o motivo de existir
-  a validação de boot. Nunca reintroduzir fallback para mock em provider desconhecido.
-- **Nunca logar o corpo do e-mail** — ele contém o código OTP. O `ZeptoMailSender` loga só o status
-  HTTP e o destinatário.
-- O `.venv/` da raiz **não** tem as deps da camada de usuários (`pydantic_settings`, `fastapi`…).
-- A camada `app_*` é **isolada** do pipeline de dados; migrations não tocam as tabelas de previsão.
-- O harness do Claude **bloqueia** escrever/apagar `backend/.env` (arquivo de credencial não
-  rastreado) e migração em produção por auto-mode. Rodar `alembic upgrade head` como dono do ambiente.
-- Odd justa é referência analítica (sem margem de casa) e **nunca < 1,00**; a plataforma remunera o
-  uso da IA, a promoção é campanha de estorno — não é aposta.
-- `ARCHITECTURE.md` §3 foi **corrigido** em 2026-07-08: a versão anterior descrevia um "Raw Data
-  Lake" em coluna `JSONB` que nunca existiu no código.
+   depende de transação multi-reg
