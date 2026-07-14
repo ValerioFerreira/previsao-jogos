@@ -9,7 +9,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.domains.admin.models import Banner
-from app.domains.campaigns.models import Campaign, Experiment, ExperimentVariant
+from app.domains.campaigns.models import (
+    Campaign, CampaignAffiliate, CampaignCoupon, CampaignPackage, Experiment, ExperimentVariant,
+)
 
 
 def list_active_campaigns(db: Session) -> list[dict]:
@@ -22,9 +24,28 @@ def list_active_campaigns(db: Session) -> list[dict]:
     out = []
     for c in rows:
         banner = db.get(Banner, c.banner_id) if c.banner_id else None
+        from app.domains.payments.models import CreditPackage
+        from app.domains.promotions.models import Coupon
+        from app.domains.affiliates.models import Affiliate
+
+        package_ids = [r[0] for r in db.execute(
+            select(CampaignPackage.package_id).where(CampaignPackage.campaign_id == c.id))]
+        coupon_ids = [r[0] for r in db.execute(
+            select(CampaignCoupon.coupon_id).where(CampaignCoupon.campaign_id == c.id))]
+        affiliate_ids = [r[0] for r in db.execute(
+            select(CampaignAffiliate.affiliate_id).where(CampaignAffiliate.campaign_id == c.id))]
+
+        packages = db.execute(select(CreditPackage).where(CreditPackage.id.in_(package_ids))).scalars().all() if package_ids else []
+        coupons = db.execute(select(Coupon).where(Coupon.id.in_(coupon_ids))).scalars().all() if coupon_ids else []
+        affiliates = db.execute(select(Affiliate).where(Affiliate.id.in_(affiliate_ids))).scalars().all() if affiliate_ids else []
+
         out.append({
             "id": str(c.id), "name": c.name, "priority": c.priority,
             "banner": {"title": banner.title, "body": banner.body, "type": banner.type} if banner else None,
+            "packages": [{"id": str(p.id), "name": p.name, "credits": p.credits,
+                         "price_brl": str(p.price_brl)} for p in packages],
+            "coupons": [{"id": str(co.id), "code": co.code} for co in coupons],
+            "affiliates": [{"id": str(a.id), "code": a.code} for a in affiliates],
         })
     return out
 

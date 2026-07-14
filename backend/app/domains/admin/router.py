@@ -112,6 +112,18 @@ def patch_coupon(coupon_id: str, data: schemas.CouponPatch, request: Request,
     return service.patch_coupon(db, admin, coupon_id, data, client_ip(request))
 
 
+@router.delete("/coupons/{coupon_id}", response_model=schemas.OkResponse)
+def delete_coupon(coupon_id: str, request: Request,
+                  admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    service.delete_coupon(db, admin, coupon_id, client_ip(request))
+    return schemas.OkResponse(detail="Cupom excluído.")
+
+
+@router.get("/coupons/analytics")
+def coupon_analytics(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.coupon_analytics(db)
+
+
 # ---------- afiliados ----------
 @router.get("/affiliates")
 def list_affiliates(_: User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -130,16 +142,99 @@ def patch_affiliate(affiliate_id: str, data: schemas.AffiliatePatch, request: Re
     return service.patch_affiliate(db, admin, affiliate_id, data, client_ip(request))
 
 
+@router.post("/affiliates/{affiliate_id}/payments", status_code=201)
+def create_affiliate_payment(affiliate_id: str, data: schemas.AffiliatePaymentRequest, request: Request,
+                             admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.create_affiliate_payment(db, admin, affiliate_id, data, client_ip(request))
+
+
+@router.get("/affiliates/{affiliate_id}/payments")
+def list_affiliate_payments(affiliate_id: str, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.list_affiliate_payments(db, affiliate_id)
+
+
 # ---------- pacotes de crédito ----------
 @router.get("/packages")
 def list_packages(_: User = Depends(require_admin), db: Session = Depends(get_db)):
     return service.list_packages_admin(db)
 
 
+@router.post("/packages", status_code=201)
+def create_package(data: schemas.PackageRequest, request: Request,
+                   admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.create_package(db, admin, data, client_ip(request))
+
+
 @router.patch("/packages/{package_id}")
 def patch_package(package_id: str, data: schemas.PackagePatch, request: Request,
                   admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return service.patch_package(db, admin, package_id, data, client_ip(request))
+
+
+# ---------- campanhas ----------
+@router.get("/campaigns")
+def list_campaigns(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.list_campaigns(db)
+
+
+@router.post("/campaigns", status_code=201)
+def create_campaign(data: schemas.CampaignRequest, request: Request,
+                    admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.create_campaign(db, admin, data, client_ip(request))
+
+
+@router.patch("/campaigns/{campaign_id}")
+def patch_campaign(campaign_id: str, data: schemas.CampaignPatch, request: Request,
+                   admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.patch_campaign(db, admin, campaign_id, data, client_ip(request))
+
+
+@router.delete("/campaigns/{campaign_id}", response_model=schemas.OkResponse)
+def delete_campaign(campaign_id: str, request: Request,
+                    admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    service.delete_campaign(db, admin, campaign_id, client_ip(request))
+    return schemas.OkResponse(detail="Campanha excluída.")
+
+
+@router.get("/campaigns/{campaign_id}/dashboard")
+def campaign_dashboard(campaign_id: str, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.campaign_dashboard(db, campaign_id)
+
+
+@router.post("/campaigns/{campaign_id}/packages/{package_id}")
+def add_campaign_package(campaign_id: str, package_id: str, request: Request,
+                         admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.add_campaign_package(db, admin, campaign_id, package_id, client_ip(request))
+
+
+@router.delete("/campaigns/{campaign_id}/packages/{package_id}")
+def remove_campaign_package(campaign_id: str, package_id: str, request: Request,
+                            admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.remove_campaign_package(db, admin, campaign_id, package_id, client_ip(request))
+
+
+@router.post("/campaigns/{campaign_id}/coupons/{coupon_id}")
+def add_campaign_coupon(campaign_id: str, coupon_id: str, request: Request,
+                        admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.add_campaign_coupon(db, admin, campaign_id, coupon_id, client_ip(request))
+
+
+@router.delete("/campaigns/{campaign_id}/coupons/{coupon_id}")
+def remove_campaign_coupon(campaign_id: str, coupon_id: str, request: Request,
+                           admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.remove_campaign_coupon(db, admin, campaign_id, coupon_id, client_ip(request))
+
+
+@router.post("/campaigns/{campaign_id}/affiliates/{affiliate_id}")
+def add_campaign_affiliate(campaign_id: str, affiliate_id: str, request: Request,
+                           admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.add_campaign_affiliate(db, admin, campaign_id, affiliate_id, client_ip(request))
+
+
+@router.delete("/campaigns/{campaign_id}/affiliates/{affiliate_id}")
+def remove_campaign_affiliate(campaign_id: str, affiliate_id: str, request: Request,
+                              admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.remove_campaign_affiliate(db, admin, campaign_id, affiliate_id, client_ip(request))
 
 
 # ---------- suporte ----------
@@ -182,6 +277,19 @@ def list_banners(_: User = Depends(require_admin), db: Session = Depends(get_db)
 def create_banner(data: schemas.BannerRequest, request: Request,
                   admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return service.create_banner(db, admin, data, client_ip(request))
+
+
+@router.patch("/banners/{banner_id}")
+def patch_banner(banner_id: str, data: schemas.BannerPatch, request: Request,
+                 admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.patch_banner(db, admin, banner_id, data, client_ip(request))
+
+
+@router.delete("/banners/{banner_id}", response_model=schemas.OkResponse)
+def delete_banner(banner_id: str, request: Request,
+                  admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    service.delete_banner(db, admin, banner_id, client_ip(request))
+    return schemas.OkResponse(detail="Banner excluído.")
 
 
 # ---------- auditoria ----------

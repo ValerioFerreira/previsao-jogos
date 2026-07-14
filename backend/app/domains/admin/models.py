@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, JSONB, TimestampMixin, UUIDPrimaryKeyMixin
@@ -45,3 +45,7 @@ class Banner(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Controle de ordem de exibição — prioridade "de campanha" (Black Friday > padrão) e
+    # ordem fina entre banners de mesma prioridade.
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

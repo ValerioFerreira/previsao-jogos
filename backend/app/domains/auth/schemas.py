@@ -11,6 +11,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     cpf: str
     phone: str
+    referral_code: str | None = None  # indicação entre usuários — independente de ?ref= (afiliado)
+    referral_source: str | None = None  # "link" (via /convite/{codigo}) | "manual" (digitado)
 
     @field_validator("cpf")
     @classmethod
@@ -104,6 +106,14 @@ class UserPublic(BaseModel):
     phone: str
     status: str
     role: str
+    referral_code: str | None = None
+
+
+class ReferralInfo(BaseModel):
+    referral_code: str | None
+    share_link: str | None
+    completed_referrals: int
+    credits_earned: str
 
 
 class TokenResponse(BaseModel):

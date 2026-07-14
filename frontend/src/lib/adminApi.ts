@@ -40,8 +40,12 @@ export const adminApi = {
     authFetch("/admin/coupons", { method: "POST", body: JSON.stringify(body) }),
   patchCoupon: (id: string, body: Record<string, unknown>) =>
     authFetch(`/admin/coupons/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteCoupon: (id: string) => authFetch(`/admin/coupons/${id}`, { method: "DELETE" }),
+  couponAnalytics: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/coupons/analytics"),
 
   packages: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/packages"),
+  createPackage: (body: Record<string, unknown>) =>
+    authFetch("/admin/packages", { method: "POST", body: JSON.stringify(body) }),
   patchPackage: (id: string, body: Record<string, unknown>) =>
     authFetch(`/admin/packages/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
@@ -50,10 +54,37 @@ export const adminApi = {
     authFetch("/admin/affiliates", { method: "POST", body: JSON.stringify(body) }),
   patchAffiliate: (id: string, body: Record<string, unknown>) =>
     authFetch(`/admin/affiliates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  affiliatePayments: (affiliateId: string) =>
+    authFetch<{ items: Record<string, unknown>[] }>(`/admin/affiliates/${affiliateId}/payments`),
+  createAffiliatePayment: (affiliateId: string, body: Record<string, unknown>) =>
+    authFetch(`/admin/affiliates/${affiliateId}/payments`, { method: "POST", body: JSON.stringify(body) }),
 
   banners: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/banners"),
   createBanner: (body: Record<string, unknown>) =>
     authFetch("/admin/banners", { method: "POST", body: JSON.stringify(body) }),
+  patchBanner: (id: string, body: Record<string, unknown>) =>
+    authFetch(`/admin/banners/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteBanner: (id: string) => authFetch(`/admin/banners/${id}`, { method: "DELETE" }),
+
+  campaigns: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/campaigns"),
+  createCampaign: (body: Record<string, unknown>) =>
+    authFetch("/admin/campaigns", { method: "POST", body: JSON.stringify(body) }),
+  patchCampaign: (id: string, body: Record<string, unknown>) =>
+    authFetch(`/admin/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteCampaign: (id: string) => authFetch(`/admin/campaigns/${id}`, { method: "DELETE" }),
+  campaignDashboard: (id: string) => authFetch<Record<string, unknown>>(`/admin/campaigns/${id}/dashboard`),
+  addCampaignPackage: (id: string, packageId: string) =>
+    authFetch(`/admin/campaigns/${id}/packages/${packageId}`, { method: "POST" }),
+  removeCampaignPackage: (id: string, packageId: string) =>
+    authFetch(`/admin/campaigns/${id}/packages/${packageId}`, { method: "DELETE" }),
+  addCampaignCoupon: (id: string, couponId: string) =>
+    authFetch(`/admin/campaigns/${id}/coupons/${couponId}`, { method: "POST" }),
+  removeCampaignCoupon: (id: string, couponId: string) =>
+    authFetch(`/admin/campaigns/${id}/coupons/${couponId}`, { method: "DELETE" }),
+  addCampaignAffiliate: (id: string, affiliateId: string) =>
+    authFetch(`/admin/campaigns/${id}/affiliates/${affiliateId}`, { method: "POST" }),
+  removeCampaignAffiliate: (id: string, affiliateId: string) =>
+    authFetch(`/admin/campaigns/${id}/affiliates/${affiliateId}`, { method: "DELETE" }),
 
   settings: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/settings"),
   setSetting: (key: string, body: { value: Record<string, unknown>; description?: string }) =>

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, ArrowRight, CheckCircle2, Mail } from "lucide-react";
@@ -20,10 +20,22 @@ export default function CadastroPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const [form, setForm] = useState({ full_name: "", email: "", cpf: "", phone: "" });
+  const [referralCode, setReferralCode] = useState("");
+  const [referralSource, setReferralSource] = useState<"link" | "manual">("manual");
   const [code, setCode] = useState("");
   const [setupToken, setSetupToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+
+  useEffect(() => {
+    // código de indicação (independente do ?ref= do afiliado) — via /convite/[code] (que
+    // redireciona pra cá com ?indicacao=) ou direto na URL de cadastro
+    const fromUrl = new URLSearchParams(window.location.search).get("indicacao");
+    if (fromUrl) {
+      setReferralCode(fromUrl.toUpperCase());
+      setReferralSource("link");
+    }
+  }, []);
 
   const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -37,6 +49,8 @@ export default function CadastroPage() {
         email: form.email.trim(),
         cpf: form.cpf.replace(/\D/g, ""),
         phone: form.phone.replace(/\D/g, ""),
+        referral_code: referralCode.trim() || undefined,
+        referral_source: referralCode.trim() ? referralSource : undefined,
       });
       setStep("otp");
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
@@ -99,6 +113,12 @@ export default function CadastroPage() {
                   <Label htmlFor="tel">Telefone</Label>
                   <Input id="tel" value={form.phone} onChange={upd("phone")} placeholder="(11) 90000-0000" required />
                 </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="referral">Código de indicação (opcional)</Label>
+                <Input id="referral" value={referralCode}
+                  onChange={(e) => { setReferralCode(e.target.value.toUpperCase()); setReferralSource("manual"); }}
+                  placeholder="Ex.: VALERIO8F2" />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (<>Continuar <ArrowRight className="w-4 h-4 ml-2" /></>)}

@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.domains.enums import CreditTxType, PaymentProvider, PaymentStatus
+from app.domains.enums import CreditTxType, PackageStatus, PaymentProvider, PaymentStatus
 from app.domains.payments import schemas
 from app.domains.payments.gateways import get_gateway
 from app.domains.affiliates import service as affiliates_service
@@ -23,29 +23,16 @@ from app.domains.promotions import service as promotions_service
 from app.domains.users.models import User
 from app.domains.wallet.service import get_or_create_wallet, post_transaction
 
-_DEFAULT_PACKAGES = [
-    ("Avulso", 1, "1.00", 0),
-    ("Pacote 10", 10, "10.00", 0),
-    ("Pacote 50 (+5 bônus)", 50, "50.00", 5),
-    ("Pacote 100 (+15 bônus)", 100, "100.00", 15),
-]
-
-
-def seed_default_packages(db: Session) -> None:
-    if db.execute(select(CreditPackage.id).limit(1)).first() is not None:
-        return
-    for name, credits, price, bonus in _DEFAULT_PACKAGES:
-        db.add(CreditPackage(name=name, credits=credits, price_brl=Decimal(price),
-                             bonus_credits=bonus, active=True))
-    db.commit()
-
 
 def list_packages(db: Session) -> list[schemas.PackageItem]:
-    rows = db.execute(select(CreditPackage).where(CreditPackage.active.is_(True))
-                      .order_by(CreditPackage.credits)).scalars().all()
+    """Pacotes à venda — 100% gerenciados pelo painel admin (sem defaults hardcoded;
+    `POST /admin/packages` é o único jeito de criar um novo)."""
+    rows = db.execute(select(CreditPackage).where(CreditPackage.status == PackageStatus.ativo)
+                      .order_by(CreditPackage.sort_order, CreditPackage.credits)).scalars().all()
     return [schemas.PackageItem(
         id=str(p.id), name=p.name, credits=p.credits, price_brl=p.price_brl,
         bonus_credits=p.bonus_credits, total_credits=p.credits + p.bonus_credits,
+        featured_badge=p.featured_badge.value if p.featured_badge else None,
     ) for p in rows]
 
 
@@ -53,7 +40,7 @@ def create_order(db: Session, user: User, data: schemas.CheckoutRequest) -> sche
     analytics_service.track(db, "checkout_started", user_id=user.id, package_id=data.package_id, credits=data.credits)
     if data.package_id:
         pkg = db.get(CreditPackage, uuid.UUID(data.package_id))
-        if pkg is None or not pkg.active:
+        if pkg is None or pkg.status != PackageStatus.ativo:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pacote não encontrado.")
         credits = pkg.credits + pkg.bonus_credits
         amount = Decimal(pkg.price_brl)
@@ -63,6 +50,7 @@ def create_order(db: Session, user: User, data: schemas.CheckoutRequest) -> sche
         amount = (Decimal(credits) * Decimal(str(settings.credit_unit_price_brl))).quantize(Decimal("0.01"))
         package_id = None
 
+    original_amount = amount
     coupon_id = None
     if data.coupon_code:
         from app.domains.promotions import schemas as promo_schemas
@@ -75,10 +63,13 @@ def create_order(db: Session, user: User, data: schemas.CheckoutRequest) -> sche
         credits += preview.bonus_credits
         analytics_service.track(db, "coupon_applied", user_id=user.id, code=data.coupon_code)
 
+    discount_amount = (original_amount - amount) if original_amount > amount else Decimal("0")
+
     gateway = get_gateway()
     order = PaymentOrder(
         user_id=user.id, provider=PaymentProvider(gateway.name), package_id=package_id,
-        coupon_id=coupon_id, amount_brl=amount, credits=credits, status=PaymentStatus.created,
+        coupon_id=coupon_id, amount_brl=amount, discount_amount_brl=discount_amount,
+        credits=credits, status=PaymentStatus.created,
         idempotency_key=f"order:{uuid.uuid4().hex}",
     )
     db.add(order)
@@ -176,13 +167,22 @@ def recommend_package(db: Session, user: User) -> schemas.PackageItem | None:
 def list_orders(db: Session, user: User, only_pending: bool = False) -> list[schemas.OrderListItem]:
     """Minhas compras (Fase 6) — se only_pending, filtra pedidos PIX/pendentes para o
     banner de recuperação de pagamento (reabre o QR/copia-e-cola salvo em raw_payload)."""
+    from app.domains.promotions.models import Coupon
+
     stmt = select(PaymentOrder).where(PaymentOrder.user_id == user.id)
     if only_pending:
         stmt = stmt.where(PaymentOrder.status == PaymentStatus.pending)
     rows = db.execute(stmt.order_by(PaymentOrder.created_at.desc()).limit(50)).scalars().all()
+    coupon_ids = {o.coupon_id for o in rows if o.coupon_id}
+    coupons_by_id = {}
+    if coupon_ids:
+        coupons_by_id = {c.id: c.code for c in db.execute(
+            select(Coupon).where(Coupon.id.in_(coupon_ids))).scalars().all()}
     return [schemas.OrderListItem(
         order_id=str(o.id), provider=o.provider.value, method=o.method, status=o.status.value,
         amount_brl=o.amount_brl, credits=o.credits,
+        coupon_code=coupons_by_id.get(o.coupon_id) if o.coupon_id else None,
+        discount_amount_brl=o.discount_amount_brl,
         checkout=o.raw_payload if o.status == PaymentStatus.pending else None,
         invoice_url=o.invoice_url, invoice_status=o.invoice_status,
         created_at=o.created_at.isoformat(), paid_at=o.paid_at.isoformat() if o.paid_at else None,

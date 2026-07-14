@@ -1,11 +1,12 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Coins, Loader2, Plus, Sparkles, Tag, Wallet as WalletIcon } from "lucide-react";
+import { AlertTriangle, Coins, Copy, Gift, Loader2, Plus, Share2, Sparkles, Tag, Wallet as WalletIcon } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import { authApi, type ReferralInfo } from "@/lib/authApi";
 import {
-  paymentsApi, walletApiFull, promotionsApi, bannersApi, ordersApi,
-  type CreditPackage, type Transaction, type CouponPreview, type Banner, type OrderListItem,
+  paymentsApi, walletApiFull, promotionsApi, bannersApi, ordersApi, campaignsApi,
+  type CreditPackage, type Transaction, type CouponPreview, type Banner, type OrderListItem, type ActiveCampaign,
 } from "@/lib/monetizationApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,8 @@ const BADGE_LABEL: Record<string, { label: string; className: string }> = {
   mais_vendido: { label: "★ Mais vendido", className: "bg-amber-500 text-white" },
   melhor_oferta: { label: "Melhor custo-benefício", className: "bg-emerald-600 text-white" },
   oferta_limitada: { label: "Oferta por tempo limitado", className: "bg-rose-600 text-white" },
+  melhor_para_comecar: { label: "Melhor para começar", className: "bg-sky-600 text-white" },
+  melhor_custo_beneficio: { label: "💎 Melhor custo-benefício", className: "bg-violet-600 text-white" },
 };
 
 export default function CarteiraPage() {
@@ -36,12 +39,15 @@ export default function CarteiraPage() {
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
+  const [campaign, setCampaign] = useState<ActiveCampaign | null>(null);
+  const [referral, setReferral] = useState<ReferralInfo | null>(null);
   const [pendingOrders, setPendingOrders] = useState<OrderListItem[]>([]);
   const [recommendedId, setRecommendedId] = useState<string | null>(null);
   const [myOrders, setMyOrders] = useState<OrderListItem[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const [couponCode, setCouponCode] = useState("");
   const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null);
@@ -54,9 +60,11 @@ export default function CarteiraPage() {
 
   const load = useCallback(async () => {
     try {
-      const [pk, tx, bn, pend, mine, rec] = await Promise.all([
+      const [pk, tx, bn, camp, ref, pend, mine, rec] = await Promise.all([
         paymentsApi.packages(), walletApiFull.transactions(50),
         bannersApi.active().catch(() => ({ items: [] })),
+        campaignsApi.active().catch(() => ({ items: [] })),
+        authApi.myReferral().catch(() => null),
         ordersApi.pending().catch(() => []),
         ordersApi.mine().catch(() => []),
         paymentsApi.recommended().catch(() => null),
@@ -64,6 +72,8 @@ export default function CarteiraPage() {
       setPackages([...pk].sort((a, b) => (a.credits + a.bonus_credits) - (b.credits + b.bonus_credits)));
       setTxs(tx.items);
       setBanners(bn.items);
+      setCampaign(camp.items[0] ?? null);
+      setReferral(ref);
       setPendingOrders(pend);
       setMyOrders(mine);
       setRecommendedId(rec?.id ?? null);
@@ -177,6 +187,22 @@ export default function CarteiraPage() {
         <h1 className="text-2xl font-bold">Carteira</h1>
       </div>
 
+      {/* Campanha ativa (prioridade máxima) — banner amarra cupom/pacotes participantes */}
+      {campaign?.banner && (
+        <div className="rounded-lg bg-gradient-to-r from-violet-700 to-violet-500 text-white p-4 flex items-center gap-3">
+          <Sparkles className="w-5 h-5 shrink-0" />
+          <div>
+            <div className="font-semibold">{campaign.banner.title}</div>
+            {campaign.banner.body && <div className="text-sm text-violet-50">{campaign.banner.body}</div>}
+            {campaign.coupons.length > 0 && (
+              <div className="text-xs text-violet-100 mt-1">
+                Use o cupom <span className="font-mono font-semibold">{campaign.coupons[0].code}</span> no checkout.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 1. Banner promocional */}
       {banners.map((b) => (
         <div key={b.id} className="rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 text-white p-4 flex items-center gap-3">
@@ -252,6 +278,38 @@ export default function CarteiraPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Convide seus amigos (indicação — independente do programa de afiliados) */}
+      {referral?.referral_code && (
+        <Card>
+          <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Gift className="w-4 h-4" /> Convide seus amigos</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Você e seu amigo recebem créditos grátis quando ele usar seu código no cadastro.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-lg font-bold px-3 py-1.5 rounded-md bg-muted">{referral.referral_code}</span>
+              <Button size="sm" variant="outline" onClick={() => {
+                navigator.clipboard.writeText(referral.referral_code || "");
+                setCopied(true); setTimeout(() => setCopied(false), 2000);
+              }}>
+                <Copy className="w-3.5 h-3.5 mr-1" /> {copied ? "Copiado!" : "Copiar código"}
+              </Button>
+              {referral.share_link && (
+                <Button size="sm" variant="outline" onClick={() => {
+                  if (navigator.share) navigator.share({ url: referral.share_link! });
+                  else { navigator.clipboard.writeText(referral.share_link!); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+                }}>
+                  <Share2 className="w-3.5 h-3.5 mr-1" /> Compartilhar
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {referral.completed_referrals} indicação(ões) concluída(s) · {referral.credits_earned} créditos ganhos
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 6. Pagamentos pendentes (recuperação de PIX) */}
       {pendingOrders.length > 0 && (
@@ -330,6 +388,8 @@ export default function CarteiraPage() {
                     <div className="text-xs text-muted-foreground">
                       {new Date(o.created_at).toLocaleString("pt-BR")} · {o.provider}
                       {o.method ? ` · ${o.method}` : ""}
+                      {o.coupon_code ? ` · cupom ${o.coupon_code}` : ""}
+                      {o.discount_amount_brl && Number(o.discount_amount_brl) > 0 ? ` (−R$ ${Number(o.discount_amount_brl).toFixed(2)})` : ""}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

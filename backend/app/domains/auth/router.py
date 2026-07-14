@@ -16,7 +16,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def register(data: schemas.RegisterRequest, request: Request, db: Session = Depends(get_db)):
     ip = client_ip(request)
     rate_limit.hit(f"register:{ip}", max_events=5, window_sec=300)
-    service.register(db, data, ip)
+    service.register(db, data, ip, request.headers.get("user-agent"))
     return {"message": "Cadastro iniciado. Enviamos um código de verificação para seu e-mail."}
 
 
@@ -80,4 +80,10 @@ def me(user: User = Depends(get_current_user)):
     return schemas.UserPublic(
         id=str(user.id), full_name=user.full_name, email=user.email, cpf=user.cpf,
         phone=user.phone, status=user.status.value, role=user.role.value,
+        referral_code=user.referral_code,
     )
+
+
+@router.get("/me/referral", response_model=schemas.ReferralInfo)
+def my_referral(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.get_referral_info(db, user)
