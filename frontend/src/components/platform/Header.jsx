@@ -2,7 +2,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sun, Moon, Activity, Wifi, WifiOff, BarChart3, Wrench } from 'lucide-react';
+import { Sun, Moon, Activity, BarChart3, Wrench } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 import { motion } from 'framer-motion';
 import AccountMenu from '@/components/platform/AccountMenu';
@@ -16,7 +16,6 @@ const NAV_ITEMS = [
 export default function Header() {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
-  const isConnected = true;
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -27,9 +26,9 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-14">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14">
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2 shrink-0 min-h-[44px] min-w-[44px]">
+            <Link href="/" className="flex items-center gap-2 shrink-0 min-h-[44px] min-w-[44px] justify-self-start">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
                 <Activity className="w-5 h-5 text-white" />
               </div>
@@ -42,7 +41,7 @@ export default function Header() {
             </Link>
 
             {/* Navigation - Desktop */}
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden md:flex items-center gap-1 justify-self-center">
               {NAV_ITEMS.map(item => {
                 const isActive = pathname === item.path;
                 return (
@@ -67,22 +66,7 @@ export default function Header() {
             </nav>
 
             {/* Right Controls */}
-            <div className="flex items-center gap-3 shrink-0">
-              {/* API Status */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                {isConnected ? (
-                  <>
-                    <Wifi className="w-3.5 h-3.5 text-emerald-500" />
-                    <span className="hidden sm:inline">Conectado</span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="w-3.5 h-3.5 text-red-500" />
-                    <span className="hidden sm:inline">Desconectado</span>
-                  </>
-                )}
-              </div>
-
+            <div className="flex items-center gap-3 shrink-0 justify-self-end">
               {/* Theme Toggle */}
               {mounted && (
                 <button

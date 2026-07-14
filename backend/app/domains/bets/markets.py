@@ -7,6 +7,8 @@ linha, nem dois resultados). A odd combinada é o produto das odds das seleçõe
 """
 from __future__ import annotations
 
+import random
+
 MAX_AUTO_LEGS = 4  # nº máximo de seleções numa aposta auto-selecionada
 
 
@@ -147,18 +149,19 @@ def combined_odd(selections: list[dict], cap_precision: int = 3) -> float:
 
 
 def auto_select(candidates: dict[str, dict], cap: float) -> list[dict]:
-    """Escolhe a combinação (grupos distintos, até MAX_AUTO_LEGS) com odd combinada
-    MÁXIMA sem ultrapassar o teto — ou seja, a mais próxima de `cap` (2,00) por baixo."""
+    """Sorteia, a cada chamada, uma combinação (grupos distintos, até MAX_AUTO_LEGS)
+    entre as que ficam com odd combinada mais próxima do teto (2,00) por baixo — assim
+    cliques sucessivos no botão "Selecionar Automaticamente" tendem a sugerir apostas
+    diferentes, sempre com odd <= cap."""
     items = sorted(
         [c for c in candidates.values() if 1.0 < c["odd"] <= cap],
         key=lambda c: (-c["odd"], c["market_key"]),
     )
-    best = {"prod": 0.0, "sel": []}
+    found: list[tuple[float, list[dict]]] = []
 
     def dfs(start: int, used: set, prod: float, chosen: list):
-        if chosen and prod > best["prod"]:
-            best["prod"] = prod
-            best["sel"] = list(chosen)
+        if chosen:
+            found.append((prod, list(chosen)))
         if len(chosen) >= MAX_AUTO_LEGS:
             return
         for j in range(start, len(items)):
@@ -173,10 +176,16 @@ def auto_select(candidates: dict[str, dict], cap: float) -> list[dict]:
                 chosen.pop(); used.discard(b)
 
     dfs(0, set(), 1.0, [])
-    if not best["sel"]:
+    if not found:
         allc = [c for c in candidates.values() if c["odd"]]
         return [min(allc, key=lambda c: c["odd"])] if allc else []
-    return best["sel"]
+
+    best_prod = max(prod for prod, _ in found)
+    # mantém só combinações razoavelmente próximas do teto (>= 80% da melhor encontrada)
+    # para variar a sugestão sem se afastar demais da odd máxima.
+    threshold = best_prod * 0.80
+    pool = [sel for prod, sel in found if prod >= threshold] or [sel for _, sel in found]
+    return random.choice(pool)
 
 
 def resolve_selections(candidates: dict[str, dict], market_keys: list[str]) -> list[dict]:

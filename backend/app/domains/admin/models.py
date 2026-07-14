@@ -41,6 +41,7 @@ class Banner(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     body: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     type: Mapped[str] = mapped_column(String(40), default="info", nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

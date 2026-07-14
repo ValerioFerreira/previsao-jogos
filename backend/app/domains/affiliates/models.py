@@ -25,6 +25,8 @@ class Affiliate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     commission_fixed_brl: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)  # active|paused
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
 class AffiliateAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):

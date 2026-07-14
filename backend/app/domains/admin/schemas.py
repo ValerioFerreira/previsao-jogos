@@ -70,6 +70,7 @@ class CouponRequest(BaseModel):
     per_user_limit: int | None = None
     valid_from: datetime | None = None
     valid_to: datetime | None = None
+    valid_days: int | None = None  # duração em dias a partir de agora — atalho para valid_to
     first_purchase_only: bool = False
     description: str | None = None
     active: bool = True
@@ -97,6 +98,8 @@ class AffiliateRequest(BaseModel):
     user_id: str | None = None
     commission_pct: Decimal | None = None
     commission_fixed_brl: Decimal | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
     notes: str | None = None
 
 
@@ -105,6 +108,8 @@ class AffiliatePatch(BaseModel):
     commission_pct: Decimal | None = None
     commission_fixed_brl: Decimal | None = None
     status: str | None = None  # active | paused
+    contact_email: str | None = None
+    contact_phone: str | None = None
     notes: str | None = None
 
 
@@ -138,6 +143,7 @@ class SettingRequest(BaseModel):
 class BannerRequest(BaseModel):
     title: str
     body: str | None = None
+    image_url: str | None = None
     type: str = "info"
     active: bool = True
     starts_at: datetime | None = None
@@ -149,6 +155,7 @@ class BannerRequest(BaseModel):
 class BannerPatch(BaseModel):
     title: str | None = None
     body: str | None = None
+    image_url: str | None = None
     type: str | None = None
     active: bool | None = None
     starts_at: datetime | None = None

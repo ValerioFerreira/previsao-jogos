@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/AuthContext";
 export default function ScreenshotGuard({ children, page }: { children: React.ReactNode; page: string }) {
   const { user } = useAuth();
   const [triggered, setTriggered] = useState(false);
+  const isAdmin = user && (user.role === "admin" || user.role === "superadmin");
 
   const report = useCallback((incident_type: IncidentType) => {
     if (!user) return; // só usuários autenticados geram análises protegidas
@@ -23,15 +24,18 @@ export default function ScreenshotGuard({ children, page }: { children: React.Re
   }, [report]);
 
   useEffect(() => {
+    if (isAdmin) return; // admin não tem nenhuma restrição de impressão/cópia/captura
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === "PrintScreen") trigger("printscreen");
     };
     document.addEventListener("keyup", onKeyUp);
     return () => document.removeEventListener("keyup", onKeyUp);
-  }, [trigger]);
+  }, [trigger, isAdmin]);
 
   const blockCopy = (e: React.ClipboardEvent) => { e.preventDefault(); report("copy_blocked"); };
   const blockContextMenu = (e: React.MouseEvent) => { e.preventDefault(); report("context_menu_blocked"); };
+
+  if (isAdmin) return <>{children}</>;
 
   return (
     <div className="relative">

@@ -8,7 +8,8 @@ export type AdminUser = {
 };
 
 export type AuditEntry = {
-  id: string; admin_id: string | null; action: string; target_type: string | null;
+  id: string; admin_id: string | null; admin_name: string | null; admin_email: string | null;
+  action: string; target_type: string | null;
   target_id: string | null; before: unknown; after: unknown; created_at: string;
 };
 

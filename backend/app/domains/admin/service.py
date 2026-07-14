@@ -219,13 +219,16 @@ def create_coupon(db: Session, admin: User, data: schemas.CouponRequest, ip) -> 
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Tipo de desconto inválido.")
     if db.execute(select(Coupon).where(Coupon.code == data.code)).scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Código de cupom já existe.")
+    valid_to = data.valid_to
+    if valid_to is None and data.valid_days:
+        valid_to = datetime.now(timezone.utc) + timedelta(days=data.valid_days)
     c = Coupon(
         promotion_id=uuid.UUID(data.promotion_id), code=data.code.strip().upper(), discount_type=dtype,
         discount_value=data.discount_value, bonus_credits=data.bonus_credits,
         min_purchase_brl=data.min_purchase_brl,
         package_id=uuid.UUID(data.package_id) if data.package_id else None,
         usage_limit=data.usage_limit, per_user_limit=data.per_user_limit,
-        valid_from=data.valid_from, valid_to=data.valid_to,
+        valid_from=data.valid_from, valid_to=valid_to,
         first_purchase_only=data.first_purchase_only, description=data.description, active=data.active,
     )
     db.add(c); db.flush()
@@ -312,6 +315,7 @@ def _affiliate_out(a: Affiliate, db: Session) -> dict:
            "commission_pct": str(a.commission_pct) if a.commission_pct else None,
            "commission_fixed_brl": str(a.commission_fixed_brl) if a.commission_fixed_brl else None,
            "status": a.status, "notes": a.notes,
+           "contact_email": a.contact_email, "contact_phone": a.contact_phone,
            "commission_due_brl": str(due), "commission_paid_brl": str(paid)}
 
 
@@ -321,6 +325,7 @@ def create_affiliate(db: Session, admin: User, data: schemas.AffiliateRequest, i
     a = Affiliate(name=data.name, code=data.code.strip().lower(),
                  user_id=uuid.UUID(data.user_id) if data.user_id else None,
                  commission_pct=data.commission_pct, commission_fixed_brl=data.commission_fixed_brl,
+                 contact_email=data.contact_email, contact_phone=data.contact_phone,
                  notes=data.notes)
     db.add(a); db.flush()
     audit(db, admin, "affiliate_create", "affiliate", a.id, after={"code": a.code}, ip=ip)
@@ -340,6 +345,8 @@ def patch_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.A
     if data.commission_pct is not None: a.commission_pct = data.commission_pct
     if data.commission_fixed_brl is not None: a.commission_fixed_brl = data.commission_fixed_brl
     if data.status is not None: a.status = data.status
+    if data.contact_email is not None: a.contact_email = data.contact_email
+    if data.contact_phone is not None: a.contact_phone = data.contact_phone
     if data.notes is not None: a.notes = data.notes
     audit(db, admin, "affiliate_update", "affiliate", a.id, before=before,
           after={"status": a.status}, ip=ip)
@@ -672,13 +679,13 @@ def analytics_dashboard(db: Session) -> dict:
         "revenue": {
             "today_brl": str(revenue_since(today0)), "month_brl": str(revenue_since(month0)),
             "year_brl": str(revenue_since(year0)), "total_brl": str(total_revenue),
-            "ticket_medio_brl": str(ticket_medio),
+            "ticket_medio_brl": str(ticket_medio.quantize(Decimal("0.01"))),
         },
         "by_package": [{"name": n, "orders": c, "revenue_brl": str(r)} for n, c, r in by_package],
         "credits": {
-            "vendidos": str(credit_totals.get(CreditTxType.purchase, 0)),
-            "promocionais": str(credit_totals.get(CreditTxType.promo_credit, 0) + credit_totals.get(CreditTxType.bonus, 0)),
-            "usados": str(abs(credit_totals.get(CreditTxType.consumption, 0))),
+            "vendidos": str(int(credit_totals.get(CreditTxType.purchase, 0))),
+            "promocionais": str(int(credit_totals.get(CreditTxType.promo_credit, 0) + credit_totals.get(CreditTxType.bonus, 0))),
+            "usados": str(int(abs(credit_totals.get(CreditTxType.consumption, 0)))),
         },
         "funnel": {
             "checkout_started": checkout_started, "credit_purchase": credit_purchase,
@@ -734,14 +741,15 @@ def get_settings(db: Session) -> dict:
 
 
 def _banner_out(b: Banner) -> dict:
-    return {"id": str(b.id), "title": b.title, "body": b.body, "type": b.type, "active": b.active,
+    return {"id": str(b.id), "title": b.title, "body": b.body, "image_url": b.image_url,
+           "type": b.type, "active": b.active,
            "starts_at": b.starts_at.isoformat() if b.starts_at else None,
            "ends_at": b.ends_at.isoformat() if b.ends_at else None,
            "priority": b.priority, "sort_order": b.sort_order}
 
 
 def create_banner(db: Session, admin: User, data: schemas.BannerRequest, ip) -> dict:
-    b = Banner(title=data.title, body=data.body, type=data.type, active=data.active,
+    b = Banner(title=data.title, body=data.body, image_url=data.image_url, type=data.type, active=data.active,
                starts_at=data.starts_at, ends_at=data.ends_at,
                priority=data.priority, sort_order=data.sort_order)
     db.add(b); db.flush()
@@ -760,6 +768,7 @@ def patch_banner(db: Session, admin: User, banner_id: str, data: schemas.BannerP
     before = _banner_out(b)
     if data.title is not None: b.title = data.title
     if data.body is not None: b.body = data.body
+    if data.image_url is not None: b.image_url = data.image_url
     if data.type is not None: b.type = data.type
     if data.active is not None: b.active = data.active
     if data.starts_at is not None: b.starts_at = data.starts_at
@@ -794,7 +803,12 @@ def list_audit(db: Session, limit: int, offset: int) -> dict:
     total = db.execute(select(func.count(AdminAuditLog.id))).scalar_one()
     rows = db.execute(select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc())
                       .limit(limit).offset(offset)).scalars().all()
+    admin_ids = [a.admin_id for a in rows if a.admin_id]
+    admins = {u.id: u for u in db.execute(select(User).where(User.id.in_(admin_ids)))
+              .scalars()} if admin_ids else {}
     return {"items": [{"id": str(a.id), "admin_id": str(a.admin_id) if a.admin_id else None,
+                       "admin_name": admins[a.admin_id].full_name if a.admin_id in admins else None,
+                       "admin_email": admins[a.admin_id].email if a.admin_id in admins else None,
                        "action": a.action, "target_type": a.target_type,
                        "target_id": str(a.target_id) if a.target_id else None,
                        "before": a.before, "after": a.after, "created_at": a.created_at.isoformat()}

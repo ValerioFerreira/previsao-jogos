@@ -33,6 +33,15 @@ function formatDateBR(s: string): string {
   return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : s;
 }
 
+// Data e hora da partida (dd/mm/aaaa hh:mm) para uso em textos como a oferta ParcerIA.
+function fmtMatchDateTime(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 // Faixa de odd justa (margem de 7% para menos até 1/prob) a partir de uma prob em %.
 function oddRangeStr(probPct: number): string {
   if (!probPct || probPct <= 0) return '—';
@@ -433,13 +442,7 @@ export default function Previsoes() {
       {homeTeamId && awayTeamId && (
         <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} onEditTeams={() => setEditingTeams(true)} />
       )}
-      {(canGenerate && !editingTeams) ? (
-        /* F5: recolhido — só o título; trocar equipes é feito pelo botão flutuante "Alterar Equipes" */
-        <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-border/50 rounded-xl px-5 py-3 mx-auto max-w-full w-full flex items-center justify-center gap-2">
-          <TrendingUp className="w-4 h-4 text-emerald-500" />
-          <h2 className="text-sm font-heading font-bold">Configuração do Confronto</h2>
-        </motion.div>
-      ) : (
+      {(canGenerate && !editingTeams) ? null : (
       <motion.div
         layout
         transition={{ layout: { duration: 0.4, ease: 'easeInOut' } }}
@@ -799,13 +802,23 @@ export default function Previsoes() {
               <div className="max-w-3xl mx-auto mb-2">
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 mb-4 text-sm text-muted-foreground leading-relaxed">
                   <p className="mb-2">
-                    <b className="text-foreground">Como funciona:</b> esta é uma <b>partida agendada</b>, então você tem <b>1 crédito
-                    reservado</b> para montar uma aposta na oferta <b>&quot;ParcerIA&quot;</b>.
+                    <b className="text-foreground">Oferta ParcerIA</b><br />
+                    Você utilizou um crédito de análise e para uma partida agendada (<b className="text-foreground">{teamPt(homeTeamId)} x {teamPt(awayTeamId)}</b> - {fmtMatchDateTime(matchDate)}).
                   </p>
                   <p className="mb-2">
-                    Escolha abaixo alguns palpites desta análise — por exemplo, <i>{teamPt(homeTeamId)} não perde</i> combinado com
-                    <i> mais de 2,5 gols</i>. O sistema junta tudo numa aposta única com odd de até 2,00. <b>Se acertar, o crédito é
-                    usado normalmente; se errar, ele volta para a sua conta</b> — por isso o nome &quot;só paga se acertar&quot;.
+                    Mas calma, seu crédito ainda não foi gasto, ele só está retido, e você ainda pode recuperá-lo para fazer outra análise.
+                  </p>
+                  <p className="mb-2">
+                    Como? Selecione uma aposta, simples ou combinada, de odd máxima 2,00, e o sistema irá acompanhar a partida para ver o resultado.
+                  </p>
+                  <p className="mb-2">
+                    Se não quiser ter o trabalho de escolher a aposta, não tem problema! Selecione a aposta automaticamente com o botão &quot;Selecionar Automaticamente&quot; e o sistema irá sugerir uma aposta dentro da odd limite para você!
+                  </p>
+                  <p className="mb-2">
+                    <b className="text-foreground">Se sua aposta bater</b> - O crédito é consumido (pô, a gente ajudou né! 😅)
+                  </p>
+                  <p className="mb-2">
+                    <b className="text-foreground">Se sua aposta não bater</b> - Não fique triste, seu crédito é estornado e você poderá fazer uma nova análise para outro confronto, e a gente torce pra que dê mais sorte! 🍀🤞
                   </p>
                   <Link href="/como-funciona#promocao" className="text-primary font-medium inline-flex items-center gap-1">
                     Ver a explicação completa da oferta ParcerIA →

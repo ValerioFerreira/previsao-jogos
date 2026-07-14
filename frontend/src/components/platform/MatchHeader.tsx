@@ -48,7 +48,7 @@ export function MatchHeader({
         <div className="flex justify-center mb-1">
           <button
             onClick={onEditTeams}
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground bg-card/80 backdrop-blur-md border border-border/50 rounded-full px-3 py-1 shadow-sm transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-card/80 backdrop-blur-md border-2 border-emerald-500/60 hover:border-emerald-500 rounded-full px-4 py-2 shadow-sm transition-colors"
           >
             ✎ Alterar Equipes
           </button>
