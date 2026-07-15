@@ -56,13 +56,13 @@ export default function AccountMenu() {
           <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
-            <Link href="/carteira" className="cursor-pointer">
-              <WalletIcon className="w-4 h-4 mr-2" /> Carteira
+            <Link href="/perfil" className="cursor-pointer">
+              <UserIcon className="w-4 h-4 mr-2" /> Meu perfil
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link href="/perfil" className="cursor-pointer">
-              <UserIcon className="w-4 h-4 mr-2" /> Meu perfil
+            <Link href="/carteira" className="cursor-pointer">
+              <WalletIcon className="w-4 h-4 mr-2" /> Carteira
             </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />

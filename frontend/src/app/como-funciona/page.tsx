@@ -42,7 +42,7 @@ function ParcerIAHighlight() {
             ParcerIA
           </span>
         </h2>
-        <p className="mt-1 font-heading text-lg sm:text-xl font-bold text-foreground">Você utilizou um crédito de análise, mas ele ainda não foi gasto.</p>
+        <p className="mt-1 font-heading text-lg sm:text-xl font-bold text-foreground">Você só paga se ganhar!</p>
 
         <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
           Ao analisar uma <b className="text-foreground">partida oficial agendada</b>, você reserva <b className="text-foreground">1 crédito</b> e

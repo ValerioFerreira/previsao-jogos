@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 
 export default function Footer() {
   return (
@@ -9,6 +10,11 @@ export default function Footer() {
         </p>
         <p className="text-[11px] sm:text-xs text-muted-foreground/70 leading-relaxed text-center italic mt-2">
           Cada análise gerada é individual e exclusiva da sua sessão de uso — o compartilhamento das informações, por qualquer meio (captura de tela, cópia, impressão ou reenvio a terceiros), é proibido pelos Termos de Uso. A plataforma monitora o padrão de uso das contas e tentativas de compartilhamento indevido podem resultar em penalidades, incluindo consumo de créditos e suspensão temporária ou definitiva da conta.
+        </p>
+        <p className="text-center mt-3">
+          <Link href="/documentos" className="text-[11px] sm:text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
+            Documentos e Termos
+          </Link>
         </p>
       </div>
     </footer>

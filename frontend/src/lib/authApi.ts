@@ -81,8 +81,15 @@ async function tryRefresh(): Promise<boolean> {
     });
     tokens.set(t);
     return true;
-  } catch {
-    tokens.clear();
+  } catch (e) {
+    // Só limpamos os tokens quando o servidor recusa explicitamente o refresh
+    // (401/400 — token inválido/expirado). Erros transitórios (rede, cold start
+    // do backend) não devem derrubar a sessão do usuário silenciosamente.
+    const status = (e as { status?: number }).status;
+    if (status === 401 || status === 400) {
+      tokens.clear();
+      window.dispatchEvent(new CustomEvent("apostai:session-expired"));
+    }
     return false;
   }
 }

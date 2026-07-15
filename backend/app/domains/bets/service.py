@@ -105,17 +105,20 @@ def create_bet(db: Session, user: User, analysis_id: str, market_keys: list[str]
         id=str(bet.id), analysis_id=str(a.id), status=bet.status.value, combined_odd=bet.combined_odd,
         auto_selected=auto, fixture_id=bet.fixture_id, match_datetime=bet.match_datetime,
         created_at=bet.created_at, selections=_selection_outs(sels),
+        home_team=a.home_team, away_team=a.away_team,
     )
 
 
 def _to_response(db: Session, bet: Bet) -> schemas.BetResponse:
     sels = db.execute(select(BetSelection).where(BetSelection.bet_id == bet.id)).scalars().all()
+    a = db.get(Analysis, bet.analysis_id)
     return schemas.BetResponse(
         id=str(bet.id), analysis_id=str(bet.analysis_id), status=bet.status.value,
         combined_odd=bet.combined_odd, auto_selected=False, fixture_id=bet.fixture_id,
         match_datetime=bet.match_datetime, created_at=bet.created_at,
         selections=[schemas.SelectionOut(market_key=s.market_key, label=s.market_label or s.market_key,
                                          selection=s.selection, odd=float(s.odd)) for s in sels],
+        home_team=a.home_team if a else None, away_team=a.away_team if a else None,
     )
 
 

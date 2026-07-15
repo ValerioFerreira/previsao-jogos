@@ -1,16 +1,17 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Coins, Copy, Gift, Loader2, Plus, Share2, Sparkles, Tag, Wallet as WalletIcon } from "lucide-react";
+import { AlertTriangle, Coins, Copy, Gift, Loader2, Plus, Share2, Sparkles, Wallet as WalletIcon } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { authApi, type ReferralInfo } from "@/lib/authApi";
 import {
-  paymentsApi, walletApiFull, promotionsApi, bannersApi, ordersApi, campaignsApi,
-  type CreditPackage, type Transaction, type CouponPreview, type Banner, type OrderListItem, type ActiveCampaign,
+  paymentsApi, walletApiFull, bannersApi, ordersApi, campaignsApi, legalApi,
+  type CreditPackage, type Transaction, type Banner, type OrderListItem, type ActiveCampaign, type LegalDoc,
 } from "@/lib/monetizationApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CheckoutModal } from "@/components/platform/CheckoutModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const TX_LABEL: Record<string, string> = {
   purchase: "Compra de créditos",
@@ -44,15 +45,13 @@ export default function CarteiraPage() {
   const [pendingOrders, setPendingOrders] = useState<OrderListItem[]>([]);
   const [recommendedId, setRecommendedId] = useState<string | null>(null);
   const [myOrders, setMyOrders] = useState<OrderListItem[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingDocs, setPendingDocs] = useState<LegalDoc[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const [couponCode, setCouponCode] = useState("");
-  const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null);
-  const [couponBusy, setCouponBusy] = useState(false);
-  const [couponErr, setCouponErr] = useState<string | null>(null);
+  const [checkoutPkg, setCheckoutPkg] = useState<CreditPackage | null>(null);
+  const [legalGateOpen, setLegalGateOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/entrar");
@@ -60,7 +59,7 @@ export default function CarteiraPage() {
 
   const load = useCallback(async () => {
     try {
-      const [pk, tx, bn, camp, ref, pend, mine, rec] = await Promise.all([
+      const [pk, tx, bn, camp, ref, pend, mine, rec, pendingLegal] = await Promise.all([
         paymentsApi.packages(), walletApiFull.transactions(50),
         bannersApi.active().catch(() => ({ items: [] })),
         campaignsApi.active().catch(() => ({ items: [] })),
@@ -68,6 +67,7 @@ export default function CarteiraPage() {
         ordersApi.pending().catch(() => []),
         ordersApi.mine().catch(() => []),
         paymentsApi.recommended().catch(() => null),
+        legalApi.pending().catch(() => []),
       ]);
       setPackages([...pk].sort((a, b) => (a.credits + a.bonus_credits) - (b.credits + b.bonus_credits)));
       setTxs(tx.items);
@@ -77,6 +77,7 @@ export default function CarteiraPage() {
       setPendingOrders(pend);
       setMyOrders(mine);
       setRecommendedId(rec?.id ?? null);
+      setPendingDocs(pendingLegal);
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -117,55 +118,20 @@ export default function CarteiraPage() {
     return Math.round((p.bonus_credits / total) * 100);
   }
 
-  async function applyCoupon() {
-    if (!couponCode.trim()) return;
-    setCouponBusy(true);
-    setCouponErr(null);
-    setCouponPreview(null);
-    try {
-      // usa o pacote de referência apenas p/ preview de valor mínimo/pacote-específico;
-      // a validação de verdade (server-side) roda de novo no checkout.
-      const ref = packages[packages.length - 1];
-      const preview = await promotionsApi.validateCoupon({
-        code: couponCode.trim(), amount_brl: ref ? ref.price_brl : "0", credits: ref ? ref.total_credits : 0,
-      });
-      setCouponPreview(preview);
-    } catch (e) {
-      setCouponErr((e as Error).message);
-    } finally {
-      setCouponBusy(false);
-    }
-  }
-
-  async function buy(pkg: CreditPackage) {
-    setBusyId(pkg.id);
+  function startBuy(pkg: CreditPackage) {
     setErr(null);
     setMsg(null);
-    try {
-      const order = await paymentsApi.checkout({
-        package_id: pkg.id,
-        coupon_code: couponPreview ? couponCode.trim() : undefined,
-      });
-      if (order.provider === "mock") {
-        // gateway MOCK: confirma o pagamento imediatamente (dev/sandbox local)
-        await paymentsApi.mockConfirm(order.order_id);
-        await refreshWallet();
-        await load();
-        setMsg(`Compra confirmada: +${order.credits} créditos.`);
-      } else {
-        // gateway real: o crédito só é liberado pelo webhook do provedor, nunca pelo
-        // cliente — redireciona para o checkout hospedado e o usuário volta com
-        // ?status=success|pending|failure.
-        const initPoint = (order.checkout?.init_point as string | undefined)
-          || (order.checkout?.sandbox_init_point as string | undefined);
-        if (!initPoint) throw new Error("Checkout indisponível — tente novamente em instantes.");
-        window.location.href = initPoint;
-      }
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusyId(null);
+    if (pendingDocs.length > 0) {
+      setLegalGateOpen(true);
+      return;
     }
+    setCheckoutPkg(pkg);
+  }
+
+  async function onConfirmed(result: { credits: number }) {
+    await refreshWallet();
+    await load();
+    setMsg(`Compra confirmada: +${result.credits} créditos.`);
   }
 
   function reopenCheckout(o: OrderListItem) {
@@ -187,6 +153,24 @@ export default function CarteiraPage() {
         <h1 className="text-2xl font-bold">Carteira</h1>
       </div>
 
+      {/* Resumo da carteira — primeiro, antes de vendas/banners */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm text-muted-foreground">Créditos disponíveis</div>
+            <div className="text-3xl font-bold flex items-center gap-2 mt-1">
+              <Coins className="w-6 h-6 text-emerald-500" /> {Math.floor(available)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm text-muted-foreground">Reservados</div>
+            <div className="text-3xl font-bold mt-1 text-amber-500">{Math.floor(reserved)}</div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Campanha ativa (prioridade máxima) — banner amarra cupom/pacotes participantes */}
       {campaign?.banner && (
         <div className="rounded-lg bg-gradient-to-r from-violet-700 to-violet-500 text-white p-4 flex items-center gap-3">
@@ -203,7 +187,7 @@ export default function CarteiraPage() {
         </div>
       )}
 
-      {/* 1. Banner promocional */}
+      {/* Banners promocionais */}
       {banners.map((b) => (
         <div key={b.id} className="rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 text-white p-4 flex items-center gap-3">
           <Sparkles className="w-5 h-5 shrink-0" />
@@ -217,7 +201,7 @@ export default function CarteiraPage() {
       {msg && <div className="text-sm rounded-md bg-emerald-500/10 text-emerald-600 p-3">{msg}</div>}
       {err && <div className="text-sm rounded-md bg-red-500/10 text-red-600 p-3">{err}</div>}
 
-      {/* 2/3. Pacotes de créditos (com selos de destaque) */}
+      {/* Pacotes de créditos (com selos de destaque) */}
       <Card>
         <CardHeader><CardTitle className="text-lg">Comprar créditos</CardTitle></CardHeader>
         <CardContent>
@@ -241,41 +225,19 @@ export default function CarteiraPage() {
                       Recomendado para você
                     </span>
                   )}
-                  <div className="text-2xl font-bold mt-2">{p.total_credits}</div>
+                  <div className="text-sm font-semibold mt-2">{p.name}</div>
+                  <div className="text-2xl font-bold">{p.total_credits}</div>
                   <div className="text-xs text-muted-foreground">créditos{p.bonus_credits ? ` (+${p.bonus_credits} bônus)` : ""}</div>
                   <div className="text-sm font-semibold">R$ {Number(p.price_brl).toFixed(2)}</div>
                   <div className="text-[11px] text-muted-foreground">R$ {pricePerCredit(p).toFixed(2)} por crédito</div>
                   {pct > 0 && <div className="text-[11px] font-medium text-emerald-600">Economize {pct}%</div>}
-                  <Button size="sm" className="w-full mt-1" disabled={busyId === p.id} onClick={() => buy(p)}>
-                    {busyId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : (<><Plus className="w-3.5 h-3.5 mr-1" /> Comprar</>)}
+                  <Button size="sm" className="w-full mt-1" onClick={() => startBuy(p)}>
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Comprar
                   </Button>
                 </div>
               );
             })}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* 4. Código promocional */}
-      <Card>
-        <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Tag className="w-4 h-4" /> Código promocional</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex gap-2">
-            <Input placeholder="Código promocional" value={couponCode}
-                  onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponPreview(null); setCouponErr(null); }} />
-            <Button variant="outline" disabled={couponBusy || !couponCode.trim()} onClick={applyCoupon}>
-              {couponBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Aplicar"}
-            </Button>
-          </div>
-          {couponErr && <p className="text-xs text-red-600">{couponErr}</p>}
-          {couponPreview && (
-            <div className="text-sm rounded-md bg-emerald-500/10 text-emerald-700 p-2.5">
-              Cupom aplicado — {couponPreview.bonus_credits > 0
-                ? `+${couponPreview.bonus_credits} créditos bônus`
-                : `de R$ ${Number(couponPreview.original_amount_brl).toFixed(2)} por R$ ${Number(couponPreview.final_amount_brl).toFixed(2)}`}.
-              Válido na próxima compra abaixo.
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -311,7 +273,7 @@ export default function CarteiraPage() {
         </Card>
       )}
 
-      {/* 6. Pagamentos pendentes (recuperação de PIX) */}
+      {/* Pagamentos pendentes (recuperação de PIX) */}
       {pendingOrders.length > 0 && (
         <Card className="border-amber-500">
           <CardContent className="pt-6 space-y-3">
@@ -328,25 +290,7 @@ export default function CarteiraPage() {
         </Card>
       )}
 
-      {/* 5. Resumo da carteira */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Créditos disponíveis</div>
-            <div className="text-3xl font-bold flex items-center gap-2 mt-1">
-              <Coins className="w-6 h-6 text-emerald-500" /> {Math.floor(available)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Reservados</div>
-            <div className="text-3xl font-bold mt-1 text-amber-500">{Math.floor(reserved)}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 7. Histórico financeiro */}
+      {/* Histórico financeiro */}
       <Card>
         <CardHeader><CardTitle className="text-lg">Histórico financeiro</CardTitle></CardHeader>
         <CardContent>
@@ -373,7 +317,7 @@ export default function CarteiraPage() {
         </CardContent>
       </Card>
 
-      {/* 8. Minhas compras */}
+      {/* Minhas compras */}
       <Card>
         <CardHeader><CardTitle className="text-lg">Minhas compras</CardTitle></CardHeader>
         <CardContent>
@@ -404,6 +348,25 @@ export default function CarteiraPage() {
           )}
         </CardContent>
       </Card>
+
+      <CheckoutModal
+        pkg={checkoutPkg}
+        open={!!checkoutPkg}
+        onOpenChange={(open) => { if (!open) setCheckoutPkg(null); }}
+        onConfirmed={onConfirmed}
+      />
+
+      <Dialog open={legalGateOpen} onOpenChange={setLegalGateOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Documentos pendentes</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Antes de comprar créditos, você precisa ler e aceitar {pendingDocs.length === 1 ? "o documento pendente" : `os ${pendingDocs.length} documentos pendentes`} (Termos de Uso, Política de Privacidade e demais).
+          </p>
+          <Button className="w-full" onClick={() => router.push("/documentos")}>Ir para Documentos</Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -828,7 +828,7 @@ export default function Previsoes() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center max-w-2xl mx-auto">
-                A oferta <b>&quot;ParcerIA&quot;</b> (só paga se acertar) vale apenas para <b>análises de partidas agendadas</b>. Esta é
+                A oferta <b>&quot;ParcerIA&quot;</b> vale apenas para <b>análises de partidas agendadas</b>. Esta é
                 uma <b>análise independente</b>, então não é elegível.{' '}
                 <Link href="/como-funciona#promocao" className="text-primary font-medium">Saiba mais</Link>.
               </p>

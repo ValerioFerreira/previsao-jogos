@@ -8,6 +8,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { PredictionProvider } from "@/lib/PredictionContext";
 import { AuthProvider } from "@/lib/AuthContext";
 import ReferralCapture from "@/components/platform/ReferralCapture";
+import InactivityWatcher from "@/components/platform/InactivityWatcher";
+import SessionExpiredNotice from "@/components/platform/SessionExpiredNotice";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -31,6 +33,8 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <ReferralCapture />
+            <InactivityWatcher />
+            <SessionExpiredNotice />
             <PredictionProvider>
               <div className="relative flex min-h-screen flex-col">
                 <Header />

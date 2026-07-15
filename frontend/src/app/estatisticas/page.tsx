@@ -51,6 +51,9 @@ export default function Estatisticas() {
   const [pickerMode, setPickerMode] = useState<'futura' | 'passada' | 'independente'>('independente');
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
   const [matchDate, setMatchDate] = useState<string | undefined>(undefined);
+  // Com as duas equipes escolhidas, o card de Configuração recolhe (só o título);
+  // "Alterar Confronto" (no cabeçalho flutuante) reabre para trocar — mesmo padrão da Análise.
+  const [editingMatch, setEditingMatch] = useState(false);
 
   const openMatch = (home: string, away: string, date: string) => {
     setMatchParams({ home, away, date });
@@ -191,6 +194,7 @@ export default function Estatisticas() {
   if (matchParams) {
     return (
       <div className="space-y-6">
+        <MatchHeader home={matchParams.home} away={matchParams.away} teamIds={teamIds} date={matchParams.date} onEditTeams={clearMatch} />
         <button onClick={backToAnalise} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" /> Voltar para a Análise
         </button>
@@ -213,23 +217,34 @@ export default function Estatisticas() {
   return (
     <div className="space-y-6">
       {bothSelected && (
-        <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} neutral={neutralField} />
+        <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} neutral={neutralField} onEditTeams={() => setEditingMatch(true)} />
       )}
+      {(bothSelected && !editingMatch) ? null : (
       <motion.div
+        layout
+        transition={{ layout: { duration: 0.4, ease: 'easeInOut' } }}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-card border border-border/50 rounded-xl p-5"
       >
-        <h2 className="text-lg font-heading font-bold mb-4 flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-cyan-500" />
-          Configuração do Confronto
-        </h2>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h2 className="text-lg font-heading font-bold flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-cyan-500" />
+            Configuração do Confronto
+          </h2>
+          {bothSelected && editingMatch && (
+            <button onClick={() => setEditingMatch(false)} className="text-xs font-medium text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-3 py-1.5">
+              Concluir
+            </button>
+          )}
+        </div>
         <MatchModePicker
           onModeChange={(m) => { setPickerMode(m); if (m !== 'futura') setMatchDate(undefined); }}
-          onSelectFuture={(fx) => setMatchDate(fx.date)}
+          onSelectFuture={(fx) => { setMatchDate(fx.date); setEditingMatch(false); }}
           onSelectPast={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))}
         />
       </motion.div>
+      )}
 
       {!bothSelected && (
         <div className="text-center py-16 text-muted-foreground text-sm">

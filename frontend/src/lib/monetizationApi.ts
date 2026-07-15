@@ -156,6 +156,8 @@ export type BetResponse = {
   match_datetime: string | null;
   created_at: string;
   selections: BetSelection[];
+  home_team?: string | null;
+  away_team?: string | null;
 };
 
 export const betsApi = {
