@@ -3,9 +3,10 @@
 > **Mapa de caminhos, não enciclopédia.** Leia este arquivo primeiro para saber ONDE está cada
 > coisa; o conteúdo detalhado (o quê/por quê) vive nos docs abaixo. Mantenha este índice curto.
 
-Plataforma de **previsão probabilística de partidas** (hoje seleções; clubes em coleta).
-Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/frontend`** (Next.js,
-deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
+Plataforma de **previsão probabilística de partidas** (produção: seleções; clubes: coleta
+saturando em 26 competições + pesquisa de modelos concluída na branch `clubs`, ver §13 do
+doc-mestre). Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/frontend`**
+(Next.js, deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 
 ## 📚 Documentação (raiz)
 - **`ESTADO_ATUAL_E_PROXIMOS_PASSOS.md`** — **LEIA PRIMEIRO.** Handoff: estado atual + próximos passos.
@@ -13,10 +14,16 @@ deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
   jurídicos, nota fiscal — nada é código pendente).
 - **`DOCUMENTACAO_CENTRAL.md`** — doc-mestre. Modelos, mercados, métricas, **§6 gate de validação**,
   **§8/§9 histórico e TESTES já feitos (não repetir)**, **§12 monetização (§12.7 = conversão
-  completa, gateway MP/cupons/afiliados/analytics/admin, 2026-07-11)**.
+  completa, gateway MP/cupons/afiliados/analytics/admin, 2026-07-11)**, **§13 pesquisa de clubes
+  (branch `clubs`, 2026-07-15 — arquitetura atual venceu tudo, sem exceção de push)**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
-  usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**.
+  usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
+  reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa
+  máquina nova)**.
 - **`docs/ARQUITETURA_MONETIZACAO.md`** — desenho original da monetização (créditos/apostas/admin).
+- **`backend/docs/PESQUISA_CLUBES.md`** — diário completo da pesquisa de clubes (literatura,
+  candidatos, protocolo, todos os experimentos); **`backend/docs/RELATORIO_FINAL_PESQUISA_CLUBES.md`**
+  — números consolidados (gerado por `scripts/clubs_consolidate.py`).
 - Memória do agente: `~/.claude/projects/<proj>/memory/MEMORY.md` (índice) + arquivos.
 
 ## 🐍 Backend (`/backend`)
@@ -38,12 +45,20 @@ deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 - **Dataset de treino:** `international_features_enriched_apifootball.csv` (gitignored; espelho `features_enriched`).
 
 ### Scripts (`/backend/scripts`)
-- **Coleta:** `prefetch_wc_data.py` (seleções, `--all-nations`), `prefetch_clubs.py` (clubes Brasil→Europa,
-  tabela `club_match_detail_cache`). **Cron:** `prefetch_wc.cmd` (Task Scheduler `\PrevisaoJogos\`).
+- **Coleta:** `prefetch_wc_data.py` (seleções, `--all-nations`), `prefetch_clubs.py` (clubes, **26
+  competições** — 13 originais Brasil→Europa→SulAmérica + 13 de expansão 2026-07-15, `LEAGUES` no
+  topo do arquivo — tabela `club_match_detail_cache` + espelho local `data/club_raw_cache.sqlite`).
+  `mirror_club_cache.py` (backfill único via API, zero egress do Neon). `collect_club_odds_forward.py`
+  (odds futuras de clubes, novo). **Cron:** `prefetch_wc.cmd` (Task Scheduler `\PrevisaoJogos\`).
+  **Checar cota/validade da assinatura antes de coleta grande:** ver `ARCHITECTURE.md §7.2`.
 - **Modelos:** `build_scorer_model.py`, `build_shots_prop_model.py` (leem o espelho local).
 - **Agregados:** `precompute_aggregates.py` (roda após os rebuilds no cron).
 - **Experimentos/testes (gate §6):** `exp6..15_*.py`, `test_player_cards.py`, `test_player_fouls.py`,
   `promotion_validation.py`, etc. **Resultados registrados em `DOCUMENTACAO_CENTRAL.md` §8/§9.**
+- **Pesquisa de clubes (`clubs_*.py` + `/backend/research_clubs/`):** protocolo único, ratings da
+  literatura, modelos estatísticos/GBM/state-space/ensemble/deep tabular. Ver `DOCUMENTACAO_CENTRAL.md
+  §13` e `backend/docs/PESQUISA_CLUBES.md` antes de propor um novo candidato — muita coisa já foi
+  testada e reprovada lá também.
 
 ## ⚛️ Frontend (`/frontend/src`)
 - `app/page.tsx` — **Análise** (config → gerar análise → mercados → Monte sua Aposta / Funções Avançadas).
@@ -67,12 +82,20 @@ deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 Conta demo: `demo.apostai@gmail.com` / `Demo1234` (admin, com créditos).
 
 ## ✅ Regras de ouro
-- **Antes de testar hipótese de modelo:** conferir `DOCUMENTACAO_CENTRAL.md` §9 — muita coisa já foi
-  reprovada (não repetir). **Após testar qualquer hipótese, registrar o resultado lá.**
+- **Antes de testar hipótese de modelo:** conferir `DOCUMENTACAO_CENTRAL.md` §9 **e** §13 (pesquisa
+  de clubes) — muita coisa já foi reprovada (não repetir). **Após testar qualquer hipótese,
+  registrar o resultado lá** (ou em `backend/docs/PESQUISA_CLUBES.md` se for sobre clubes).
 - **Promoção de modelo** exige o **gate §6** (CV temporal, reduzir log-loss sem piorar ECE, consistente).
-- **Coleta:** exaurir a cota diária (75k) com propósito; seleções saturaram → coletando clubes.
+  Pesquisa em branch (`clubs` ou nova) **não dá push para `main`** a menos que bata a produção real
+  sob o gate — é a exceção documentada em §13.
+- **Coleta:** exaurir a cota diária (75k) com propósito; seleções saturaram, clubes em 26 competições.
+  **Checar a validade da assinatura da API-Football** (`GET /status` → `subscription.end`) antes de
+  planejar coleta de vários dias — ela tem prazo, não é indefinida.
 - **Neon:** não reintroduzir varredura de blobs (`SELECT raw FROM match_detail_cache`) em runtime — use
-  os agregados. Ver `ARCHITECTURE.md §3.1`.
+  os agregados. Ver `ARCHITECTURE.md §3.1`. O mesmo vale para `club_match_detail_cache` — sempre usar
+  o espelho local (`data/club_raw_cache.sqlite`), nunca puxar os blobs do Neon em runtime/jobs.
+- **Ambiente novo (outra máquina):** ver `ARCHITECTURE.md §7` — venv não é portável, `requirements.txt`
+  separa produção de pesquisa, `data/` é gitignored e precisa ser regenerado ou copiado.
 - **Monetização:** cupom (benefício ao usuário) e afiliado (comissão) são **independentes** — nunca
   acoplar a lógica dos dois. Gateway/nota fiscal são adapters trocáveis (`PaymentGateway`/
   `InvoiceProvider` Protocol) — nunca hardcode o provedor num domínio; troque via `PAYMENT_PROVIDER`

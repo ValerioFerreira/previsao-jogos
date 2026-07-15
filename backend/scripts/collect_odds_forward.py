@@ -44,6 +44,10 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 from scripts.fetch_odds import BASE, BET_MAP, load_key, parse_fixture_odds  # noqa: E402
 

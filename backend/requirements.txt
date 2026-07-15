@@ -3,14 +3,24 @@ httpx==0.28.1
 uvicorn[standard]==0.32.1
 pydantic==2.10.4
 scikit-learn==1.5.2
+scipy==1.17.1
 pandas==3.0.3
 numpy==2.2.6
 joblib==1.5.3
 psycopg2-binary==2.9.9
 sqlalchemy>=2.0.36,<2.1
+pyarrow
 # --- Camada de usuarios / monetizacao (auth, carteira, pagamentos, promocoes) ---
 alembic==1.14.0
 argon2-cffi==23.1.0
 PyJWT==2.10.1
 pydantic-settings==2.7.0
 email-validator==2.2.0
+# --- Pesquisa de modelos (branch `clubs`, research_clubs/ e scripts/clubs_*.py) ---
+# NAO usados pelo predictor de producao (app/, predictor.py) -- so pelos experimentos.
+# torch NAO entra aqui (o indice CPU-only do pip e especifico de plataforma) -- instalar
+# separado, ver docs/PESQUISA_CLUBES.md "Ambiente" ou ARCHITECTURE.md.
+catboost==1.2.10
+lightgbm==4.6.0
+xgboost==3.3.0
+tabulate

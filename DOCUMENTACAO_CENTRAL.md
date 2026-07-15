@@ -6,7 +6,7 @@
 > histórico de desenvolvimento em ordem cronológica** com o resultado de cada tentativa e o
 > motivo de cada aprovação/reprovação. Atualize este arquivo a cada nova sessão.
 >
-> Última atualização: **2026-07-09**. Branch de trabalho: `claude-testing` · produção: `main`.
+> Última atualização: **2026-07-15**. Branch de trabalho: `clubs` (pesquisa, §13) · produção: `main`.
 > Companheiros mantidos: `README.md` (porta de entrada), `ARCHITECTURE.md` (infra/banco/e-mail)
 > e `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` (handoff vivo — **leia primeiro ao retomar**).
 
@@ -573,3 +573,68 @@ bônus. `GET /campaigns/experiments/{key}/variant` expõe `assign_variant()` par
 credenciais reais do Mercado Pago, merge da branch `monetization` + deploy, revisão jurídica dos
 documentos legais (ainda são templates), decisão do emissor de nota fiscal com o contador. Detalhe
 completo em `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` §2.1.
+
+---
+
+## 13. Pesquisa de Modelos para Clubes (2026-07-15, branch `clubs`)
+
+Com a coleta de seleções saturada, a coleta de **clubes** (13 competições, Brasil→Europa→América
+do Sul, 2010→2026) chegou a **54.072 jogos**. Isso abriu uma pesquisa dedicada — **duas linhas
+paralelas, sob o mesmo protocolo único** (5 folds temporais expanding, seed 42; métricas
+log-loss/RPS/Brier/ECE/tail-ECE/cobertura80) — para responder duas perguntas: *(1) a arquitetura
+atual de seleções continua a melhor quando treinada com muito mais dados? (2) o conhecimento de
+clubes melhora as previsões de seleções?* Diário completo, literatura revisada e todos os números
+em **`backend/docs/PESQUISA_CLUBES.md`**; relatório consolidado automático em
+**`backend/docs/RELATORIO_FINAL_PESQUISA_CLUBES.md`**. Infra reprodutível: **§7 do
+`ARCHITECTURE.md`**.
+
+### 13.1 Linha A — arquitetura atual retreinada em clubes
+Mesma classe `DixonColesNBRegressor` (GBM→λ/μ + acoplamento DC + NB), sem mudança estrutural,
+treinada nas mesmas 158 `base_feats`. **Venceu tudo**: bateu os 7 candidatos da Linha B (Fase 1),
+a bateria avançada (Fase 6) e o tuning de hiperparâmetros (Fase 2.5, 18 configs × 5 folds)
+confirmou que a config de produção (100 árvores, prof.3, lr=0.05) já é a **melhor do grid**
+(log-loss 0,9938) — 5-9× mais dados de clubes não deslocou o ponto ótimo de complexidade.
+Cascata de contagem (finalizações/a-gol/escanteios/cartões) replicada com sucesso sobre 35.208
+jogos com box-score (8,6× mais que seleções), cobertura de intervalo 80% honesta em todos os
+mercados (83,9%-88,2%).
+
+**9 hipóteses reprovadas/inconclusivas em seleções, revisitadas com a base maior**: 8 continuam
+reprovadas/inconclusivas (time-decay, momentum, XGBoost/LightGBM p/ λ, calibração pós-hoc,
+árbitro, perfil Elo-condicionado, xG-feature — prejudicado por baixa cobertura histórica —, GP≈NB
+em escanteios). **1 achado novo**: o blend DC+HistGBM no mercado de **BTTS passou a valer**
+(4/5 folds, era só marginal em seleções) — candidato a investigar no pipeline de seleções (fora
+do escopo desta pesquisa).
+
+**Transferência clubes→seleções (Fase 3): NÃO ajudou.** Zero-shot (só clubes) piora bastante
+(0/5 folds); treino combinado (pooled) é um empate estatístico (delta≈0); hiperparâmetros já são
+os mesmos. **Sem exceção de push** — nada bateu a produção real de seleções sob o gate §6.
+
+### 13.2 Linha B — pesquisa aberta (sem viés da arquitetura atual)
+Revisão de literatura (Soccer Prediction Challenges 2017/2023, Bunker/Yeung/Fujii 2024,
+Koopman-Lit): confirma que **GBM sobre ratings dinâmicos (CatBoost+pi-ratings) é o SOTA** em
+datasets só-de-gols — implementado e testado, mas **perdeu** para a arquitetura de produção
+mesmo após sweep extensivo de hiperparâmetros (melhor config 0,9970 vs 0,9938 do DC-NB).
+Também testados e reprovados: Dixon-Coles clássico (estático e com time-decay), Poisson
+bivariado Karlis-Ntzoufras, ratings GAP (Wheatcroft) plugados direto como λ de NB (empata com a
+cascata GBM, não bate), **state-space score-driven** (GAS, na linha de Koopman-Lit — único
+modelo da literatura com lucro comprovado contra odds; 0/5 folds aqui), **stacking/ensemble**
+(quase empate) e **MLP tabular** (torch CPU; confirma a literatura — DL não bate GBM em futebol).
+
+**Engenharia de atributos própria de clubes** (congestão de calendário, altitude+viagem,
+mata-mata ida/volta, rotação de elenco, xG over/under-performance, GAP ratings, importância da
+partida via tabela corrente simulada): só **GAP ratings passou isolado** (5/5 folds, delta
+-0,0022 — pequeno mas consistente); os demais deram resultado misto ou nulo.
+
+### 13.3 Backtest de valor (Fase 8) — achado operacional
+`odds_registry` tinha **ZERO cobertura de clubes** (só Copa do Mundo) — o backtest de ROI real
+de clubes é hoje impossível. Corrigido nesta sessão: `backend/scripts/collect_club_odds_forward.py`
+(novo) passa a coletar odds futuras das ligas de clubes. Backtest de papel (proxy contra
+frequência histórica, **não é ROI real**) deu edge positivo em 5/5 folds, yield médio +5,64% —
+só diagnóstico de calibração relativa, não validação de rentabilidade.
+
+### 13.4 Conclusão
+**Meta-achado da pesquisa:** a arquitetura de produção não só sobrevive à escala — ela é
+**comprovadamente ótima** dentro do espaço de hipóteses testado (estatístico clássico, GBM+ratings,
+state-space, ensemble, deep learning), mesmo com quase 10× mais dados e diversidade de ligas/
+continentes. Não há promoção para `main`; todo o trabalho fica documentado e commitado na branch
+`clubs` para referência futura (evita retestar as mesmas hipóteses).

@@ -145,4 +145,47 @@ registrado para Fase 4.1).
 positiva fraca de placares não ajuda no agregado, replicando o achado de seleções (Fase 1 do
 doc-central: acoplamento aposentado em escanteios pelo mesmo motivo).
 
+### Fase 2 — Contagem, calibração, tuning DC (Linha A completa)
+
+**2.1 Cascata de contagem** (finalizações→escanteios/cartões, ortogonalização de estilo,
+35.208 jogos com box-score, 5 folds):
+
+| Mercado | Log-loss | MAE | Cobertura 80% |
+|---|---|---|---|
+| Finalizações | 3,1902 | 4,615 | 86,6% |
+| Finalizações a gol | 2,5502 | 2,494 | 85,5% |
+| Escanteios | 2,6328 | 2,698 | 88,2% |
+| Cartões | 2,2249 | 1,824 | 83,9% |
+
+Todos com cobertura de intervalo 80% próxima do nominal (83,9%-88,2%) — calibração honesta,
+sem sinal de descalibração sistemática, mesmo com 8,6× mais jogos com box-score que seleções.
+
+**2.5 Tuning de hiperparâmetros do DC-NB** (18 configs × 5 folds = 90 fits): **a configuração
+de PRODUÇÃO (n_estimators=100, max_depth=3, learning_rate=0.05) é a MELHOR do grid**
+(log-loss 0,993758) — a 2ª colocada (200,3,0.03 → 0,993778) é estatisticamente indistinguível
+(Δ=0,00002). Configs mais profundas/com mais árvores **pioram** (300,5,0.05 → 1,008707, pior
+do grid). **Resposta definitiva à pergunta 1 da diretriz**: os hiperparâmetros da arquitetura
+já estavam no ponto ótimo — 5-9× mais dados de clubes não desloca o ponto ótimo de
+complexidade do modelo. Isso também torna o teste de "finetune" da Fase 3 (que usou os
+hiperparâmetros de produção por já serem o candidato natural) validamente equivalente ao
+baseline — não precisa reexecução.
+
+## 5. Conclusão consolidada — respondendo à diretriz original
+
+**Pergunta 1 (a arquitetura atual continua a melhor com mais dados de clubes?):** **SIM,
+inequivocamente.** DC-NB de produção venceu 7 candidatos da Linha B na Fase 1 (incl. o SOTA
+da literatura, CatBoost+pi-ratings), venceu a bateria avançada da Fase 6 (sweep extensivo,
+state-space, ensemble, deep learning tabular) e seus hiperparâmetros já eram os ótimos
+(Fase 2.5). Nenhuma das 9 hipóteses reprovadas em seleções reverteu com mais dados, exceto
+o blend BTTS (Fase 4), que passou a valer.
+
+**Pergunta 2 (o conhecimento de clubes melhora as previsões de seleções?):** **NÃO, na forma
+testada.** Zero-shot (só clubes) piora bastante (0/5 folds); pooled é um empate estatístico
+(delta≈0); transferência de hiperparâmetros é redundante (já são os mesmos). **Não há
+exceção de push a aplicar** — nada bateu a produção real de seleções sob o gate §6.
+
+**Achado que abre uma porta:** o blend DC+HistGBM no mercado de BTTS passou a valer com a
+base de clubes (4/5 folds) — não testado ainda em seleções; candidato a investigação futura
+sob o próprio pipeline de seleções (fora do escopo desta pesquisa de clubes).
+
 (Continuar registrando tudo aqui, inclusive negativos, com números.)

@@ -30,7 +30,7 @@ def _get_throttled(path, **params):
     time.sleep(0.15)
     return result
 
-# (league_id, nome) na ordem de prioridade: Brasil -> Europa.
+# (league_id, nome) na ordem de prioridade: Brasil -> Europa -> [expansão 2026-07-15].
 LEAGUES = [
     (71, "Brasileirao Serie A"),
     (72, "Brasileirao Serie B"),
@@ -45,6 +45,22 @@ LEAGUES = [
     (848, "Conference League"),
     (13, "Copa Libertadores"),
     (11, "Copa Sul-Americana"),
+    # --- Expansão 2026-07-15: assinatura API-Football expira 2026-07-19 -- usar a cota
+    # restante p/ diversificar geografia/estilo da pesquisa de clubes (branch `clubs`).
+    # IDs confirmados via /leagues; box-score (stats) só cobre 2021+ nestas ligas.
+    (88, "Eredivisie"),
+    (94, "Primeira Liga"),
+    (144, "Jupiler Pro League"),
+    (179, "Premiership (Escocia)"),
+    (203, "Super Lig"),
+    (128, "Liga Profesional Argentina"),
+    (262, "Liga MX"),
+    (253, "Major League Soccer"),
+    (307, "Pro League (Arabia Saudita)"),
+    (40, "Championship (Inglaterra)"),
+    (17, "AFC Champions League Elite"),
+    (12, "CAF Champions League"),
+    (16, "CONCACAF Champions League"),
 ]
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"
