@@ -75,6 +75,27 @@ def put(fixture_id, league_id, season, raw):
             f"INSERT INTO {TABLE} (key, fixture_id, league_id, season, raw, cached_at) "
             "VALUES (:k,:f,:l,:s,:r, now()) ON CONFLICT (key) DO UPDATE SET raw=EXCLUDED.raw, cached_at=now()"
         ), {"k": key, "f": fixture_id, "l": league_id, "s": season, "r": json.dumps(raw, ensure_ascii=False)})
+    _local_put(key, fixture_id, league_id, season, raw)
+
+
+def _local_put(key, fixture_id, league_id, season, raw):
+    """Espelho local de clubes (data/club_raw_cache.sqlite) — os jobs pesados leem
+    do disco em vez de puxar blobs do Neon (ARCHITECTURE.md §3.1). Silencioso em falha."""
+    try:
+        import sqlite3
+        path = Path(__file__).resolve().parents[1] / "data" / "club_raw_cache.sqlite"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(path))
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS raw (key TEXT PRIMARY KEY, fixture_id INTEGER, "
+            "league_id INTEGER, season INTEGER, raw TEXT)")
+        conn.execute(
+            "INSERT OR REPLACE INTO raw(key, fixture_id, league_id, season, raw) VALUES (?,?,?,?,?)",
+            (key, fixture_id, league_id, season, json.dumps(raw, ensure_ascii=False)))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 def main():
