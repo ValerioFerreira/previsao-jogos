@@ -62,6 +62,8 @@ def fit_mlp(X_tr, y_tr, X_val, y_val, n_in, epochs=60, patience=8, lr=1e-3, wd=1
         perm = torch.randperm(n)
         for i in range(0, n, 256):
             idx = perm[i:i + 256]
+            if len(idx) < 2:  # BatchNorm1d exige >1 amostra por batch em modo treino
+                continue
             opt.zero_grad()
             out = model(Xt[idx])
             loss = lossf(out, yt[idx])
