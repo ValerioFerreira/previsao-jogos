@@ -102,6 +102,47 @@ assimétrico; densidade de competições simultâneas; árbitro (amostra por ár
 
 | Data | Experimento | Resultado | Veredito |
 |---|---|---|---|
-| 2026-07-15 | Setup: espelho local + dataset builder + doc | — | em andamento |
+| 2026-07-15 | Setup: espelho local + dataset builder + doc | 54.072 jogos, 158/158 base_feats, NaN 1,33% | infra pronta |
+| 2026-07-15 | **Fase 1 — bateria de resultado (8 candidatos, 49.999 jogos pós burn-in, 5 folds temporais)** | ver tabela abaixo | **A_dc_nb vence** |
 
-(Registrar TUDO aqui, inclusive negativos, com números.)
+### Fase 1 — resultado (H/D/A), ranking médio dos 5 folds
+
+| Modelo | Log-loss | RPS | Brier | ECE | Acc | Tempo |
+|---|---|---|---|---|---|---|
+| **A_dc_nb** (produção retreinada) | **0,9935** | **0,2029** | **0,5928** | **0,0145** | **0,5227** | 412s |
+| B1_cat_pi (CatBoost+pi-ratings) | 0,9985 | 0,2042 | 0,5960 | 0,0175 | 0,5148 | 12s |
+| B3_ordlogit_pi (ordered logit+pi) | 0,9998 | 0,2048 | 0,5971 | 0,0164 | 0,5156 | 0s |
+| B2_cat_berrar (CatBoost+Berrar) | 1,0072 | 0,2060 | 0,6011 | 0,0230 | 0,5085 | 12s |
+| B1_lgbm_pi (LightGBM+pi-ratings) | 1,0134 | 0,2072 | 0,6042 | 0,0270 | 0,5097 | 6s |
+| B7_bivpois (Poisson bivariado K&N, por liga) | 1,0407 | 0,2145 | 0,6178 | 0,0297 | 0,4951 | 731s |
+| B4_dc_classic (DC clássico estático, por liga) | 1,0413 | 0,2144 | 0,6176 | 0,0284 | 0,4954 | 256s |
+| B4_dc_dynamic (DC clássico xi=1,5, por liga) | 1,0599 | 0,2184 | 0,6265 | 0,0402 | 0,4897 | 419s |
+
+**Achado principal:** a arquitetura de PRODUÇÃO (GBM→λ/μ por time via 158 features + acoplamento
+Dixon-Coles + NB), simplesmente **retreinada em clubes sem nenhuma mudança estrutural**, bate
+TODOS os candidatos da literatura testados — inclusive a combinação apontada como SOTA nos
+Soccer Prediction Challenges (CatBoost+pi-ratings). Também vence folgadamente os modelos de
+"força pura por time" (DC clássico, Poisson bivariado, ambos ajustados por liga) — confirma o
+achado de seleções (Fase 7 do doc-central): força pura perde para GBM+features ricas.
+**Responde a pergunta 1 da diretriz, parcialmente**: a arquitetura segue sendo a melhor
+disponível — mas ainda não sabemos se seus HIPERPARÂMETROS (profundidade/nº árvores/rho) são
+ótimos para o volume 5× maior de clubes (isso é a Fase 2.5, tuning).
+
+**Segmentação (A_dc_nb, log-loss por segmento):** melhor em jogos desequilibrados (elo_desequil
+0,888) e nas competições de elite (Champions League 0,921) — como em seleções, o Elo domina.
+Pior em ligas nacionais equilibradas (Brasileirão B 1,046, elo_equil 1,061) — esperado, é onde
+a incerteza estrutural é maior. ECE por segmento é baixo em toda parte (1,7%-7,5%), sem sinal de
+descalibração sistemática por competição.
+
+**xi do DC dinâmico piora** (0,0599 vs 1,041 do estático) — contrário à intuição de que "clubes
+jogam mais, forma deveria pesar mais"; o time-decay como implementado (via MLE conjunto) não
+ajuda aqui, consistente com o achado de seleções de que decay só ajudou finalizações, não
+resultado. **Não repetir DC-dinâmico simples — testar decay embutido nas FEATURES de forma
+(rolling l3/l5/l10, já presentes no base_feats) em vez de no peso da verossimilhança** (fica
+registrado para Fase 4.1).
+
+**Poisson bivariado** (λ3 de covariância) essencialmente empata com DC clássico — a correlação
+positiva fraca de placares não ajuda no agregado, replicando o achado de seleções (Fase 1 do
+doc-central: acoplamento aposentado em escanteios pelo mesmo motivo).
+
+(Continuar registrando tudo aqui, inclusive negativos, com números.)
