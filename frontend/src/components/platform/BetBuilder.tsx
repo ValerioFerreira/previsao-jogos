@@ -42,6 +42,7 @@ export default function BetBuilder({ analysisId, home, away, onConfirmed }: { an
   const [valid, setValid] = useState(true);
   const [exceeds, setExceeds] = useState(false);
   const [autoPreview, setAutoPreview] = useState<{ label: string; odd: number }[]>([]);
+  const [showAutoPreview, setShowAutoPreview] = useState(false);
   const [loadingMk, setLoadingMk] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [bet, setBet] = useState<BetResponse | null>(null);
@@ -62,6 +63,11 @@ export default function BetBuilder({ analysisId, home, away, onConfirmed }: { an
       if (keys.length === 0) setAutoPreview(p.selections.map((s) => ({ label: s.label, odd: s.odd })));
     } catch (e) { setErr((e as Error).message); }
   }, [analysisId]);
+
+  const regenerateAuto = useCallback(async () => {
+    setShowAutoPreview(true);
+    await runPreview([]);
+  }, [runPreview]);
 
   useEffect(() => { if (!loadingMk) runPreview(selected); }, [selected, loadingMk, runPreview]);
 
@@ -180,11 +186,21 @@ export default function BetBuilder({ analysisId, home, away, onConfirmed }: { an
         </div>
       )}
 
-      {/* auto-seleção (prévia) quando nada escolhido */}
-      {selected.length === 0 && autoPreview.length > 0 && (
-        <div className="mb-4 text-xs rounded-md bg-primary/5 border border-primary/20 p-3">
-          <div className="flex items-center gap-1.5 font-medium mb-1"><Sparkles className="w-3.5 h-3.5 text-primary" /> Seleção automática (prévia)</div>
-          {autoPreview.map((s, i) => <div key={i} className="flex justify-between text-muted-foreground"><span>{tl(s.label)}</span><span className="font-mono">@{s.odd.toFixed(2)}</span></div>)}
+      {/* auto-seleção: botão + prévia opcional quando nada escolhido manualmente */}
+      {selected.length === 0 && (
+        <div className="mb-4">
+          <button
+            onClick={regenerateAuto}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium rounded-md border border-primary/30 bg-primary/5 hover:bg-primary/10 p-2.5 transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-primary" /> {showAutoPreview ? "Gerar outra sugestão automática" : "Selecionar Automaticamente"}
+          </button>
+          {showAutoPreview && autoPreview.length > 0 && (
+            <div className="mt-2 text-xs rounded-md bg-primary/5 border border-primary/20 p-3">
+              <div className="flex items-center gap-1.5 font-medium mb-1"><Sparkles className="w-3.5 h-3.5 text-primary" /> Seleção automática (prévia)</div>
+              {autoPreview.map((s, i) => <div key={i} className="flex justify-between text-muted-foreground"><span>{tl(s.label)}</span><span className="font-mono">@{s.odd.toFixed(2)}</span></div>)}
+            </div>
+          )}
         </div>
       )}
 

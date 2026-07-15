@@ -4,6 +4,8 @@ Fluxo: cadastro -> OTP por e-mail -> verificação -> criação de senha -> ativ
 from __future__ import annotations
 
 import logging
+import secrets
+import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -29,6 +31,33 @@ _SETUP_SCOPE = "pw_setup"
 # idempotency_key (welcome-bonus:<user_id>) — reativar/repetir não credita de novo.
 WELCOME_CREDITS = Decimal("8")
 
+# Config default do bônus de indicação, sobrescrita pelo PlatformSetting "referral_bonus"
+# (chave configurável pelo painel admin — nenhum valor de negócio fica só hardcoded aqui).
+_DEFAULT_REFERRAL_BONUS = {"referrer_credits": 5, "referred_credits": 5}
+
+# Sem caracteres ambíguos (0/O, 1/I) pra ficar fácil de digitar/ler o código de indicação.
+_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+
+def _referral_bonus_config(db: Session) -> dict:
+    from app.domains.admin.models import PlatformSetting
+    row = db.execute(select(PlatformSetting).where(PlatformSetting.key == "referral_bonus")).scalar_one_or_none()
+    return {**_DEFAULT_REFERRAL_BONUS, **(row.value or {})} if row else dict(_DEFAULT_REFERRAL_BONUS)
+
+
+def _generate_referral_code(db: Session, full_name: str) -> str:
+    """Código curto e amigável, mas único por natureza (não sequencial a partir do nome:
+    prefixo do primeiro nome + sufixo aleatório) — ex. VALERIO8F2, JOAOA31."""
+    first_name = (full_name.split() or ["USER"])[0]
+    ascii_name = unicodedata.normalize("NFKD", first_name).encode("ascii", "ignore").decode("ascii")
+    prefix = "".join(ch for ch in ascii_name.upper() if ch.isalnum())[:6] or "USER"
+    for _ in range(20):  # cinto-e-suspensório: colisão é praticamente impossível com o sufixo aleatório
+        suffix = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(3))
+        code = f"{prefix}{suffix}"
+        if db.execute(select(User.id).where(User.referral_code == code)).scalar_one_or_none() is None:
+            return code
+    raise RuntimeError("Não foi possível gerar um código de indicação único.")
+
 
 def _utc(dt: datetime | None) -> datetime | None:
     if dt is None:
@@ -48,6 +77,21 @@ def _public(user: User) -> schemas.UserPublic:
     return schemas.UserPublic(
         id=str(user.id), full_name=user.full_name, email=user.email, cpf=user.cpf,
         phone=user.phone, status=user.status.value, role=user.role.value,
+        referral_code=user.referral_code,
+    )
+
+
+def get_referral_info(db: Session, user: User) -> schemas.ReferralInfo:
+    from app.domains.promotions.models import Referral
+
+    completed = db.execute(select(Referral).where(
+        Referral.referrer_user_id == user.id, Referral.status == "completed")).scalars().all()
+    cfg = _referral_bonus_config(db)
+    earned = Decimal(str(cfg.get("referrer_credits", 5))) * len(completed)
+    return schemas.ReferralInfo(
+        referral_code=user.referral_code,
+        share_link=f"{settings.frontend_base_url}/convite/{user.referral_code}" if user.referral_code else None,
+        completed_referrals=len(completed), credits_earned=str(earned),
     )
 
 
@@ -105,7 +149,7 @@ def _consume_otp(db: Session, user: User, purpose: OtpPurpose, code: str, ip: st
 
 
 # --------------------------------------------------------------------- cadastro
-def register(db: Session, data: schemas.RegisterRequest, ip: str | None) -> None:
+def register(db: Session, data: schemas.RegisterRequest, ip: str | None, ua: str | None = None) -> None:
     email = data.email.lower()
     # unicidade: e-mail / CPF / telefone não podem colidir com conta já existente
     existing_email = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
@@ -133,8 +177,69 @@ def register(db: Session, data: schemas.RegisterRequest, ip: str | None) -> None
         _log(db, AuthEventType.register, user.id, ip)
         analytics_service.track(db, "signup", user_id=user.id)
 
+        if data.referral_code:
+            _create_pending_referral(db, user, data.referral_code, data.referral_source, ip, ua)
+
     _create_and_send_otp(db, user, OtpPurpose.email_verify, ip)
     db.commit()
+
+
+def _create_pending_referral(db: Session, new_user: User, code: str, source: str | None,
+                             ip: str | None, ua: str | None) -> None:
+    """Indicação entre usuários — independente do programa de afiliados (?ref=). Só cria a
+    linha 'pending'; os créditos são concedidos na ativação (set_password), junto do bônus
+    de boas-vindas, para não conceder nada a uma conta que nunca chega a existir de fato."""
+    from app.domains.promotions.models import Referral
+
+    referrer = db.execute(select(User).where(User.referral_code == code.strip().upper())).scalar_one_or_none()
+    if referrer is None or referrer.id == new_user.id:
+        return
+    db.add(Referral(
+        referrer_user_id=referrer.id, referred_user_id=new_user.id, status="pending",
+        reward_config=_referral_bonus_config(db), signup_ip=ip, user_agent=ua,
+        signup_source=source or "manual",
+    ))
+
+
+def _grant_referral_bonus_if_pending(db: Session, user: User) -> None:
+    """Concede os créditos dos dois lados na ativação da conta indicada — idempotente por
+    `idempotency_key` única por referral.id (post_transaction), então mesmo se set_password
+    for reprocessado o bônus nunca duplica."""
+    from app.domains.promotions.models import Referral
+
+    referral = db.execute(select(Referral).where(
+        Referral.referred_user_id == user.id, Referral.status == "pending",
+    )).scalar_one_or_none()
+    if referral is None:
+        return
+    referrer = db.get(User, referral.referrer_user_id)
+    if referrer is None:
+        referral.status = "completed"
+        referral.completed_at = _now()
+        return
+
+    cfg = referral.reward_config or _DEFAULT_REFERRAL_BONUS
+    referred_credits = Decimal(str(cfg.get("referred_credits", 5)))
+    referrer_credits = Decimal(str(cfg.get("referrer_credits", 5)))
+
+    if referred_credits > 0:
+        wallet = get_or_create_wallet(db, user.id)
+        post_transaction(
+            db, wallet=wallet, tx_type=CreditTxType.bonus, amount=referred_credits,
+            idempotency_key=f"referral-bonus:{referral.id}",
+            reference_type="referral", reference_id=referral.id,
+            description=f"Indicação concluída — indicado por {referrer.full_name}",
+        )
+    if referrer_credits > 0:
+        referrer_wallet = get_or_create_wallet(db, referrer.id)
+        post_transaction(
+            db, wallet=referrer_wallet, tx_type=CreditTxType.bonus, amount=referrer_credits,
+            idempotency_key=f"referral-bonus-referrer:{referral.id}",
+            reference_type="referral", reference_id=referral.id,
+            description=f"Indicação concluída — amigo indicado: {user.full_name}",
+        )
+    referral.status = "completed"
+    referral.completed_at = _now()
 
 
 def resend_otp(db: Session, email: str, purpose_str: str, ip: str | None) -> None:
@@ -177,6 +282,9 @@ def set_password(db: Session, setup_token: str, password: str, ip: str | None) -
             idempotency_key=f"welcome-bonus:{user.id}",
             description="Bônus de boas-vindas (créditos grátis)",
         )
+    if user.referral_code is None:
+        user.referral_code = _generate_referral_code(db, user.full_name)
+    _grant_referral_bonus_if_pending(db, user)
     _log(db, AuthEventType.password_set, user.id, ip)
     tokens = _issue_tokens(db, user, ip, None)
     db.commit()

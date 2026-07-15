@@ -9,7 +9,8 @@ export type CreditPackage = {
   price_brl: string;
   bonus_credits: number;
   total_credits: number;
-  featured_badge?: "mais_vendido" | "melhor_oferta" | "oferta_limitada" | null;
+  featured_badge?: "mais_vendido" | "melhor_oferta" | "oferta_limitada"
+    | "melhor_para_comecar" | "melhor_custo_beneficio" | null;
 };
 
 export type CouponPreview = {
@@ -68,6 +69,8 @@ export type OrderListItem = {
   status: string;
   amount_brl: string;
   credits: number;
+  coupon_code?: string | null;
+  discount_amount_brl?: string | null;
   checkout: Record<string, unknown> | null;
   invoice_url: string | null;
   invoice_status: string | null;
@@ -90,6 +93,20 @@ export const promotionsApi = {
 
 export const bannersApi = {
   active: () => authFetch<{ items: Banner[] }>("/banners/active"),
+};
+
+export type ActiveCampaign = {
+  id: string;
+  name: string;
+  priority: number;
+  banner: { title: string; body: string | null; type: string } | null;
+  packages: { id: string; name: string; credits: number; price_brl: string }[];
+  coupons: { id: string; code: string }[];
+  affiliates: { id: string; code: string }[];
+};
+
+export const campaignsApi = {
+  active: () => authFetch<{ items: ActiveCampaign[] }>("/campaigns/active"),
 };
 
 // ---------------- análise ----------------
@@ -142,6 +159,8 @@ export type BetResponse = {
   match_datetime: string | null;
   created_at: string;
   selections: BetSelection[];
+  home_team?: string | null;
+  away_team?: string | null;
 };
 
 export const betsApi = {

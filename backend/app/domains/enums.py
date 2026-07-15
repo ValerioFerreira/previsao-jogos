@@ -118,6 +118,14 @@ class PackageBadge(str, enum.Enum):
     mais_vendido = "mais_vendido"
     melhor_oferta = "melhor_oferta"
     oferta_limitada = "oferta_limitada"
+    melhor_para_comecar = "melhor_para_comecar"
+    melhor_custo_beneficio = "melhor_custo_beneficio"
+
+
+class PackageStatus(str, enum.Enum):
+    ativo = "ativo"
+    oculto = "oculto"
+    arquivado = "arquivado"
 
 
 class PromotionType(str, enum.Enum):

@@ -8,6 +8,8 @@ type AuthState = {
   wallet: Wallet | null;
   loading: boolean;
   isAuthenticated: boolean;
+  sessionExpiredMsg: string | null;
+  dismissSessionExpiredMsg: () => void;
   login: (email: string, password: string) => Promise<void>;
   setSession: (t: TokenResponse) => Promise<void>;
   logout: () => void;
@@ -20,6 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserPublic | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionExpiredMsg, setSessionExpiredMsg] = useState<string | null>(null);
 
   const refreshWallet = useCallback(async () => {
     try {
@@ -38,9 +41,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const me = await authApi.me();
       setUser(me);
       await refreshWallet();
-    } catch {
-      tokens.clear();
-      setUser(null);
+    } catch (e) {
+      // Só derruba a sessão quando o servidor recusa explicitamente o token
+      // (401 — inválido/expirado, já sem refresh válido). Erros transitórios
+      // (rede instável, backend em cold start) não devem deslogar o usuário
+      // silenciosamente — mantemos os tokens para tentar de novo depois.
+      const status = (e as { status?: number }).status;
+      if (status === 401) {
+        tokens.clear();
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -49,6 +59,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadSession();
   }, [loadSession]);
+
+  // Disparado pelo authApi quando um refresh de token é recusado pelo servidor
+  // em pleno uso — a sessão caiu de verdade, então avisamos o usuário em vez de
+  // simplesmente sumir com os dados da tela.
+  useEffect(() => {
+    const onExpired = () => {
+      setUser(null);
+      setWallet(null);
+      setSessionExpiredMsg("Sua sessão expirou por inatividade. Faça login novamente para continuar.");
+    };
+    window.addEventListener("apostai:session-expired", onExpired);
+    return () => window.removeEventListener("apostai:session-expired", onExpired);
+  }, []);
+
+  const dismissSessionExpiredMsg = useCallback(() => setSessionExpiredMsg(null), []);
 
   const applySession = useCallback(
     async (t: TokenResponse) => {
@@ -81,6 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         wallet,
         loading,
         isAuthenticated: !!user,
+        sessionExpiredMsg,
+        dismissSessionExpiredMsg,
         login,
         setSession: applySession,
         logout,

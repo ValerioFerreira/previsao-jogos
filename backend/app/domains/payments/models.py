@@ -10,7 +10,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, 
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, JSONB, TimestampMixin, UUIDPrimaryKeyMixin, enum_type
-from app.domains.enums import PackageBadge, PaymentProvider, PaymentStatus
+from app.domains.enums import PackageBadge, PackageStatus, PaymentProvider, PaymentStatus
 
 _MONEY = Numeric(18, 2)
 
@@ -23,7 +23,11 @@ class CreditPackage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     credits: Mapped[int] = mapped_column(Integer, nullable=False)
     price_brl: Mapped[Decimal] = mapped_column(_MONEY, nullable=False)
     bonus_credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # ativo = à venda; oculto = existe mas não aparece pra novos compradores; arquivado =
+    # encerrado. Nunca DELETE físico: pedidos antigos sempre resolvem pro pacote original.
+    status: Mapped[PackageStatus] = mapped_column(
+        enum_type(PackageStatus), default=PackageStatus.ativo, nullable=False
+    )
 
     # Vitrine/conversão (Carteira redesenhada): selo de destaque + ordem de exibição.
     # Preço-por-crédito e % de economia são derivados no frontend (price_brl/total_credits).
@@ -52,6 +56,10 @@ class PaymentOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     invoice_status: Mapped[str | None] = mapped_column(String(30), nullable=True)  # pending|issued|failed
     invoice_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     amount_brl: Mapped[Decimal] = mapped_column(_MONEY, nullable=False)
+    # Valor do desconto já aplicado (amount_brl é o valor FINAL, já descontado). Guardado
+    # separado pra "Minhas compras"/analytics saberem quanto o cupom deu de desconto sem
+    # precisar re-derivar da config atual do cupom (que pode ter mudado/sido excluída).
+    discount_amount_brl: Mapped[Decimal] = mapped_column(_MONEY, default=Decimal("0"), nullable=False)
     credits: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[PaymentStatus] = mapped_column(
         enum_type(PaymentStatus), default=PaymentStatus.created, nullable=False

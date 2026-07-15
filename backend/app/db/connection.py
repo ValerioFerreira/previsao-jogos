@@ -36,9 +36,37 @@ if DATABASE_URL.startswith("postgresql"):
         "max_overflow": 10,
         "pool_pre_ping": True,
         "pool_recycle": 300, # Reciclar conexões a cada 5 min para evitar drops
+        # Causa raiz do travamento dos jobs de coleta (2026-07-08..14): o pooler do Neon
+        # às vezes derruba a conexão TCP sem avisar (RST silencioso) e o psycopg2 NÃO tem
+        # timeout por padrão — o processo fica preso indefinidamente num connect() ou numa
+        # query, nunca levanta exceção, e o `prefetch_wc.cmd` nunca chega nas etapas
+        # seguintes (rebuild/precompute/prefetch de clubes). Com timeouts explícitos, a
+        # conexão trava no máximo alguns segundos e levanta OperationalError — que o
+        # código já trata (cache_get/cache_put fazem try/except e seguem em frente).
+        # OBS: "options": "-c statement_timeout=..." NÃO funciona aqui -- o endpoint é o
+        # pooler (pgbouncer) do Neon, que rejeita parâmetros de startup arbitrários
+        # ("unsupported startup parameter in options"). Usamos keepalives (nível TCP,
+        # não passa pelo protocolo de startup) para detectar a conexão morta rápido, e
+        # aplicamos o statement_timeout via SET logo após conectar (evento "connect").
+        "connect_args": {
+            "connect_timeout": 10,      # segundos p/ completar o handshake TCP/SSL
+            "keepalives": 1,
+            "keepalives_idle": 15,      # segundos ocioso antes do 1º probe
+            "keepalives_interval": 5,   # segundos entre probes
+            "keepalives_count": 3,      # probes sem resposta até considerar morta
+        },
     }
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
+
+if DATABASE_URL.startswith("postgresql"):
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _set_statement_timeout(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("SET statement_timeout = 20000")  # 20s max por query no servidor
+        cursor.close()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():

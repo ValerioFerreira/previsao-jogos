@@ -58,6 +58,8 @@ class BetResponse(BaseModel):
     match_datetime: datetime | None
     created_at: datetime
     selections: list[SelectionOut]
+    home_team: str | None = None
+    away_team: str | None = None
 
 
 class BetsPage(BaseModel):

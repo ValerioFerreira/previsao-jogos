@@ -13,6 +13,7 @@ class PackageItem(BaseModel):
     price_brl: Decimal
     bonus_credits: int
     total_credits: int
+    featured_badge: str | None = None
 
 
 class CheckoutRequest(BaseModel):
@@ -51,6 +52,8 @@ class OrderListItem(BaseModel):
     status: str
     amount_brl: Decimal
     credits: int
+    coupon_code: str | None = None
+    discount_amount_brl: Decimal | None = None
     checkout: dict | None = None
     invoice_url: str | None = None
     invoice_status: str | None = None

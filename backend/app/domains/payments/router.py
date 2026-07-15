@@ -15,7 +15,6 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 @router.get("/packages", response_model=list[schemas.PackageItem])
 def packages(db: Session = Depends(get_db)):
-    service.seed_default_packages(db)
     return service.list_packages(db)
 
 

@@ -40,6 +40,11 @@ LEAGUES = [
     (135, "Serie A (Italia)"),
     (78, "Bundesliga"),
     (61, "Ligue 1"),
+    (2, "Champions League"),
+    (3, "Europa League"),
+    (848, "Conference League"),
+    (13, "Copa Libertadores"),
+    (11, "Copa Sul-Americana"),
 ]
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"

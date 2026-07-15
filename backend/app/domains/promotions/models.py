@@ -68,9 +68,16 @@ class Coupon(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_purchase_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)  # regras em texto livre p/ admin
 
 
 class Referral(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Indicação entre usuários (créditos, independente do programa de afiliados — ver
+    affiliates/models.py). status: pending (cadastrado, aguardando ativação da conta) |
+    completed (bônus já concedido aos dois lados) — reward_config é um SNAPSHOT do
+    PlatformSetting 'referral_bonus' no momento do cadastro, pra não mudar retroativamente
+    o que já foi prometido se o admin alterar os valores depois."""
     __tablename__ = "app_referrals"
 
     referrer_user_id: Mapped[uuid.UUID] = mapped_column(
@@ -81,3 +88,7 @@ class Referral(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False)
     reward_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    signup_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    signup_source: Mapped[str | None] = mapped_column(String(40), nullable=True)  # link|manual

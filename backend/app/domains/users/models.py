@@ -27,6 +27,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     role: Mapped[UserRole] = mapped_column(enum_type(UserRole), default=UserRole.user, nullable=False)
 
+    # código próprio de indicação (gerado na ativação da conta, ver auth/service.py::set_password)
+    referral_code: Mapped[str | None] = mapped_column(String(30), unique=True, index=True, nullable=True)
+
     # rastreabilidade (exigida no spec)
     signup_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

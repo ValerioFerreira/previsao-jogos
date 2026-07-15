@@ -14,6 +14,14 @@ export type UserPublic = {
   phone: string;
   status: string;
   role: string;
+  referral_code?: string | null;
+};
+
+export type ReferralInfo = {
+  referral_code: string | null;
+  share_link: string | null;
+  completed_referrals: number;
+  credits_earned: string;
 };
 
 export type TokenResponse = {
@@ -73,8 +81,15 @@ async function tryRefresh(): Promise<boolean> {
     });
     tokens.set(t);
     return true;
-  } catch {
-    tokens.clear();
+  } catch (e) {
+    // Só limpamos os tokens quando o servidor recusa explicitamente o refresh
+    // (401/400 — token inválido/expirado). Erros transitórios (rede, cold start
+    // do backend) não devem derrubar a sessão do usuário silenciosamente.
+    const status = (e as { status?: number }).status;
+    if (status === 401 || status === 400) {
+      tokens.clear();
+      window.dispatchEvent(new CustomEvent("apostai:session-expired"));
+    }
     return false;
   }
 }
@@ -94,7 +109,7 @@ export async function authFetch<T>(path: string, init?: RequestInit): Promise<T>
 
 // ---------------------------------------------------------------- auth
 export const authApi = {
-  register: (d: { full_name: string; email: string; cpf: string; phone: string }) =>
+  register: (d: { full_name: string; email: string; cpf: string; phone: string; referral_code?: string; referral_source?: string }) =>
     raw<{ message: string }>("/auth/register", { method: "POST", body: JSON.stringify(d) }),
 
   resendOtp: (email: string, purpose = "email_verify") =>
@@ -116,6 +131,8 @@ export const authApi = {
   },
 
   me: () => authFetch<UserPublic>("/auth/me"),
+
+  myReferral: () => authFetch<ReferralInfo>("/auth/me/referral"),
 
   forgotPassword: (email: string) =>
     raw<{ message: string }>("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),

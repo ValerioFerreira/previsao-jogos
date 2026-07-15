@@ -25,6 +25,8 @@ class Affiliate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     commission_fixed_brl: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)  # active|paused
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
 class AffiliateAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -55,3 +57,25 @@ class AffiliateCommission(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     amount_brl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="devida", nullable=False)  # devida|paga
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_affiliate_payments.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+
+
+class AffiliatePayment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Lote de pagamento efetuado a um afiliado, cobrindo um período — permite controlar
+    comissões devidas vs efetivamente pagas (cada AffiliateCommission incluída ganha
+    payment_id + status='paga')."""
+    __tablename__ = "app_affiliate_payments"
+
+    affiliate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("app_affiliates.id", ondelete="CASCADE"), index=True
+    )
+    amount_brl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    method: Mapped[str | None] = mapped_column(String(40), nullable=True)  # pix|transferencia|...
+    receipt_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)  # pending|paid|canceled
