@@ -79,19 +79,21 @@ function useCountdown(targetIso: string) {
   };
 }
 
-function CountdownUnit({ value, label }: { value: number; label: string }) {
+function CountdownUnit({ value, label, big = false }: { value: number; label: string; big?: boolean }) {
   return (
-    <div className="flex flex-col items-center bg-white/15 rounded-lg px-2 py-1 min-w-[44px] sm:min-w-[52px]">
-      <span className="text-base sm:text-xl font-mono font-extrabold tabular-nums leading-none">{String(value).padStart(2, "0")}</span>
-      <span className="text-[8px] sm:text-[9px] uppercase tracking-wide text-white/70 mt-0.5">{label}</span>
+    <div className={`flex flex-col items-center rounded-lg backdrop-blur-sm border border-white/15 bg-white/10 ${big ? "px-3 sm:px-4 py-2 sm:py-2.5 min-w-[58px] sm:min-w-[76px]" : "px-2 py-1 min-w-[44px] sm:min-w-[52px]"}`}>
+      <span className={`font-mono font-extrabold tabular-nums leading-none text-white ${big ? "text-2xl sm:text-4xl" : "text-base sm:text-xl"}`}>{String(value).padStart(2, "0")}</span>
+      <span className={`uppercase tracking-wide text-white/70 mt-0.5 sm:mt-1 ${big ? "text-[9px] sm:text-[11px]" : "text-[8px] sm:text-[9px]"}`}>{label}</span>
     </div>
   );
 }
 
-// Aviso informativo no topo da Análise — Copa do Mundo grátis e contagem regressiva para os
-// mercados de clubes. Dispensável (fica escondido em localStorage) para não incomodar quem já viu.
-const NEWS_BANNER_KEY = "apostai:news_banner_v2_dismissed";
-function NewsBanner() {
+const CLUB_MARKETS_BG_URL = "https://png.pngtree.com/thumb_back/fh260/background/20230705/pngtree-intense-football-game-at-the-stadium-3d-rendering-of-competing-players-image_3821105.jpg";
+
+// Anúncio no topo da Análise — mercados de clubes chegando, com contagem regressiva.
+// Dispensável (fica escondido em localStorage) para não incomodar quem já viu.
+const NEWS_BANNER_KEY = "apostai:news_banner_v3_dismissed";
+function ClubMarketsBanner() {
   const [dismissed, setDismissed] = useState(true);
   const countdown = useCountdown(CLUBS_LAUNCH_ISO);
   useEffect(() => {
@@ -107,72 +109,53 @@ function NewsBanner() {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-600 via-cyan-600 to-sky-700 text-white p-4 sm:p-5 shadow-lg shadow-cyan-900/20"
+      className="relative overflow-hidden rounded-2xl shadow-xl shadow-cyan-900/20"
     >
-      {/* brilho animado de fundo */}
-      <motion.div
+      {/* imagem de fundo, com fade se misturando ao background da página */}
+      <div
         aria-hidden
-        animate={{ opacity: [0.2, 0.45, 0.2], scale: [1, 1.2, 1] }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-        className="pointer-events-none absolute -top-16 -right-10 w-48 h-48 rounded-full bg-white/10 blur-3xl"
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${CLUB_MARKETS_BG_URL})` }}
       />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-slate-950/75 via-slate-950/60 to-background" />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-background/50 via-transparent to-background/50" />
 
-      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-2.5 right-2.5 text-white/70 hover:text-white transition-colors z-10">
+      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-3 right-3 text-white/70 hover:text-white transition-colors z-10">
         <X className="w-4 h-4" />
       </button>
 
-      <div className="relative space-y-3 pr-6">
-        <div className="flex items-start gap-2">
-          <motion.span
-            animate={{ rotate: [0, -8, 8, -8, 0] }}
-            transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 2 }}
-            className="text-xl sm:text-2xl shrink-0"
-          >
-            🏆
-          </motion.span>
-          <p className="text-sm sm:text-base leading-snug">
-            Copa do Mundo? É{" "}
-            <motion.span
-              animate={{ scale: [1, 1.08, 1] }}
-              transition={{ duration: 1.4, repeat: Infinity }}
-              className="inline-block font-extrabold text-amber-300"
-            >
-              GRÁTIS
-            </motion.span>
-            ! 🎉 Aproveita que as análises da <b>final</b> e da <b>disputa do 3º colocado</b> não vão consumir créditos, e boa sorte! 🍀
-          </p>
+      <div className="relative px-5 py-8 sm:py-10 flex flex-col items-center text-center gap-4">
+        <motion.p
+          animate={{ opacity: [0.85, 1, 0.85] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+          className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-cyan-300"
+        >
+          Nova Atualização
+        </motion.p>
+        <h2 className="font-heading font-extrabold text-2xl sm:text-4xl text-white leading-tight tracking-tight">
+          MERCADOS DE <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">CLUBES</span>
+        </h2>
+
+        <div className="flex flex-wrap justify-center gap-1.5 max-w-2xl">
+          {CLUB_LEAGUES.map((l) => (
+            <span key={l} className="text-[11px] font-medium bg-white/10 border border-white/15 text-white/90 rounded-full px-2.5 py-1 backdrop-blur-sm">{l}</span>
+          ))}
         </div>
 
-        <div className="flex items-start gap-2">
-          <span className="text-xl sm:text-2xl shrink-0">😌</span>
-          <p className="text-sm sm:text-base leading-snug">
-            E quando a Copa acabar? Tem calma → <span className="font-extrabold text-cyan-100">NOVOS MERCADOS DE CLUBES</span> estão chegando! 🚀
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 pt-0.5">
-          <span className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-white/80">
-            <Clock className="w-3.5 h-3.5" /> Lançamento em:
+        <div className="flex flex-col items-center gap-2 pt-2">
+          <span className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-white/70">
+            <Clock className="w-3.5 h-3.5" /> Lançamento em
           </span>
-          <div className="flex items-center gap-1 sm:gap-1.5">
-            <CountdownUnit value={countdown.days} label="dias" />
-            <span className="font-bold text-white/40">:</span>
-            <CountdownUnit value={countdown.hours} label="hrs" />
-            <span className="font-bold text-white/40">:</span>
-            <CountdownUnit value={countdown.minutes} label="min" />
-            <span className="font-bold text-white/40">:</span>
-            <CountdownUnit value={countdown.seconds} label="seg" />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <CountdownUnit value={countdown.days} label="dias" big />
+            <span className="font-bold text-white/30 text-xl sm:text-2xl">:</span>
+            <CountdownUnit value={countdown.hours} label="hrs" big />
+            <span className="font-bold text-white/30 text-xl sm:text-2xl">:</span>
+            <CountdownUnit value={countdown.minutes} label="min" big />
+            <span className="font-bold text-white/30 text-xl sm:text-2xl">:</span>
+            <CountdownUnit value={countdown.seconds} label="seg" big />
           </div>
         </div>
-
-        <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
-          <span className="inline-flex flex-wrap gap-1 align-middle">
-            {CLUB_LEAGUES.map((l) => (
-              <span key={l} className="text-[11px] font-medium bg-white/15 rounded-full px-2 py-0.5">{l}</span>
-            ))}
-          </span>{" "}
-          <b>e muito mais!</b>
-        </p>
       </div>
     </motion.div>
   );
@@ -584,7 +567,7 @@ export default function Previsoes() {
 
   return (
     <div className="space-y-6">
-      <NewsBanner />
+      <ClubMarketsBanner />
       {homeTeamId && awayTeamId && (
         <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} onEditTeams={() => setEditingTeams(true)} />
       )}
@@ -740,14 +723,42 @@ export default function Previsoes() {
             {errMsg}{errMsg.toLowerCase().includes('insuficiente') && <> <Link href="/carteira" className="underline font-medium">Comprar créditos</Link>.</>}
           </div>
         )}
+        {user && competition === 'Copa do Mundo' && !loading && (
+          <motion.p
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+            className="text-xs sm:text-sm font-bold text-amber-500 flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> É Copa? Então, é de graça! 🎉
+          </motion.p>
+        )}
         <motion.button
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          onClick={handleGenerate} disabled={!canGenerate || loading || (!!user && credits < 1)}
+          onClick={handleGenerate}
+          disabled={!canGenerate || loading || (!!user && credits < 1 && competition !== 'Copa do Mundo')}
           className="px-8 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
         >
           {loading
             ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processando...</span>
-            : <span className="flex items-center gap-2"><Sparkles className="w-4 h-4" /> {user ? 'Gerar análise (1 crédito)' : 'Entrar para gerar análise'}</span>}
+            : (
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                {user
+                  ? (
+                    <span className="flex items-center gap-1.5">
+                      Gerar análise{" "}
+                      {competition === 'Copa do Mundo'
+                        ? (
+                          <span className="relative inline-block">
+                            (1 crédito)
+                            <span className="pointer-events-none absolute -left-[6%] -right-[6%] top-1/2 h-[2.5px] bg-amber-400 -translate-y-1/2 -rotate-[8deg] rounded-full" />
+                          </span>
+                        )
+                        : '(1 crédito)'}
+                    </span>
+                  )
+                  : 'Entrar para gerar análise'}
+              </span>
+            )}
         </motion.button>
         {user && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
