@@ -61,5 +61,14 @@ async def webhook(provider: str, request: Request, db: Session = Depends(get_db)
         payload = json.loads(body or b"{}")
     except Exception:
         payload = {}
+    # Diagnóstico temporário (investigação de assinatura MP divergente mesmo com secret
+    # confirmado): captura o que dict(headers)/dict(query_params) poderia estar mascarando
+    # silenciosamente — headers repetidos (dict() só mantém o último) e a query string crua.
+    all_request_ids = request.headers.getlist("x-request-id")
+    if len(all_request_ids) != 1:
+        print(f"[DIAG] webhook {provider}: x-request-id aparece {len(all_request_ids)}x -> {all_request_ids}")
+    print(f"[DIAG] webhook {provider}: query_string_crua={request.url.query!r} "
+          f"x-signature_bruto={request.headers.get('x-signature')!r} "
+          f"todos_headers={list(request.headers.items())!r}")
     return service.handle_webhook(db, provider, payload, dict(request.headers), body,
                                   dict(request.query_params))

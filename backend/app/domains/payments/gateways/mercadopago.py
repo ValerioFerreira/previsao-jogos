@@ -85,7 +85,7 @@ class MercadoPagoGateway:
         conter um `data.id`, mas a MP assina com o valor da URL; usar o do corpo gera 100%
         de falso-negativo em produção). Normalizado para minúsculas conforme a doc da MP.
         """
-        secret = settings.mp_webhook_secret
+        secret = settings.mp_webhook_secret.strip()
         if not secret:
             return False
         sig_header = headers.get("x-signature") or headers.get("X-Signature")
@@ -117,8 +117,16 @@ class MercadoPagoGateway:
         expected = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
         ok = hmac.compare_digest(expected, v1)
         if not ok:
+            # Fingerprint do segredo (sha256 truncado) — nunca expõe o valor, mas permite
+            # comparar com um fingerprint calculado à parte a partir do os.environ real,
+            # pra descartar de vez qualquer divergência de carregamento de config
+            # (.env desatualizado no deploy, nome de env var errado, cache, etc.).
+            secret_fp = hashlib.sha256(secret.encode()).hexdigest()[:12]
             print(f"[AVISO] webhook MP: assinatura não bateu — manifest={manifest!r} "
-                  f"esperado={expected} recebido={v1}")
+                  f"esperado={expected} recebido={v1} "
+                  f"secret_len={len(secret)} secret_fp_sha256_12={secret_fp} "
+                  f"sig_header_bruto={sig_header!r} data_id_fonte="
+                  f"{'query.data.id' if query_params.get('data.id') else 'query.data_id' if query_params.get('data_id') else 'query.id' if query_params.get('id') else 'body/vazio'}")
         return ok
 
     def parse_webhook(self, payload: dict) -> WebhookEvent:
