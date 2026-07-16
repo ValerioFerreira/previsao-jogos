@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Shield, Ban, CheckCircle2, Coins, Plus, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { adminApi, type AdminUser, type AuditEntry } from "@/lib/adminApi";
+import { legalApi, type LegalDoc } from "@/lib/monetizationApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -115,7 +116,9 @@ export default function AdminPage() {
   const [banners, setBanners] = useState<Record<string, unknown>[]>([]);
   const [campaigns, setCampaigns] = useState<Record<string, unknown>[]>([]);
   const [settings, setSettings] = useState<Record<string, unknown>[]>([]);
+  const [legalDocs, setLegalDocs] = useState<LegalDoc[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [legalMsg, setLegalMsg] = useState<string | null>(null);
 
   const [newPromo, setNewPromo] = useState({ code: "", name: "", type: "refund_if_lose" });
   const [newCoupon, setNewCoupon] = useState({
@@ -140,6 +143,9 @@ export default function AdminPage() {
   });
   const [editBannerModal, setEditBannerModal] = useState<Record<string, unknown> | null>(null);
   const [editBannerForm, setEditBannerForm] = useState({ title: "", body: "", image_url: "" });
+  const [editLegalModal, setEditLegalModal] = useState<LegalDoc | null>(null);
+  const [editLegalForm, setEditLegalForm] = useState({ title: "", body_md: "" });
+  const [editLegalLoading, setEditLegalLoading] = useState(false);
   const [affPaymentModal, setAffPaymentModal] = useState<Record<string, unknown> | null>(null);
   const [affPaymentForm, setAffPaymentForm] = useState({ amount_brl: "0", method: "pix" });
   const [affPaymentsListModal, setAffPaymentsListModal] = useState<{ affiliate: Record<string, unknown>; items: Record<string, unknown>[] } | null>(null);
@@ -155,14 +161,14 @@ export default function AdminPage() {
   const loadAll = useCallback(async () => {
     await loadUsers();
     try {
-      const [p, pr, a, d, cp, ca, pk, af, bn, cm, st] = await Promise.all([
+      const [p, pr, a, d, cp, ca, pk, af, bn, cm, st, ld] = await Promise.all([
         adminApi.payments(), adminApi.promotions(), adminApi.audit(), adminApi.dashboard(),
         adminApi.coupons(), adminApi.couponAnalytics(), adminApi.packages(), adminApi.affiliates(),
-        adminApi.banners(), adminApi.campaigns(), adminApi.settings(),
+        adminApi.banners(), adminApi.campaigns(), adminApi.settings(), legalApi.documents(),
       ]);
       setPayments(p.items); setPromos(pr.items); setAudit(a.items); setDashboard(d);
       setCoupons(cp.items); setCouponAnalytics(ca.items); setPackages(pk.items); setAffiliates(af.items);
-      setBanners(bn.items); setCampaigns(cm.items); setSettings(st.items);
+      setBanners(bn.items); setCampaigns(cm.items); setSettings(st.items); setLegalDocs(ld);
     } catch (e) { setErr((e as Error).message); }
   }, [loadUsers]);
 
@@ -332,6 +338,37 @@ export default function AdminPage() {
     } catch (e) { setErr((e as Error).message); }
   }
 
+  async function openEditLegal(d: LegalDoc) {
+    setEditLegalModal(d);
+    setEditLegalForm({ title: d.title, body_md: "" });
+    setEditLegalLoading(true);
+    try {
+      const full = await legalApi.document(d.type);
+      setEditLegalForm({ title: full.title, body_md: full.body_md });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setEditLegalLoading(false);
+    }
+  }
+  function submitEditLegal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editLegalModal) return;
+    setConfirmState({
+      message: `Publicar uma nova versão de "${editLegalModal.title}"? Isso REVOGA o aceite de todos os usuários — na próxima vez que logarem, será pedido que revisem e assinem novamente.`,
+      onConfirm: async () => {
+        if (!editLegalModal) return;
+        try {
+          await adminApi.publishLegal({ type: editLegalModal.type, title: editLegalForm.title, body_md: editLegalForm.body_md });
+          setLegalDocs(await legalApi.documents());
+          setEditLegalModal(null);
+          setLegalMsg(`Nova versão de "${editLegalForm.title}" publicada — todos os usuários precisarão assinar novamente.`);
+          setTimeout(() => setLegalMsg(null), 6000);
+        } catch (e) { setErr((e as Error).message); }
+      },
+    });
+  }
+
   function deleteBanner(b: Record<string, unknown>) {
     setConfirmState({
       message: `Excluir o banner "${b.title}"?`,
@@ -472,6 +509,7 @@ export default function AdminPage() {
           <TabsTrigger value="afiliados">Afiliados</TabsTrigger>
           <TabsTrigger value="banners">Banners</TabsTrigger>
           <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
+          <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="config">Configurações</TabsTrigger>
           <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
         </TabsList>
@@ -839,6 +877,34 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
+        {/* ---------------- Documentos legais ---------------- */}
+        <TabsContent value="documentos">
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Documentos que os usuários assinam</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Editar e publicar aqui cria uma NOVA versão vigente e revoga o aceite de todos os
+                usuários — na próxima vez que logarem, será pedido que revisem e assinem novamente.
+              </p>
+              {legalMsg && <div className="text-sm rounded-md bg-emerald-500/10 text-emerald-600 p-3">{legalMsg}</div>}
+              <div className="divide-y text-sm">
+                {legalDocs.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between py-2.5 gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium">{d.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {d.type} · versão {d.version}{d.published_at ? ` · publicado em ${fmt(d.published_at)}` : ""}
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => openEditLegal(d)}>Editar</Button>
+                  </div>
+                ))}
+                {legalDocs.length === 0 && <p className="text-sm text-muted-foreground">Nenhum documento cadastrado.</p>}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ---------------- Configurações ---------------- */}
         <TabsContent value="config">
           <Card>
@@ -953,6 +1019,28 @@ export default function AdminPage() {
             <Button type="submit" size="sm">Salvar</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!editLegalModal} onClose={() => setEditLegalModal(null)} title={`Editar documento — ${editLegalModal?.title ?? ""}`} wide>
+        {editLegalLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : (
+          <form onSubmit={submitEditLegal} className="space-y-3">
+            <p className="text-xs rounded-md bg-amber-500/10 text-amber-600 p-3">
+              Publicar cria a versão {(editLegalModal?.version ?? 0) + 1} e revoga o aceite de
+              todos os usuários da versão atual.
+            </p>
+            <Field label="Título"><Input value={editLegalForm.title} onChange={(e) => setEditLegalForm({ ...editLegalForm, title: e.target.value })} required /></Field>
+            <Field label="Conteúdo (Markdown)">
+              <Textarea className="min-h-[400px] font-mono text-xs" value={editLegalForm.body_md}
+                        onChange={(e) => setEditLegalForm({ ...editLegalForm, body_md: e.target.value })} required />
+            </Field>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditLegalModal(null)}>Cancelar</Button>
+              <Button type="submit" size="sm">Publicar nova versão</Button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       <Modal open={!!affPaymentModal} onClose={() => setAffPaymentModal(null)} title={`Registrar pagamento — ${affPaymentModal?.name ?? ""}`}>

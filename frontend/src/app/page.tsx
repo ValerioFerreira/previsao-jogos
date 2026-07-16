@@ -1,11 +1,11 @@
 "use client";
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowDown, CheckCircle2, Target, ChevronDown, Sliders } from 'lucide-react';
+import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowDown, CheckCircle2, Target, ChevronDown, Sliders, Megaphone, Gift, X } from 'lucide-react';
 import { api, PredictionResponse, PlacarMotivo, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
@@ -51,6 +51,50 @@ function oddRangeStr(probPct: number): string {
   const hi = Math.max(1, odd);
   const lo = Math.max(1, odd * 0.93);
   return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
+}
+
+const CLUB_LEAGUES = [
+  "Brasileirão Série A", "Brasileirão Série B", "Copa do Brasil",
+  "Premier League", "La Liga", "Serie A (Itália)", "Bundesliga", "Ligue 1",
+];
+
+// Aviso informativo no topo da Análise — Copa do Mundo grátis, cota diária grátis,
+// expansão de mercados e a data de início dos mercados de clubes. Dispensável (fica
+// escondido em localStorage) para não incomodar quem já viu.
+const NEWS_BANNER_KEY = "apostai:news_banner_v1_dismissed";
+function NewsBanner() {
+  const [dismissed, setDismissed] = useState(true);
+  useEffect(() => {
+    try { setDismissed(localStorage.getItem(NEWS_BANNER_KEY) === "1"); } catch { setDismissed(false); }
+  }, []);
+  if (dismissed) return null;
+  function dismiss() {
+    try { localStorage.setItem(NEWS_BANNER_KEY, "1"); } catch { /* ignora */ }
+    setDismissed(true);
+  }
+  return (
+    <div className="relative rounded-lg bg-gradient-to-r from-sky-700 to-cyan-600 text-white p-4">
+      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-2.5 right-2.5 text-white/70 hover:text-white transition-colors">
+        <X className="w-4 h-4" />
+      </button>
+      <div className="flex items-start gap-3 pr-6">
+        <Megaphone className="w-5 h-5 shrink-0 mt-0.5" />
+        <div className="space-y-1.5 text-sm">
+          <p className="flex items-center gap-1.5"><Gift className="w-3.5 h-3.5 shrink-0" /> Análises da <b>Copa do Mundo são grátis</b>, sem gastar créditos.</p>
+          <p>Todo dia, <b>1 análise grátis</b> para qualquer confronto — não retém crédito.</p>
+          <p>O site vai <b>expandir para mais mercados</b> em breve.</p>
+          <p>
+            <b>Mercados de clubes começam em 18/07/2026</b>, com destaque para:{" "}
+            <span className="inline-flex flex-wrap gap-1 mt-1">
+              {CLUB_LEAGUES.map((l) => (
+                <span key={l} className="text-[11px] font-medium bg-white/15 rounded-full px-2 py-0.5">{l}</span>
+              ))}
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Título de seção centralizado com linhas em degradê preenchendo a horizontal.
@@ -459,6 +503,7 @@ export default function Previsoes() {
 
   return (
     <div className="space-y-6">
+      <NewsBanner />
       {homeTeamId && awayTeamId && (
         <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} onEditTeams={() => setEditingTeams(true)} />
       )}

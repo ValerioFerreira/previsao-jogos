@@ -10,6 +10,7 @@ import { AuthProvider } from "@/lib/AuthContext";
 import ReferralCapture from "@/components/platform/ReferralCapture";
 import InactivityWatcher from "@/components/platform/InactivityWatcher";
 import SessionExpiredNotice from "@/components/platform/SessionExpiredNotice";
+import LegalGate from "@/components/platform/LegalGate";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -35,6 +36,7 @@ export default function RootLayout({
             <ReferralCapture />
             <InactivityWatcher />
             <SessionExpiredNotice />
+            <LegalGate />
             <PredictionProvider>
               <div className="relative flex min-h-screen flex-col">
                 <Header />

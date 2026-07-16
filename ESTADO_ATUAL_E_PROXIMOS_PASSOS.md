@@ -8,6 +8,31 @@
 
 ---
 
+## 0. Sessão (2026-07-16), parte 3 — admin edita documentos legais + banner de novidades
+
+- **Admin → aba "Documentos"** (`frontend/src/app/admin/page.tsx`): edita título/corpo (Markdown)
+  de qualquer um dos 5 documentos legais e publica uma nova versão. **Nenhuma mudança de backend
+  foi necessária** — `legal/service.py::publish()` já cria uma nova linha (`LegalDocument`) com
+  novo UUID e marca a anterior `is_current=False`; como `UserDocumentAcceptance` é vinculado ao
+  `document_id` específico, isso já revoga o aceite de todos os usuários automaticamente (a
+  versão nova nunca está entre os ids aceitos). A UI só reaproveita o endpoint
+  `POST /admin/legal/publish`, já existente e testado.
+- **Aviso ao logar** (`frontend/src/components/platform/LegalGate.tsx`, montado no
+  `layout.tsx`): quando `GET /legal/pending` volta com itens, mostra um modal pedindo para
+  revisar/assinar de novo, com atalho para `/documentos`. "Depois" só adia na mesma aba/sessão
+  (`sessionStorage`) — a Carteira continua bloqueando compra de crédito de verdade enquanto
+  houver pendência (gate já existente).
+- **Banner na página de Análise** (`frontend/src/app/page.tsx`, componente `NewsBanner`):
+  Copa do Mundo grátis, 1 análise grátis por dia, "mais mercados em breve", e mercados de
+  clubes a partir de 18/07/2026 com as principais ligas em destaque (Brasileirão A/B, Copa do
+  Brasil, Premier League, La Liga, Serie A, Bundesliga, Ligue 1 — mesma lista de prioridade do
+  `CLAUDE.md`). Dispensável via `localStorage` (não reaparece depois de fechado).
+- **Testado**: `tsc --noEmit` limpo; banner conferido via dev server real (`get_page_text`)
+  mostrando o texto esperado; nenhum erro novo no console (só os já esperados de `api.teams()`
+  sem backend rodando neste ambiente).
+
+---
+
 ## 0. Sessão (2026-07-16), parte 2 — lote de UX (Carteira/Documentos/Como Funciona/Placar
 Exato/e-mail) + correções de backend (ParcerIA travada, fixture já iniciada, créditos
 grátis, screenshot mobile, portal do afiliado)
