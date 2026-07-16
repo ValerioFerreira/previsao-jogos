@@ -89,24 +89,37 @@ class MercadoPagoGateway:
         if not secret:
             return False
         sig_header = headers.get("x-signature") or headers.get("X-Signature")
-        request_id = headers.get("x-request-id") or headers.get("X-Request-Id")
+        request_id = (headers.get("x-request-id") or headers.get("X-Request-Id") or "").strip()
         if not sig_header:
+            print("[AVISO] webhook MP: sem header x-signature")
             return False
-        parts = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+        # .strip() em chave E valor — a MP pode mandar "ts=...,  v1=..." com espaço após a
+        # vírgula; sem o strip, a chave vira " v1" (com espaço) e o v1 nunca é encontrado.
+        parts = {}
+        for p in sig_header.split(","):
+            if "=" in p:
+                k, v = p.split("=", 1)
+                parts[k.strip()] = v.strip()
         ts, v1 = parts.get("ts"), parts.get("v1")
         if not ts or not v1:
+            print(f"[AVISO] webhook MP: x-signature sem ts/v1 (header bruto={sig_header!r})")
             return False
-        data_id = (query_params.get("data.id") or query_params.get("data_id") or "").lower()
+        data_id = (query_params.get("data.id") or query_params.get("data_id")
+                   or query_params.get("id") or "").strip().lower()
         if not data_id:
             # fallback defensivo — algumas integrações também ecoam data.id no corpo
             try:
                 import json
-                data_id = str(json.loads(body or b"{}").get("data", {}).get("id", "")).lower()
+                data_id = str(json.loads(body or b"{}").get("data", {}).get("id", "")).strip().lower()
             except Exception:
                 data_id = ""
         manifest = f"id:{data_id};request-id:{request_id};ts:{ts};"
         expected = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected, v1)
+        ok = hmac.compare_digest(expected, v1)
+        if not ok:
+            print(f"[AVISO] webhook MP: assinatura não bateu — manifest={manifest!r} "
+                  f"esperado={expected} recebido={v1}")
+        return ok
 
     def parse_webhook(self, payload: dict) -> WebhookEvent:
         """Payload de notificação IPN/webhook do MP traz só o `data.id` do pagamento —
