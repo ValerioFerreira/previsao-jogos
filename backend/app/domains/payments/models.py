@@ -55,6 +55,10 @@ class PaymentOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     invoice_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     invoice_status: Mapped[str | None] = mapped_column(String(30), nullable=True)  # pending|issued|failed
     invoice_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Id do documento no provedor (ex.: NFE.io) — permite reconsultar status (polling)
+    # sem reemitir, e é a chave de idempotência do request_invoice().
+    invoice_provider_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(60), nullable=True)  # número dado pelo município, só após "issued"
     amount_brl: Mapped[Decimal] = mapped_column(_MONEY, nullable=False)
     # Valor do desconto já aplicado (amount_brl é o valor FINAL, já descontado). Guardado
     # separado pra "Minhas compras"/analytics saberem quanto o cupom deu de desconto sem

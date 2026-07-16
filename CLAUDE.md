@@ -14,7 +14,8 @@ deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 - **`DOCUMENTACAO_CENTRAL.md`** — doc-mestre. Modelos, mercados, métricas, **§6 gate de validação**,
   **§8/§9 histórico e TESTES já feitos (não repetir)**, **§12 monetização (§12.7 = conversão
   completa, gateway MP/cupons/afiliados/analytics/admin, 2026-07-11; §12.8 = merge na `main` +
-  nota fiscal sob demanda, 2026-07-13)**.
+  nota fiscal sob demanda, 2026-07-13; §12.9 = código p/ Mercado Pago real + nota fiscal automática
+  via NFE.io, 2026-07-16 — falta só o runbook do dono)**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**.
 - **`docs/ARQUITETURA_MONETIZACAO.md`** — desenho original da monetização (créditos/apostas/admin).
@@ -32,10 +33,12 @@ deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 - `app/services/fixture_fetch.py` — API-Football (cache `match_detail_cache`, `/injuries`).
 - `app/domains/{auth,wallet,payments,analysis,bets,promotions,admin,affiliates,campaigns,analytics,
   notifications,support}` — monetização (ORM 2.0 + Alembic, já na `main`). Gateway real: `payments/
-  gateways/mercadopago.py` (falta credencial, ver handoff §2.1). Nota fiscal: emissão automática via
-  `payments/invoicing.py` (`NoopInvoiceProvider` — falta o emissor real), mas a **exibição ao
-  cliente é sob demanda** (`invoice_requested_at` + `POST /payments/orders/{id}/request-invoice` +
-  botão "Solicitar nota fiscal" na Carteira).
+  gateways/mercadopago.py` (código pronto, falta credencial de produção — runbook em
+  `DOCUMENTACAO_CENTRAL.md` §12.9). Nota fiscal: emissão automática via `payments/invoicing.py` +
+  `payments/invoicing_nfeio.py` (adapter NFE.io, assíncrono — `check_status()`/`invoice_poll.py`
+  fazem o polling; `NoopInvoiceProvider` continua o default seguro sem `INVOICE_PROVIDER=nfeio`),
+  mas a **exibição ao cliente é sob demanda** (`invoice_requested_at` +
+  `POST /payments/orders/{id}/request-invoice` + botão "Solicitar nota fiscal" na Carteira).
 - `app/core/{config,email,startup,security,rate_limit}.py` — config/JWT/OTP/e-mail/guarda de boot.
 - `app/db/connection.py` — engine SQLAlchemy (Neon) + `truncate_and_append`.
 - `model_artifacts/*.joblib` — modelos em produção (DC, NB/GP, `scorer_model`, `shots_prop_model`, calibradores).

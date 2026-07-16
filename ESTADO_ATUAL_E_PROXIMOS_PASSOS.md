@@ -1,14 +1,62 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
-> está e o que fazer a seguir. Última atualização: **2026-07-14**.
+> está e o que fazer a seguir. Última atualização: **2026-07-16**.
 > Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
 > não repetir**, **§12 = monetização**), `ARCHITECTURE.md` (infra — **§3.1 Neon, §5 monetização, §6
 > e-mail**), `docs/ARQUITETURA_MONETIZACAO.md`.
 
 ---
 
-## 0. Última sessão (2026-07-14) — coleta de clubes travava havia 1 semana (causa raiz + fix)
+## 0. Sessão (2026-07-16) — código para Mercado Pago real + nota fiscal automática (NFE.io)
+
+**O que foi feito:** implementado (ainda não commitado/deployado — ver "pendências" abaixo) o
+código que falta para os dois últimos itens do checklist §2.1: ativar Mercado Pago de verdade e
+emitir NFS-e automática via **NFE.io** (decisão do dono; dados fiscais já prontos).
+
+- **Mercado Pago:** o adapter (`gateways/mercadopago.py`) já estava pronto de sessões anteriores.
+  Único código novo: `backend/app/core/startup.py::_payment_problems()` — mesmo padrão de guarda
+  fatal do e-mail, agora também para pagamento (derruba o boot em produção se
+  `PAYMENT_PROVIDER=mercadopago` e faltar `MP_ACCESS_TOKEN`/`MP_PUBLIC_KEY`/`MP_WEBHOOK_SECRET`).
+- **Nota fiscal (NFE.io), do zero:** `InvoiceProvider` (`invoicing.py`) expandido com
+  `check_status()` (a emissão da NFE.io é **assíncrona** — POST devolve `pending` com um id, o
+  status final só vem depois); novo adapter `invoicing_nfeio.py`; `get_invoice_provider()` agora
+  ramifica por `INVOICE_PROVIDER` (`nfeio` | `noop`, mesmo formato do `get_gateway()`); migração
+  `f7c1b2e9d4a3` adiciona `invoice_provider_id`/`invoice_number` em `app_payment_orders`
+  (`down_revision=e1f2a3b4c5d6`, head único conferido à mão — `alembic` não está instalado neste
+  ambiente); `request_invoice()` agora reconsulta em vez de reemitir quando já existe
+  `invoice_provider_id` (evita nota duplicada); novo polling (`scripts/invoice_poll.py` +
+  `POST /api/cron/poll-invoices`, mesmo formato do `settle_bets.py`) porque a emissão é assíncrona.
+  Guarda de boot equivalente (`_invoice_problems()`): fatal em produção se `INVOICE_PROVIDER=nfeio`
+  e faltar token/dados fiscais; **`noop` em produção só avisa, não derruba** (diferente de
+  e-mail/pagamento — não emitir nota real não bloqueia o lançamento).
+- **Testado ponta a ponta sem gastar dinheiro real nem emitir nota real:**
+  `scripts/verify_startup_config.py` (7 cenários da validação de boot) e
+  `scripts/verify_invoice_flow.py` (checkout mock → paga → nota `pending` → poll → `issued`,
+  mais o caminho de erro do provedor e o não-duplicar do `request_invoice()`) — os dois passam
+  100%. `verify_signup_flow.py` rodado de novo como regressão (também passa).
+- **Exato JSON da NFE.io não confirmado contra o Swagger real** (`invoicing_nfeio.py` foi escrito
+  a partir da documentação pública, não de uma chamada real) — nomes de campo
+  (`cityServiceCode`, `federalTaxNumber`, enums de status) podem precisar de ajuste fino na
+  primeira chamada real; isso não muda o resto do desenho (Protocol/factory/migration/config já
+  são independentes desse detalhe).
+- **Dependências instaladas** em `api/.venv` (fastapi/sqlalchemy/httpx já existiam parcialmente;
+  faltavam `sqlalchemy`, `alembic`, `argon2-cffi`, `PyJWT`, `pydantic-settings`,
+  `email-validator`, `psycopg2-binary` — instalados para rodar os scripts de verificação).
+
+**Pendências (fora de escopo de código, do dono):**
+1. Runbook Mercado Pago: credenciais de produção no Render + configurar webhook no painel MP
+   (passo a passo em `DOCUMENTACAO_CENTRAL.md` §12.9 / commit desta sessão).
+2. Runbook NFE.io: cadastrar empresa + subir certificado A1 no painel NFE.io (só dá pra fazer lá,
+   não por API), copiar Company ID/API Key, setar env vars no Render, configurar o cron de
+   `poll-invoices`.
+3. `alembic upgrade head` em produção ainda não rodou para NENHUMA migração pendente desde a
+   sessão anterior (inclui agora também a `f7c1b2e9d4a3`) — depende do dono.
+4. Ainda não commitado/pushado — revisar o diff antes.
+
+---
+
+## −1. Sessão (2026-07-14) — coleta de clubes travava havia 1 semana (causa raiz + fix)
 
 **Sintoma:** desde 07/07, o cron diário (`prefetch_wc.cmd`) nunca chegava nas etapas de
 rebuild/precompute/`prefetch_clubs.py` — só a etapa de seleções rodava. `club_match_detail_cache`

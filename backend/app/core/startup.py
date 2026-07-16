@@ -52,6 +52,53 @@ def _problems() -> list[str]:
     if settings.jwt_secret == _JWT_DEFAULT:
         out.append("JWT_SECRET ainda é o default de desenvolvimento — tokens seriam forjáveis.")
 
+    out.extend(_payment_problems())
+    out.extend(_invoice_problems())
+    return out
+
+
+def _payment_problems() -> list[str]:
+    out: list[str] = []
+    provider = (settings.payment_provider or "mock").lower()
+    if provider == "mock":
+        out.append(
+            "PAYMENT_PROVIDER=mock — nenhum pagamento real é processado; "
+            "use 'mercadopago' em produção."
+        )
+    elif provider == "mercadopago":
+        if not settings.mp_access_token:
+            out.append("MP_ACCESS_TOKEN ausente — obrigatório com PAYMENT_PROVIDER=mercadopago.")
+        if not settings.mp_public_key:
+            out.append("MP_PUBLIC_KEY ausente.")
+        if not settings.mp_webhook_secret:
+            out.append(
+                "MP_WEBHOOK_SECRET ausente — verify_signature() sempre rejeitaria o webhook."
+            )
+    else:
+        out.append(f"PAYMENT_PROVIDER='{provider}' desconhecido — sem adapter implementado.")
+    return out
+
+
+def _invoice_problems() -> list[str]:
+    out: list[str] = []
+    provider = (settings.invoice_provider or "noop").lower()
+    if provider == "nfeio":
+        required = {
+            "NFEIO_API_TOKEN": settings.nfeio_api_token,
+            "NFEIO_COMPANY_ID": settings.nfeio_company_id,
+            "COMPANY_CNPJ": settings.company_cnpj,
+            "COMPANY_RAZAO_SOCIAL": settings.company_razao_social,
+            "COMPANY_INSCRICAO_MUNICIPAL": settings.company_inscricao_municipal,
+            "COMPANY_CITY_SERVICE_CODE": settings.company_city_service_code,
+        }
+        for name, value in required.items():
+            if not value:
+                out.append(f"{name} ausente — obrigatório com INVOICE_PROVIDER=nfeio.")
+    elif settings.is_production:
+        # Diferente de e-mail/pagamento: não emitir nota real não bloqueia o lançamento
+        # (é o default seguro documentado do NoopInvoiceProvider) — só avisa, sempre,
+        # mesmo em produção, para não ser esquecido silenciosamente.
+        logger.warning("[config:prod] INVOICE_PROVIDER=noop — nenhuma nota fiscal real será emitida.")
     return out
 
 
@@ -65,7 +112,8 @@ def validate_startup_config() -> None:
         # que se procura no log do Render depois de um deploy.
         linha = (
             f"[config] OK — app_env={settings.app_env} "
-            f"email_provider={settings.email_provider} remetente={settings.email_from}"
+            f"email_provider={settings.email_provider} remetente={settings.email_from} "
+            f"payment_provider={settings.payment_provider} invoice_provider={settings.invoice_provider}"
         )
         logger.info(linha)
         print(linha, flush=True)

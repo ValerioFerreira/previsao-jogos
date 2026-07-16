@@ -143,6 +143,24 @@ def cron_settle_bets(token: str = Query(default="")) -> dict:
         db.close()
 
 
+@app.post("/api/cron/poll-invoices")
+def cron_poll_invoices(token: str = Query(default="")) -> dict:
+    """Reconsulta no provedor de nota fiscal (ex.: NFE.io) os documentos ainda
+    'pending' (emissão assíncrona) e persiste a transição de status. Feito para um
+    cron periódico. Protegido por CRON_TOKEN (se a env var estiver setada)."""
+    import os
+    expected = os.getenv("CRON_TOKEN")
+    if expected and token != expected:
+        raise HTTPException(status_code=403, detail="Token inválido.")
+    from app.db.base import SessionLocal
+    from app.domains.payments.service import poll_pending_invoices
+    db = SessionLocal()
+    try:
+        return poll_pending_invoices(db)
+    finally:
+        db.close()
+
+
 @app.get("/teams", response_model=TeamsResponse)
 def teams() -> TeamsResponse:
     predictor = get_predictor()

@@ -17,7 +17,7 @@ from app.domains.payments.gateways import get_gateway
 from app.domains.affiliates import service as affiliates_service
 from app.domains.analytics import service as analytics_service
 from app.domains.notifications import service as notifications_service
-from app.domains.payments.invoicing import issue_invoice
+from app.domains.payments.invoicing import get_invoice_provider, issue_invoice
 from app.domains.payments.models import CreditPackage, PaymentOrder, PaymentWebhook
 from app.domains.promotions import service as promotions_service
 from app.domains.users.models import User
@@ -211,10 +211,51 @@ def request_invoice(db: Session, user: User, order_id: str) -> schemas.OrderList
     if order.invoice_requested_at is None:
         order.invoice_requested_at = datetime.now(timezone.utc)
     if order.invoice_status != "issued":
-        issue_invoice(db, order)
+        if order.invoice_provider_id:
+            # Já existe um documento em andamento no provedor — reconsulta o status
+            # em vez de reemitir (evita nota fiscal duplicada para o mesmo pedido).
+            try:
+                result = get_invoice_provider().check_status(provider_invoice_id=order.invoice_provider_id)
+                order.invoice_url = result.url
+                order.invoice_status = result.status
+                order.invoice_number = result.invoice_number
+            except Exception as e:
+                print(f"[AVISO] check_status({order.id}): {e}")
+        else:
+            issue_invoice(db, order)
     db.commit()
     db.refresh(order)
     return _to_order_list_item(order)
+
+
+def poll_pending_invoices(db: Session) -> dict:
+    """Reconsulta no provedor os documentos ainda 'pending' (emissão assíncrona,
+    ex.: NFE.io) e persiste a transição de status. Uso agendado (cron periódico),
+    análogo a `bets/settlement.py::run_due_settlements`."""
+    provider = get_invoice_provider()
+    rows = db.execute(
+        select(PaymentOrder).where(
+            PaymentOrder.invoice_status == "pending",
+            PaymentOrder.invoice_provider_id.is_not(None),
+        )
+    ).scalars().all()
+    checked, issued, failed, errors = 0, 0, 0, 0
+    for order in rows:
+        checked += 1
+        try:
+            result = provider.check_status(provider_invoice_id=order.invoice_provider_id)
+            order.invoice_url = result.url
+            order.invoice_status = result.status
+            order.invoice_number = result.invoice_number
+            if result.status == "issued":
+                issued += 1
+            elif result.status == "failed":
+                failed += 1
+        except Exception as e:
+            errors += 1
+            print(f"[AVISO] poll_pending_invoices check_status({order.id}): {e}")
+    db.commit()
+    return {"checked": checked, "issued": issued, "failed": failed, "errors": errors}
 
 
 def handle_webhook(db: Session, provider: str, payload: dict, headers: dict, body: bytes) -> dict:

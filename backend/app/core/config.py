@@ -87,6 +87,21 @@ class Settings(BaseSettings):
     mp_webhook_secret: str = ""            # "Assinatura secreta" configurada no webhook do MP
     mp_webhook_url: str = ""               # URL pública do endpoint /payments/webhook/mercadopago (opcional; MP também aceita configurar no painel)
 
+    # --- Nota fiscal (NFS-e) ---
+    invoice_provider: str = "noop"          # noop | nfeio
+    nfeio_api_base: str = "https://api.nfe.io/v1"  # sobrescrevível em teste (fake server local)
+    nfeio_api_token: str = ""               # API Key da NFE.io (server-side, secreto)
+    nfeio_company_id: str = ""              # id da empresa cadastrada no painel NFE.io
+
+    # Dados fiscais da empresa emissora (não secretos, raramente mudam — mesmo padrão de EMAIL_FROM)
+    company_cnpj: str = ""
+    company_razao_social: str = ""
+    company_endereco: str = ""
+    company_inscricao_municipal: str = ""
+    company_cnae: str = ""
+    company_city_service_code: str = ""     # código de serviço municipal exigido pela NFE.io
+    company_regime_tributario: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.app_env.strip().lower() == "production"

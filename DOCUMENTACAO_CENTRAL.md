@@ -6,7 +6,7 @@
 > histórico de desenvolvimento em ordem cronológica** com o resultado de cada tentativa e o
 > motivo de cada aprovação/reprovação. Atualize este arquivo a cada nova sessão.
 >
-> Última atualização: **2026-07-09**. Branch de trabalho: `claude-testing` · produção: `main`.
+> Última atualização: **2026-07-16**. Branch de trabalho: `main` · produção: `main`.
 > Companheiros mantidos: `README.md` (porta de entrada), `ARCHITECTURE.md` (infra/banco/e-mail)
 > e `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` (handoff vivo — **leia primeiro ao retomar**).
 
@@ -606,3 +606,60 @@ para dentro do `request_invoice()`).
 **Fora de escopo (deliberado):** escolha do emissor real (NFE.io vs Focus NFe) — aguardando
 resposta do contador sobre CNAE/Fator R/regime tributário (sócio único, sem funcionários CLT,
 pró-labore conta para o Fator R). `NoopInvoiceProvider` segue em uso.
+
+### 12.9 Sessão 2026-07-16 — Mercado Pago real + nota fiscal automática (NFE.io)
+
+O dono decidiu o emissor (**NFE.io**) e já tem todos os dados fiscais. Código implementado e
+testado (sem gastar dinheiro/nota real); falta só o runbook manual do dono (credenciais/painéis)
+e `alembic upgrade head` em produção.
+
+**Mercado Pago:** nenhuma mudança de código no gateway (já estava pronto). Único código novo:
+`startup.py::_payment_problems()` — guarda de boot fatal em produção se `PAYMENT_PROVIDER=
+mercadopago` e faltar `MP_ACCESS_TOKEN`/`MP_PUBLIC_KEY`/`MP_WEBHOOK_SECRET` (mesmo padrão do
+e-mail). Runbook do dono: Render → env vars de produção (painel MP → Developers → Credenciais de
+produção) + configurar o webhook no painel MP apontando para
+`/payments/webhook/mercadopago` → copiar o segredo de assinatura para `MP_WEBHOOK_SECRET`.
+
+**Nota fiscal (NFE.io):** construído do zero (não existia adapter nenhum):
+- `payments/invoicing.py` — `InvoiceProvider` expandido (`customer_name`/`customer_cpf`/
+  `competency_date`/`description` no `issue()`; novo `check_status()` para polling, já que a
+  emissão da NFE.io é **assíncrona**: o POST devolve `pending` com um id, o status final
+  (`issued`/`failed`) só existe segundos/minutos depois). `get_invoice_provider()` ramifica por
+  `INVOICE_PROVIDER` (`nfeio` | `noop`), mesmo formato do `get_gateway()`.
+- `payments/invoicing_nfeio.py` (novo) — adapter REST espelhando `gateways/mercadopago.py`
+  (httpx, Basic Auth com a API Key, tabela de status). **Nomes exatos de campo não confirmados
+  contra o Swagger real da NFE.io** (escrito a partir da doc pública) — conferir na primeira
+  chamada real antes de apontar para a empresa/API key de produção; não afeta o resto do desenho.
+- Migração `f7c1b2e9d4a3` (down_revision `e1f2a3b4c5d6`) — `app_payment_orders` ganha
+  `invoice_provider_id` (id no provedor, chave de idempotência/polling) e `invoice_number`
+  (número do município, só após `issued`).
+- `request_invoice()` agora reconsulta (`check_status()`) em vez de reemitir quando já existe
+  `invoice_provider_id` — nunca duplica a nota do mesmo pedido.
+- Polling: `scripts/invoice_poll.py` + `POST /api/cron/poll-invoices` (mesmo formato do
+  `settle_bets.py`/`cron_settle_bets`), já que não dá para confiar só num webhook da NFE.io de
+  imediato — itera pedidos `invoice_status=pending` com `invoice_provider_id` setado.
+- Guarda de boot (`startup.py::_invoice_problems()`): fatal em produção se `INVOICE_PROVIDER=
+  nfeio` e faltar `NFEIO_API_TOKEN`/`NFEIO_COMPANY_ID`/dados fiscais da empresa. **`noop` em
+  produção não é fatal** (diferente de e-mail/pagamento) — só `logger.warning`, porque não emitir
+  nota real não deveria bloquear o lançamento das vendas.
+- Dados fiscais da empresa (CNPJ, razão social, endereço, inscrição municipal, CNAE, código de
+  serviço municipal, regime tributário) viram env vars em `config.py` (não `PlatformSetting`) —
+  são dados legais raramente alterados e precisam estar disponíveis no boot para a guarda fatal,
+  mesmo padrão do `EMAIL_FROM`.
+
+**Testes novos** (mesmo padrão do `verify_signup_flow.py` — servidor HTTP local fake, sem rede
+real): `scripts/verify_startup_config.py` (7 cenários da validação de boot, cobrindo os dois
+guardas novos) e `scripts/verify_invoice_flow.py` (checkout mock → paga → nota `pending` → poll
+→ `issued`, caminho de erro do provedor, e não-duplicação do `request_invoice()`) — os dois
+passam 100%. `verify_signup_flow.py` também rodado de novo como regressão.
+
+**Runbook do dono (fora de código):**
+1. Painel NFE.io (`app.nfe.io`): cadastrar/confirmar a empresa com os dados fiscais já prontos;
+   subir o certificado digital A1 (só pelo painel, não por API); copiar Company ID + API Key.
+2. Render → env vars: `PAYMENT_PROVIDER=mercadopago` + credenciais MP; `INVOICE_PROVIDER=nfeio` +
+   `NFEIO_API_TOKEN`/`NFEIO_COMPANY_ID` + os `COMPANY_*` (ver `backend/.env.example`, seção nova).
+3. Redeploy; conferir no log `[config] OK — ... payment_provider=mercadopago
+   invoice_provider=nfeio` ou o `ConfigError` listando o que falta.
+4. `alembic upgrade head` em produção (pendente desde a sessão anterior + a migração desta).
+5. Cron novo: `POST /api/cron/poll-invoices?token=$CRON_TOKEN` a cada 15-30 min (mesma cadência
+   do `settle-bets`).
