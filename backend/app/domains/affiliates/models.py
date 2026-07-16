@@ -27,6 +27,10 @@ class Affiliate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # credencial do portal do afiliado (email+CPF, ver affiliates/router.py::login) —
+    # deliberadamente mais fraca que senha+OTP (CPF não é segredo rotativo), aceitável
+    # porque só expõe estatísticas agregadas do próprio código, nunca dados de terceiros.
+    cpf: Mapped[str | None] = mapped_column(String(11), nullable=True)
 
 
 class AffiliateAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):

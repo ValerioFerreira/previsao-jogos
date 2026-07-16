@@ -35,7 +35,7 @@ function cardPeriods(p: PredictionResponse, side: string) {
   };
 }
 
-function PlacarExatoCard({ data, home, away }: { data: NonNullable<PredictionResponse["placar_exato"]>; home: string; away: string }) {
+function PlacarExatoCard({ data, home, away, teamIds }: { data: NonNullable<PredictionResponse["placar_exato"]>; home: string; away: string; teamIds: Record<string, number> }) {
   const alerta = data.alerta;
   const isAlert = alerta.nivel !== "normal";
   const alertStyles =
@@ -55,9 +55,17 @@ function PlacarExatoCard({ data, home, away }: { data: NonNullable<PredictionRes
         <Target className="w-4 h-4 text-purple-500" /> Placar Exato
         <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols (Dixon-Coles)." />
       </h4>
-      <p className="text-[10px] text-muted-foreground mb-3">
-        {teamPt(home)} <span className="opacity-60">(mandante)</span> × {teamPt(away)} <span className="opacity-60">(visitante)</span>
-      </p>
+      <div className="flex items-center justify-center gap-2 mb-3">
+        {teamLogoUrl(teamIds[home]) && (
+          <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-5 h-5 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+        )}
+        <p className="text-[10px] text-muted-foreground">{teamPt(home)}</p>
+        <span className="text-[10px] text-muted-foreground">×</span>
+        <p className="text-[10px] text-muted-foreground">{teamPt(away)}</p>
+        {teamLogoUrl(teamIds[away]) && (
+          <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-5 h-5 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+        )}
+      </div>
       <div className="grid grid-cols-3 gap-2 mb-4">
         {data.top.map((s, i) => (
           <div key={i} className={`text-center rounded-lg p-2 border ${i === 0 ? "bg-purple-500/10 border-purple-500/30" : "bg-muted/30 border-border/30"}`}>
@@ -188,7 +196,7 @@ export default function PredictionDisplay({
 
           {projection.ambas_marcam && (
             <div className={projection.placar_exato ? "grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch" : ""}>
-              {projection.placar_exato && <PlacarExatoCard data={projection.placar_exato} home={home} away={away} />}
+              {projection.placar_exato && <PlacarExatoCard data={projection.placar_exato} home={home} away={away} teamIds={teamIds} />}
               <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col">
                 <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">Ambas Marcam
                   <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol." /></h4>

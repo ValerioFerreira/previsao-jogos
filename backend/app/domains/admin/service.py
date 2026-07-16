@@ -326,7 +326,7 @@ def create_affiliate(db: Session, admin: User, data: schemas.AffiliateRequest, i
                  user_id=uuid.UUID(data.user_id) if data.user_id else None,
                  commission_pct=data.commission_pct, commission_fixed_brl=data.commission_fixed_brl,
                  contact_email=data.contact_email, contact_phone=data.contact_phone,
-                 notes=data.notes)
+                 cpf=data.cpf, notes=data.notes)
     db.add(a); db.flush()
     audit(db, admin, "affiliate_create", "affiliate", a.id, after={"code": a.code}, ip=ip)
     db.commit()
@@ -347,6 +347,7 @@ def patch_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.A
     if data.status is not None: a.status = data.status
     if data.contact_email is not None: a.contact_email = data.contact_email
     if data.contact_phone is not None: a.contact_phone = data.contact_phone
+    if data.cpf is not None: a.cpf = data.cpf
     if data.notes is not None: a.notes = data.notes
     audit(db, admin, "affiliate_update", "affiliate", a.id, before=before,
           after={"status": a.status}, ip=ip)

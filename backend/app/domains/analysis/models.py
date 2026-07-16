@@ -8,8 +8,9 @@ exatamente o que existia quando a análise foi gerada.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
-from sqlalchemy import ForeignKey, String, Uuid
+from sqlalchemy import Date, ForeignKey, String, Uuid, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, JSONB, TimestampMixin, UUIDPrimaryKeyMixin, enum_type
@@ -38,7 +39,24 @@ class Analysis(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # snapshot imutável da previsão completa
     snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
-    # lançamento de crédito associado (consumo imediato ou reserva)
+    # lançamento de crédito associado (consumo imediato ou reserva) — None quando a
+    # análise foi gratuita (Copa do Mundo ou cota diária, ver `is_free`)
     credit_tx_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_credit_transactions.id", ondelete="SET NULL"), nullable=True
+    )
+    # True = não consumiu/reservou crédito (Copa do Mundo grátis ou a cota diária grátis).
+    # Análises gratuitas não têm crédito reservado, por isso não habilitam "Monte sua Aposta".
+    is_free: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+
+class FreeDailyUse(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Registro da 'análise grátis do dia' de um usuário — 1 por dia, garantido pela
+    unique constraint (não por lógica de aplicação, que teria corrida em concorrência)."""
+    __tablename__ = "app_free_daily_uses"
+    __table_args__ = (UniqueConstraint("user_id", "used_on", name="uq_free_daily_use_user_day"),)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("app_users.id", ondelete="CASCADE"), index=True)
+    used_on: Mapped[date] = mapped_column(Date, nullable=False)
+    analysis_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_analyses.id", ondelete="SET NULL"), nullable=True
     )

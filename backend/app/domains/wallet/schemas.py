@@ -23,6 +23,8 @@ class TransactionItem(BaseModel):
     reserved_after: Decimal
     description: str | None
     reference_type: str | None
+    home_team: str | None = None
+    away_team: str | None = None
     created_at: datetime
 
 

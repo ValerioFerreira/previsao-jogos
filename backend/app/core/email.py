@@ -28,13 +28,13 @@ class EmailSendError(RuntimeError):
 
 
 class EmailSender(Protocol):
-    def send(self, to: str, subject: str, body: str) -> None: ...
+    def send(self, to: str, subject: str, body: str, html_body: str | None = None) -> None: ...
 
 
 class MockEmailSender:
     """Não envia nada — loga (para o revisor ver o código OTP no console do backend)."""
 
-    def send(self, to: str, subject: str, body: str) -> None:
+    def send(self, to: str, subject: str, body: str, html_body: str | None = None) -> None:
         logger.warning("[EMAIL:mock] para=%s | assunto=%s\n%s", to, subject, body)
         print(f"\n[EMAIL:mock] -> {to}\n  {subject}\n  {body}\n", flush=True)
 
@@ -50,13 +50,15 @@ class ZeptoMailSender:
         self._from = {"address": from_addr, "name": from_name}
         self._timeout = timeout
 
-    def send(self, to: str, subject: str, body: str) -> None:
+    def send(self, to: str, subject: str, body: str, html_body: str | None = None) -> None:
         payload = {
             "from": self._from,
             "to": [{"email_address": {"address": to}}],
             "subject": subject,
             "textbody": body,
         }
+        if html_body:
+            payload["htmlbody"] = html_body
         try:
             resp = httpx.post(
                 self._url,
@@ -84,12 +86,14 @@ class SmtpEmailSender:
         self._from_addr, self._from_name = from_addr, from_name
         self._starttls, self._timeout = starttls, timeout
 
-    def send(self, to: str, subject: str, body: str) -> None:
+    def send(self, to: str, subject: str, body: str, html_body: str | None = None) -> None:
         msg = EmailMessage()
         msg["From"] = f"{self._from_name} <{self._from_addr}>"
         msg["To"] = to
         msg["Subject"] = subject
         msg.set_content(body)
+        if html_body:
+            msg.add_alternative(html_body, subtype="html")
         try:
             if self._starttls:
                 with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as s:
@@ -143,11 +147,53 @@ def get_email_sender() -> EmailSender:
     return _build_sender()
 
 
+def _otp_email_html(titulo: str, code: str, ttl_min: int) -> str:
+    """E-mail HTML minimalista com a identidade visual do site (verde-esmeralda/#10b981,
+    mesmo tom de `--primary` do `globals.css`) — tabelas/estilos inline para compatibilidade
+    ampla com clientes de e-mail (Gmail/Outlook não aplicam <style> confiável)."""
+    return f"""\
+<!doctype html>
+<html lang="pt-BR">
+<body style="margin:0;padding:0;background:#0b0f0e;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f0e;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#131a18;border-radius:16px;overflow:hidden;border:1px solid #1f2a27;">
+        <tr><td style="background:#10b981;padding:20px 28px;">
+          <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.02em;">ApostAI</span>
+        </td></tr>
+        <tr><td style="padding:32px 28px 8px;">
+          <p style="color:#e6efec;font-size:16px;font-weight:600;margin:0 0 12px;">{titulo}</p>
+          <p style="color:#9fb0ac;font-size:14px;line-height:1.6;margin:0 0 24px;">
+            Use o código abaixo para continuar. Ele expira em {ttl_min} minutos.
+          </p>
+        </td></tr>
+        <tr><td style="padding:0 28px 28px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td align="center" style="background:#0f1614;border:1px solid #23302c;border-radius:12px;padding:18px;">
+              <span style="color:#10b981;font-size:32px;font-weight:700;letter-spacing:0.35em;font-family:Consolas,Menlo,monospace;">{code}</span>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:0 28px 28px;">
+          <p style="color:#647670;font-size:12px;line-height:1.6;margin:0;">
+            Se você não solicitou este código, pode ignorar este e-mail com segurança.
+          </p>
+        </td></tr>
+      </table>
+      <p style="color:#4a5852;font-size:11px;margin:16px 0 0;">ApostAI · previsão probabilística de partidas</p>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
 def send_otp_email(to: str, code: str, purpose: str) -> None:
     assunto = "Seu código de verificação" if purpose == "email_verify" else "Recuperação de senha"
+    titulo = "Confirme seu e-mail" if purpose == "email_verify" else "Recuperação de senha"
     corpo = (
         f"Seu código é: {code}\n"
         f"Ele expira em {settings.otp_ttl_min} minutos.\n"
         "Se você não solicitou, ignore este e-mail."
     )
-    get_email_sender().send(to, assunto, corpo)
+    html = _otp_email_html(titulo, code, settings.otp_ttl_min)
+    get_email_sender().send(to, assunto, corpo, html_body=html)

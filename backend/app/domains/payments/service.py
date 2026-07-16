@@ -228,6 +228,25 @@ def request_invoice(db: Session, user: User, order_id: str) -> schemas.OrderList
     return _to_order_list_item(order)
 
 
+def cancel_order(db: Session, user: User, order_id: str) -> schemas.OrderListItem:
+    """Cliente desiste de um pedido ainda pendente (ex.: PIX que não vai mais pagar) —
+    não mexe no ledger, já que nada foi creditado enquanto o pedido está `pending`."""
+    try:
+        oid = uuid.UUID(order_id)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+    order = db.get(PaymentOrder, oid)
+    if order is None or order.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+    if order.status != PaymentStatus.pending:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            detail="Só é possível cancelar pedidos pendentes.")
+    order.status = PaymentStatus.canceled
+    db.commit()
+    db.refresh(order)
+    return _to_order_list_item(order)
+
+
 def poll_pending_invoices(db: Session) -> dict:
     """Reconsulta no provedor os documentos ainda 'pending' (emissão assíncrona,
     ex.: NFE.io) e persiste a transição de status. Uso agendado (cron periódico),

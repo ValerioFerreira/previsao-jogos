@@ -10,6 +10,7 @@ Idempotente (idempotency_key no ledger + guarda por status). Auditável (BetSett
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -23,7 +24,11 @@ from app.domains.bets.results import MatchResult, ResultProvider
 from app.domains.enums import AnalysisStatus, BetStatus, CreditTxType, SettlementOutcome
 from app.domains.wallet.service import get_or_create_wallet, post_transaction
 
+logger = logging.getLogger("app.bets.settlement")
+
 _OPEN = (BetStatus.awaiting_start, BetStatus.in_progress, BetStatus.awaiting_settlement)
+_STUCK_LOG_EVERY = 20          # loga um aviso a cada N tentativas presas, para não poluir o log
+_STALE_HOURS_FOR_REFETCH = 24  # após esse tempo sem resposta, tenta re-resolver o fixture_id
 
 
 def _now() -> datetime:
@@ -132,21 +137,72 @@ def _record_settlement(db: Session, bet: Bet, outcome: SettlementOutcome, result
     }
 
 
+def _hours_since_match(bet: Bet, now: datetime) -> float | None:
+    if bet.match_datetime is None:
+        return None
+    md = bet.match_datetime
+    if md.tzinfo is None:
+        md = md.replace(tzinfo=timezone.utc)
+    return (now - md).total_seconds() / 3600
+
+
+def _try_reresolve_fixture(bet: Bet, analysis: Analysis | None) -> int | None:
+    """Segunda tentativa quando o `fixture_id` salvo não devolve resultado (ex.: id
+    errado/desatualizado) — reaproveita o mesmo helper usado pela coleta
+    (`fixture_fetch.resolve_fixture_id`), buscando pelo confronto (times + data) em vez do id."""
+    if analysis is None or bet.match_datetime is None:
+        return None
+    try:
+        from app.services.fixture_fetch import resolve_fixture_id
+        from app.services.predictor_service import get_team_ids
+        team_ids = get_team_ids()
+        home_id = team_ids.get(analysis.home_team)
+        away_id = team_ids.get(analysis.away_team)
+        if not home_id:
+            return None
+        d10 = bet.match_datetime.strftime("%Y-%m-%d")
+        return resolve_fixture_id(home_id, away_id, analysis.away_team, d10)
+    except Exception as e:
+        logger.warning("Bet %s: falha ao tentar re-resolver fixture_id: %s", bet.id, e)
+        return None
+
+
 def run_due_settlements(db: Session, provider: ResultProvider, now: datetime | None = None) -> dict:
     now = now or _now()
     delay = timedelta(minutes=settings.settlement_safety_delay_min)
     bets = db.execute(select(Bet).where(Bet.status.in_(_OPEN))).scalars().all()
-    counts = {"checked": 0, "in_progress": 0, "waiting_delay": 0, "won": 0, "lost": 0, "void": 0, "pending": 0}
+    counts = {"checked": 0, "in_progress": 0, "waiting_delay": 0, "won": 0, "lost": 0,
+              "void": 0, "pending": 0, "stuck_no_fixture": 0}
 
     for bet in bets:
         counts["checked"] += 1
         if not bet.fixture_id:
+            st = _get_or_create_settlement(db, bet)
+            st.attempts += 1
+            if st.attempts % _STUCK_LOG_EVERY == 1:
+                logger.warning("Bet %s sem fixture_id — %d tentativa(s) de liquidação, presa em %s.",
+                               bet.id, st.attempts, bet.status.value)
+            counts["stuck_no_fixture"] += 1
+            db.commit()
             continue
         try:
             res = provider.get(bet.fixture_id)
         except Exception:
             res = None
         if res is None:
+            st = _get_or_create_settlement(db, bet)
+            st.attempts += 1
+            stuck_hours = _hours_since_match(bet, now)
+            if stuck_hours is not None and stuck_hours > _STALE_HOURS_FOR_REFETCH:
+                analysis = db.get(Analysis, bet.analysis_id)
+                new_fid = _try_reresolve_fixture(bet, analysis)
+                if new_fid and new_fid != bet.fixture_id:
+                    logger.warning("Bet %s: fixture_id %s não respondeu após %.0fh — recalculado para %s.",
+                                   bet.id, bet.fixture_id, stuck_hours, new_fid)
+                    bet.fixture_id = new_fid
+            if st.attempts % _STUCK_LOG_EVERY == 1:
+                logger.warning("Bet %s: provider.get(%s) sem resposta — %d tentativa(s).",
+                               bet.id, bet.fixture_id, st.attempts)
             counts["pending"] += 1
             db.commit()
             continue

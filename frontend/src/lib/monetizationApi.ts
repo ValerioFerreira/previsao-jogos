@@ -33,6 +33,8 @@ export type Transaction = {
   reserved_after: string;
   description: string | null;
   reference_type: string | null;
+  home_team?: string | null;
+  away_team?: string | null;
   created_at: string;
 };
 
@@ -84,6 +86,8 @@ export const ordersApi = {
   pending: () => authFetch<OrderListItem[]>("/payments/orders/pending"),
   requestInvoice: (orderId: string) =>
     authFetch<OrderListItem>(`/payments/orders/${orderId}/request-invoice`, { method: "POST" }),
+  cancel: (orderId: string) =>
+    authFetch<OrderListItem>(`/payments/orders/${orderId}/cancel`, { method: "POST" }),
 };
 
 export const promotionsApi = {
@@ -123,6 +127,7 @@ export type AnalysisResponse = {
   credits_consumed: number;
   credits_reserved: number;
   available_balance: string;
+  is_free: boolean;
   snapshot: Record<string, unknown>;
 };
 

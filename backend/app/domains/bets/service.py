@@ -24,6 +24,23 @@ from app.domains.users.models import User
 CAP = float(settings.max_combined_odd)
 
 
+def _fetch_match_datetime(fixture_id: int | None):
+    """Data/hora do confronto (para a liquidação saber quando cobrar o resultado sem
+    depender só do fixture_id) — best-effort, nunca bloqueia a criação da aposta."""
+    if not fixture_id:
+        return None
+    try:
+        from app.services.fixture_fetch import fetch_full_by_id
+        fx = fetch_full_by_id(fixture_id)
+        raw = ((fx or {}).get("fixture") or {}).get("date") or ""
+        if not raw:
+            return None
+        from datetime import datetime
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def _load_reserved_analysis(db: Session, user: User, analysis_id: str) -> Analysis:
     try:
         aid = uuid.UUID(analysis_id)
@@ -89,6 +106,7 @@ def create_bet(db: Session, user: User, analysis_id: str, market_keys: list[str]
 
     bet = Bet(
         user_id=user.id, analysis_id=a.id, fixture_id=a.fixture_id,
+        match_datetime=_fetch_match_datetime(a.fixture_id),
         combined_odd=Decimal(str(codd)), status=BetStatus.awaiting_start,
         reserved_tx_id=a.credit_tx_id,   # a reserva feita ao gerar a análise
     )

@@ -38,13 +38,13 @@ def needs_rehash(hashed: str) -> bool:
 
 
 # --------------------------------------------------------------------- JWT de acesso
-def create_access_token(subject: str, extra: dict | None = None) -> str:
+def create_access_token(subject: str, extra: dict | None = None, ttl_min: int | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(subject),
         "type": "access",
         "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(minutes=settings.access_token_ttl_min)).timestamp()),
+        "exp": int((now + timedelta(minutes=ttl_min or settings.access_token_ttl_min)).timestamp()),
     }
     if extra:
         payload.update(extra)

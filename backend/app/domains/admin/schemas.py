@@ -100,6 +100,7 @@ class AffiliateRequest(BaseModel):
     commission_fixed_brl: Decimal | None = None
     contact_email: str | None = None
     contact_phone: str | None = None
+    cpf: str | None = None  # com contact_email, é a credencial de login do portal do afiliado
     notes: str | None = None
 
 
@@ -110,6 +111,7 @@ class AffiliatePatch(BaseModel):
     status: str | None = None  # active | paused
     contact_email: str | None = None
     contact_phone: str | None = None
+    cpf: str | None = None
     notes: str | None = None
 
 

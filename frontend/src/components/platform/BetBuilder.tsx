@@ -27,7 +27,7 @@ function lineOf(o: MarketOption): number {
   return 0;
 }
 
-export default function BetBuilder({ analysisId, home, away, onConfirmed }: { analysisId: string; home?: string; away?: string; onConfirmed?: (b: BetResponse) => void }) {
+export default function BetBuilder({ analysisId, home, away, isFree, onConfirmed }: { analysisId: string; home?: string; away?: string; isFree?: boolean; onConfirmed?: (b: BetResponse) => void }) {
   // Traduz nomes de seleção (em inglês nos rótulos do backend) para PT-BR.
   const tl = useCallback((s: string) => {
     let out = s;
@@ -214,10 +214,23 @@ export default function BetBuilder({ analysisId, home, away, onConfirmed }: { an
         {exceeds && <p className="text-xs text-red-500 mt-1">Ultrapassa o limite de {cap.toFixed(2)}. Remova alguma seleção.</p>}
       </div>
 
-      <Button onClick={confirm} disabled={confirming || exceeds || !valid} className="w-full">
-        {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : (<><CheckCircle2 className="w-4 h-4 mr-2" /> {selected.length === 0 ? "Confirmar aposta automática" : "Confirmar aposta"}</>)}
-      </Button>
-      <p className="text-[11px] text-center text-muted-foreground mt-2">Após confirmar, a aposta não poderá ser editada ou excluída.</p>
+      {isFree ? (
+        <>
+          <Button disabled className="w-full">
+            <CheckCircle2 className="w-4 h-4 mr-2" /> Confirmar aposta automática
+          </Button>
+          <p className="text-[11px] text-center text-emerald-600 mt-2 font-medium">
+            Relaxa, esta é sua seleção de aposta grátis diária, não irá reter créditos!
+          </p>
+        </>
+      ) : (
+        <>
+          <Button onClick={confirm} disabled={confirming || exceeds || !valid} className="w-full">
+            {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : (<><CheckCircle2 className="w-4 h-4 mr-2" /> {selected.length === 0 ? "Confirmar aposta automática" : "Confirmar aposta"}</>)}
+          </Button>
+          <p className="text-[11px] text-center text-muted-foreground mt-2">Após confirmar, a aposta não poderá ser editada ou excluída.</p>
+        </>
+      )}
     </div>
   );
 }

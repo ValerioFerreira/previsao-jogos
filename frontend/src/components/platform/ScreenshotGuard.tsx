@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/AuthContext";
 export default function ScreenshotGuard({ children, page }: { children: React.ReactNode; page: string }) {
   const { user } = useAuth();
   const [triggered, setTriggered] = useState(false);
+  const [backgrounded, setBackgrounded] = useState(false);
   const isAdmin = user && (user.role === "admin" || user.role === "superadmin");
 
   const report = useCallback((incident_type: IncidentType) => {
@@ -32,6 +33,18 @@ export default function ScreenshotGuard({ children, page }: { children: React.Re
     return () => document.removeEventListener("keyup", onKeyUp);
   }, [trigger, isAdmin]);
 
+  // Mobile não dispara PrintScreen (captura é por gesto do SO, sem evento de teclado) —
+  // a mitigação possível aqui é borrar/escurecer o conteúdo assim que o app perde foco
+  // (troca de app, gravação de tela, câmera aberta para fotografar a tela), cobrindo uma
+  // fração maior dos casos reais em mobile. Não é reportado como incidente (visibilitychange
+  // dispara toda troca de app — reportar isso geraria ruído sem sinal real de captura).
+  useEffect(() => {
+    if (isAdmin) return;
+    const onVisibility = () => setBackgrounded(document.hidden);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [isAdmin]);
+
   const blockCopy = (e: React.ClipboardEvent) => { e.preventDefault(); report("copy_blocked"); };
   const blockContextMenu = (e: React.MouseEvent) => { e.preventDefault(); report("context_menu_blocked"); };
 
@@ -42,7 +55,7 @@ export default function ScreenshotGuard({ children, page }: { children: React.Re
       <div
         onCopy={blockCopy}
         onContextMenu={blockContextMenu}
-        className={`select-none print:hidden transition-[filter,opacity] duration-200 ${triggered ? "blur-xl brightness-50 pointer-events-none" : ""}`}
+        className={`select-none [-webkit-touch-callout:none] print:hidden transition-[filter,opacity] duration-200 ${(triggered || backgrounded) ? "blur-xl brightness-50 pointer-events-none" : ""}`}
       >
         {children}
       </div>

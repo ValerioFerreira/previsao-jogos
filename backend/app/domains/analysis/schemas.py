@@ -38,6 +38,7 @@ class AnalysisResponse(BaseModel):
     credits_consumed: int
     credits_reserved: int
     available_balance: Decimal
+    is_free: bool = False
     snapshot: dict
 
 

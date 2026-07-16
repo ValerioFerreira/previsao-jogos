@@ -48,6 +48,12 @@ def request_invoice(order_id: str, user: User = Depends(get_current_user), db: S
     return service.request_invoice(db, user, order_id)
 
 
+@router.post("/orders/{order_id}/cancel", response_model=schemas.OrderListItem)
+def cancel_order(order_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Cliente cancela um pedido pendente (ex.: PIX que não vai mais pagar)."""
+    return service.cancel_order(db, user, order_id)
+
+
 @router.post("/mock/confirm/{order_id}", response_model=schemas.OrderResponse)
 def mock_confirm(order_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """DEV: simula o pagamento (provider mock) e credita a carteira."""

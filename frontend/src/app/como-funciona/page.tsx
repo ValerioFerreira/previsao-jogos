@@ -159,8 +159,8 @@ export default function ComoFunciona() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
       {/* Índice */}
-      <aside className="lg:sticky lg:top-20 lg:self-start">
-        <div className="flex items-center gap-2 mb-3">
+      <aside className="lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-2">
+        <div className="flex items-center gap-2 mb-3 sticky top-0 bg-background/95 backdrop-blur-sm pb-1">
           <BookOpen className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-bold">Como Funciona?</h1>
         </div>

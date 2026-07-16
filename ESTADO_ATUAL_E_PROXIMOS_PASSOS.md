@@ -8,6 +8,82 @@
 
 ---
 
+## 0. Sessão (2026-07-16), parte 2 — lote de UX (Carteira/Documentos/Como Funciona/Placar
+Exato/e-mail) + correções de backend (ParcerIA travada, fixture já iniciada, créditos
+grátis, screenshot mobile, portal do afiliado)
+
+**Confirmado com o dono no início desta sessão:** o runbook do NFE.io (item da sessão anterior,
+abaixo) **ainda não foi feito** — `INVOICE_PROVIDER` continua em `noop`, nenhuma nota fiscal real
+está sendo emitida hoje (nem custo associado). Também confirmado: **provavelmente não há nenhum
+agendamento** de `POST /api/cron/settle-bets` (nem Render Cron Job, nem Task Scheduler) — isso já
+explicava sozinho apostas presas em "Aguardando início" há +24h, independente de bug de código.
+
+### Frontend
+- **Carteira** (`frontend/src/app/carteira/page.tsx`): botão **"Cancelar"** nos pagamentos
+  pendentes (novo `POST /payments/orders/{id}/cancel`); corrigido bug pré-existente de
+  `busyId`/`setBusyId` usados sem `useState` (dava `ReferenceError` ao clicar em nota fiscal);
+  seção renomeada para **"Histórico"** com nomes de time corrigidos (agora em PT-BR — o backend
+  passou a expor `home_team`/`away_team` estruturados nas transações, em vez de só a
+  `description` em inglês); **"Minhas Compras"** ganhou botão **"Emitir nota fiscal"** sempre
+  visível (não só depois de solicitar) que abre um modal de confirmação antes de chamar
+  `request-invoice`; ambas as seções redesenhadas com mais detalhe (saldo após a transação,
+  status/cupom/data de pagamento) no padrão visual do site.
+- **Documentos** (`frontend/src/app/documentos/page.tsx`): todos os documentos agora expandem
+  **inline** (accordion) em vez de navegar para `/documentos/[type]`.
+- **Como Funciona**: sidebar com `overflow-y-auto`/`max-height` (a lista de ~30 links não cabia
+  na tela em telas menores).
+- **Placar Exato** (`PredictionDisplay.tsx`): escudos das seleções ao lado do placar; removido o
+  texto "(mandante)/(visitante)".
+- **E-mail de cadastro**: `EmailSender` (ZeptoMail/SMTP) ganhou `html_body` opcional; e-mail de
+  OTP agora tem HTML com a identidade visual do site (verde-esmeralda, mesmo tom do `--primary`).
+
+### Backend
+- **ParcerIA travada**: causa raiz — `Bet.match_datetime` nunca era preenchido, e
+  `run_due_settlements` ficava em loop silencioso (sem contador/log) quando `fixture_id` estava
+  ausente ou a API não respondia. Corrigido: `match_datetime` agora é preenchido na criação da
+  aposta; contador de tentativas (`BetSettlement.attempts`) passa a incrementar também nos
+  ramos "preso" e loga aviso a cada 20 tentativas; fallback que tenta re-resolver o `fixture_id`
+  via times+data quando preso há +24h. **Ainda falta o dono configurar o cron** (ver acima).
+- **Fixture já iniciada**: `create_analysis` agora rejeita (`400`) gerar análise de partida
+  futura cujo confronto já começou/terminou; front limpa a seleção salva no localStorage e
+  re-filtra a lista de próximos confrontos periodicamente (cobre aba aberta por horas).
+- **Créditos**: `Analysis` ganhou `is_free`; análises de **"Copa do Mundo" são grátis
+  ilimitadas**; toda conta tem **1 análise grátis por dia** (qualquer torneio, tabela nova
+  `app_free_daily_uses`, idempotente por `(user_id, dia)`). Quando a análise é grátis, "Monte sua
+  Aposta" mostra o botão desabilitado com o aviso pedido (nenhum crédito foi reservado para
+  liquidar depois, então apostar não se aplica). **Script `zero_credits_except.py`** (dry-run por
+  padrão, precisa `--apply`) pronto para o dono rodar manualmente contra produção quando quiser —
+  não rodei aqui (não há credencial do Neon de produção neste ambiente, e é ação financeira real
+  em conta de terceiros).
+- **Screenshot mobile**: `ScreenshotGuard` ganhou blur em `visibilitychange` (app perde foco) —
+  cobre uma fração maior dos casos em mobile, já que `PrintScreen` nunca dispara lá. Continua
+  valendo o limite conhecido: capturas do SO não são detectáveis via JS, nem em mobile nem em
+  desktop.
+- **Portal do afiliado**: `Affiliate` ganhou `cpf`; novo `POST /affiliates/login` (e-mail+CPF,
+  sem precisar de conta de usuário) emite JWT de escopo `affiliate` (12h, sem refresh);
+  `GET /affiliates/portal/me` e `GET /affiliates/portal/timeseries` (série por dia/mês de
+  cliques/conversões/receita/comissão). Frontend: nova página `/afiliado/entrar` + dashboard
+  atualizado com gráfico simples. **Aviso de segurança deliberado**: CPF não é segredo rotativo,
+  mais fraco que senha+OTP — aceitável aqui porque só expõe estatísticas do próprio código do
+  afiliado, nunca dado de terceiro.
+
+**Testado**: `verify_signup_flow.py`, `verify_invoice_flow.py`, `verify_startup_config.py`
+(regressão, todos passando) + novo `verify_free_analysis_flow.py` (Copa do Mundo grátis + cota
+diária, 100% passando). Import de todos os módulos tocados confirmado sem erro. **Achado
+separado, não corrigido aqui** (fora de escopo): `alembic upgrade head` contra um SQLite vazio do
+zero falha numa migração antiga (`7a1f3c9e2b40`, coluna duplicada) — não afeta produção
+(Postgres/Neon aplicado incrementalmente), mas impede recriar o banco do zero para testes; task
+separada já sinalizada.
+
+**Pendências (fora de escopo de código, do dono):**
+1. Configurar o cron de `POST /api/cron/settle-bets` (Render Cron Job recomendado, ~15-30 min).
+2. Rodar `zero_credits_except.py --apply` quando decidir zerar os créditos de produção.
+3. `alembic upgrade head` em produção (inclui as migrações novas `a2b4c6d8e0f1`/`b6d8e0f1a3c5`,
+   além das pendentes de sessões anteriores).
+4. Cadastrar afiliados com `cpf` preenchido no admin para eles conseguirem logar em `/afiliado/entrar`.
+
+---
+
 ## 0. Sessão (2026-07-16) — código para Mercado Pago real + nota fiscal automática (NFE.io)
 
 **O que foi feito:** implementado (ainda não commitado/deployado — ver "pendências" abaixo) o

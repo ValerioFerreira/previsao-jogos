@@ -1,7 +1,10 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Coins, Copy, Gift, Loader2, Plus, Share2, Sparkles, Wallet as WalletIcon } from "lucide-react";
+import {
+  AlertTriangle, Coins, Copy, FileCheck2, Gift, Loader2, Plus, Receipt, Share2, ShoppingBag,
+  Sparkles, Wallet as WalletIcon, X,
+} from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { authApi, type ReferralInfo } from "@/lib/authApi";
 import {
@@ -12,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckoutModal } from "@/components/platform/CheckoutModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { teamPt } from "@/lib/teamNames";
 
 const TX_LABEL: Record<string, string> = {
   purchase: "Compra de créditos",
@@ -52,6 +56,8 @@ export default function CarteiraPage() {
 
   const [checkoutPkg, setCheckoutPkg] = useState<CreditPackage | null>(null);
   const [legalGateOpen, setLegalGateOpen] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [invoiceModalOrder, setInvoiceModalOrder] = useState<OrderListItem | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/entrar");
@@ -139,12 +145,27 @@ export default function CarteiraPage() {
     if (initPoint) window.location.href = initPoint;
   }
 
-  async function requestInvoice(o: OrderListItem) {
+  async function cancelOrder(o: OrderListItem) {
+    setBusyId(o.order_id);
+    setErr(null);
+    try {
+      await ordersApi.cancel(o.order_id);
+      setPendingOrders((prev) => prev.filter((x) => x.order_id !== o.order_id));
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirmInvoice(o: OrderListItem) {
     setBusyId(o.order_id);
     setErr(null);
     try {
       const updated = await ordersApi.requestInvoice(o.order_id);
       setMyOrders((prev) => prev.map((x) => (x.order_id === updated.order_id ? updated : x)));
+      setInvoiceModalOrder(null);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -291,40 +312,60 @@ export default function CarteiraPage() {
         <Card className="border-amber-500">
           <CardContent className="pt-6 space-y-3">
             {pendingOrders.map((o) => (
-              <div key={o.order_id} className="flex items-center justify-between gap-3">
+              <div key={o.order_id} className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-sm">
                   <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                   <span>Você possui um pagamento pendente de R$ {Number(o.amount_brl).toFixed(2)} ({o.credits} créditos). Deseja continuar?</span>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => reopenCheckout(o)}>Continuar pagamento</Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" disabled={busyId === o.order_id}
+                          onClick={() => cancelOrder(o)}>
+                    {busyId === o.order_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><X className="w-3.5 h-3.5 mr-1" /> Cancelar</>}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => reopenCheckout(o)}>Continuar pagamento</Button>
+                </div>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
 
-      {/* Histórico financeiro */}
+      {/* Histórico */}
       <Card>
-        <CardHeader><CardTitle className="text-lg">Histórico financeiro</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Receipt className="w-4 h-4" /> Histórico</CardTitle></CardHeader>
         <CardContent>
           {txs.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma movimentação ainda.</p>
           ) : (
-            <div className="divide-y">
-              {txs.map((t) => (
-                <div key={t.id} className="flex items-center justify-between py-2.5 text-sm">
-                  <div>
-                    <div className="font-medium">{TX_LABEL[t.type] || t.type}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(t.created_at).toLocaleString("pt-BR")}
-                      {t.description ? ` · ${t.description}` : ""}
+            <div className="space-y-2">
+              {txs.map((t) => {
+                const isCredit = Number(t.amount) >= 0;
+                const matchLabel = t.home_team && t.away_team ? `${teamPt(t.home_team)} × ${teamPt(t.away_team)}` : null;
+                return (
+                  <div key={t.id} className="rounded-lg border border-border/50 p-3 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="font-medium flex items-center gap-2">
+                        {TX_LABEL[t.type] || t.type}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${t.status === "completed" ? "bg-emerald-500/10 text-emerald-600" : t.status === "reversed" ? "bg-red-500/10 text-red-600" : "bg-amber-500/10 text-amber-600"}`}>
+                          {t.status === "completed" ? "Concluído" : t.status === "reversed" ? "Estornado" : "Pendente"}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {new Date(t.created_at).toLocaleString("pt-BR")}
+                        {matchLabel ? ` · ${matchLabel}` : (t.description ? ` · ${t.description}` : "")}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className={`font-mono font-semibold ${isCredit ? "text-emerald-600" : "text-red-600"}`}>
+                        {isCredit ? "+" : ""}{Number(t.amount).toFixed(0)}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">saldo: {Number(t.balance_after).toFixed(0)}
+                        {Number(t.reserved_after) > 0 ? ` (+${Number(t.reserved_after).toFixed(0)} reservado)` : ""}
+                      </div>
                     </div>
                   </div>
-                  <div className={`font-mono font-semibold ${Number(t.amount) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {Number(t.amount) >= 0 ? "+" : ""}{Number(t.amount).toFixed(0)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -332,38 +373,41 @@ export default function CarteiraPage() {
 
       {/* Minhas compras */}
       <Card>
-        <CardHeader><CardTitle className="text-lg">Minhas compras</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-lg flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> Minhas compras</CardTitle></CardHeader>
         <CardContent>
           {myOrders.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma compra ainda.</p>
           ) : (
-            <div className="divide-y">
+            <div className="space-y-2">
               {myOrders.map((o) => (
-                <div key={o.order_id} className="flex items-center justify-between py-2.5 text-sm">
-                  <div>
+                <div key={o.order_id} className="rounded-lg border border-border/50 p-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
                     <div className="font-medium">{o.credits} créditos · R$ {Number(o.amount_brl).toFixed(2)}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground mt-0.5">
                       {new Date(o.created_at).toLocaleString("pt-BR")} · {o.provider}
                       {o.method ? ` · ${o.method}` : ""}
                       {o.coupon_code ? ` · cupom ${o.coupon_code}` : ""}
                       {o.discount_amount_brl && Number(o.discount_amount_brl) > 0 ? ` (−R$ ${Number(o.discount_amount_brl).toFixed(2)})` : ""}
                     </div>
+                    {o.paid_at && (
+                      <div className="text-[11px] text-muted-foreground mt-0.5">Pago em {new Date(o.paid_at).toLocaleString("pt-BR")}</div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {o.status === "paid" && !o.invoice_requested_at && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {o.status === "paid" && !o.invoice_url && (
                       <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busyId === o.order_id}
-                              onClick={() => requestInvoice(o)}>
-                        {busyId === o.order_id ? "Solicitando…" : "Solicitar nota fiscal"}
+                              onClick={() => setInvoiceModalOrder(o)}>
+                        <FileCheck2 className="w-3.5 h-3.5 mr-1" /> Emitir nota fiscal
                       </Button>
                     )}
-                    {o.invoice_requested_at && o.invoice_url && (
-                      <a href={o.invoice_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Nota fiscal</a>
+                    {o.invoice_url && (
+                      <a href={o.invoice_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Ver nota fiscal</a>
                     )}
                     {o.invoice_requested_at && !o.invoice_url && (
-                      <span className="text-xs text-muted-foreground">Nota fiscal solicitada — em processamento</span>
+                      <span className="text-xs text-muted-foreground">Nota fiscal em processamento</span>
                     )}
                     <span className={`text-xs px-2 py-0.5 rounded ${o.status === "paid" ? "bg-emerald-500/10 text-emerald-600" : o.status === "pending" ? "bg-amber-500/10 text-amber-600" : "bg-muted text-muted-foreground"}`}>
-                      {o.status === "paid" ? "Pago" : o.status === "pending" ? "Pendente" : o.status}
+                      {o.status === "paid" ? "Pago" : o.status === "pending" ? "Pendente" : o.status === "canceled" ? "Cancelado" : o.status}
                     </span>
                   </div>
                 </div>
@@ -389,6 +433,23 @@ export default function CarteiraPage() {
             Antes de comprar créditos, você precisa ler e aceitar {pendingDocs.length === 1 ? "o documento pendente" : `os ${pendingDocs.length} documentos pendentes`} (Termos de Uso, Política de Privacidade e demais).
           </p>
           <Button className="w-full" onClick={() => router.push("/documentos")}>Ir para Documentos</Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!invoiceModalOrder} onOpenChange={(open) => { if (!open) setInvoiceModalOrder(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Emitir nota fiscal</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Você receberá a nota fiscal por e-mail assim que ela for emitida. Deseja continuar?
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setInvoiceModalOrder(null)} disabled={!!busyId}>Cancelar</Button>
+            <Button onClick={() => invoiceModalOrder && confirmInvoice(invoiceModalOrder)} disabled={!!busyId}>
+              {busyId === invoiceModalOrder?.order_id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

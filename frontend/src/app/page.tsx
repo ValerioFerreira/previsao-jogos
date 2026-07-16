@@ -364,6 +364,26 @@ export default function Previsoes() {
     api.teamIds().then(setTeamIds).catch(() => {});
   }, []);
 
+  // Confronto selecionado que já começou (aba aberta há horas, ou seleção reidratada do
+  // localStorage num dia seguinte): limpa a seleção em vez de deixar gerar análise de um
+  // jogo que já aconteceu. Roda ao montar e depois periodicamente enquanto a aba fica aberta.
+  React.useEffect(() => {
+    const checkStale = () => {
+      const now = Date.now();
+      setUpcoming((prev) => prev.filter((f) => !f.date || new Date(f.date).getTime() > now));
+      if (mode === 'futura' && matchDate && new Date(matchDate).getTime() <= now) {
+        setFixtureId(null);
+        setMatchDate(undefined);
+        setProjection(null);
+        setErrMsg('Esta partida já aconteceu. Para informações sobre a mesma, vá à página de Estatísticas.');
+      }
+    };
+    checkStale();
+    const id = setInterval(checkStale, 60000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, matchDate]);
+
   const selectFutureFixture = (fid: string) => {
     const fx = upcoming.find(f => f.fixture_id === fid);
     if (!fx) return;
@@ -824,7 +844,7 @@ export default function Previsoes() {
                     Ver a explicação completa da oferta ParcerIA →
                   </Link>
                 </div>
-                <BetBuilder analysisId={analysis.id} home={homeTeamId} away={awayTeamId} onConfirmed={() => refreshWallet()} />
+                <BetBuilder analysisId={analysis.id} home={homeTeamId} away={awayTeamId} isFree={analysis.is_free} onConfirmed={() => refreshWallet()} />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center max-w-2xl mx-auto">

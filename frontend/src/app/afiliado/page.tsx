@@ -1,29 +1,84 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Copy, TrendingUp, Users, ShoppingCart, DollarSign } from "lucide-react";
+import { Loader2, Copy, TrendingUp, Users, ShoppingCart, DollarSign, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
-import { affiliatesApi, type AffiliatePortalStats } from "@/lib/affiliatesApi";
+import { affiliatesApi, affiliateTokens, type AffiliatePortalStats, type TimeseriesResponse } from "@/lib/affiliatesApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
+function TimeseriesChart({ ts }: { ts: TimeseriesResponse }) {
+  if (ts.items.length === 0) {
+    return <p className="text-sm text-muted-foreground">Sem dados no período.</p>;
+  }
+  const max = Math.max(1, ...ts.items.map((p) => p.clicks));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-end gap-1 h-28">
+        {ts.items.map((p) => (
+          <div key={p.bucket} className="flex-1 flex flex-col items-center justify-end gap-1 group relative">
+            <div
+              className="w-full rounded-t bg-primary/70 group-hover:bg-primary transition-colors"
+              style={{ height: `${Math.max(4, (p.clicks / max) * 100)}%` }}
+              title={`${p.bucket}: ${p.clicks} cliques, ${p.conversions} conversões, R$ ${Number(p.revenue_brl).toFixed(2)}`}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between text-[10px] text-muted-foreground">
+        <span>{ts.items[0].bucket}</span>
+        <span>{ts.items[ts.items.length - 1].bucket}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function AfiliadoPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [hasAffiliateToken, setHasAffiliateToken] = useState<boolean | null>(null);
   const [stats, setStats] = useState<AffiliatePortalStats | null>(null);
+  const [ts, setTs] = useState<TimeseriesResponse | null>(null);
+  const [granularity, setGranularity] = useState<"day" | "month">("day");
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/entrar");
-  }, [loading, user, router]);
+    setHasAffiliateToken(!!affiliateTokens.get());
+  }, []);
 
   useEffect(() => {
-    if (!user) return;
-    affiliatesApi.me().then(setStats).catch((e) => setErr((e as Error).message));
-  }, [user]);
+    if (hasAffiliateToken === null) return;
+    if (!hasAffiliateToken && !loading && !user) {
+      router.replace("/afiliado/entrar");
+    }
+  }, [hasAffiliateToken, loading, user, router]);
 
-  if (loading || !user) {
+  useEffect(() => {
+    if (hasAffiliateToken === null) return;
+    const load = hasAffiliateToken ? affiliatesApi.portalMe() : (user ? affiliatesApi.me() : null);
+    if (!load) return;
+    load.then(setStats).catch((e) => {
+      if (hasAffiliateToken) {
+        affiliateTokens.clear();
+        router.replace("/afiliado/entrar");
+      } else {
+        setErr((e as Error).message);
+      }
+    });
+  }, [hasAffiliateToken, user, router]);
+
+  useEffect(() => {
+    if (!hasAffiliateToken) return;
+    affiliatesApi.portalTimeseries(granularity).then(setTs).catch(() => setTs(null));
+  }, [hasAffiliateToken, granularity]);
+
+  function logout() {
+    affiliateTokens.clear();
+    router.replace("/afiliado/entrar");
+  }
+
+  if (hasAffiliateToken === null || (!hasAffiliateToken && loading)) {
     return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
@@ -44,7 +99,12 @@ export default function AfiliadoPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Portal do Afiliado</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Portal do Afiliado</h1>
+        {hasAffiliateToken && (
+          <Button size="sm" variant="ghost" onClick={logout}><LogOut className="w-3.5 h-3.5 mr-1" /> Sair</Button>
+        )}
+      </div>
 
       <Card>
         <CardHeader><CardTitle className="text-lg">Seu link exclusivo</CardTitle></CardHeader>
@@ -90,7 +150,7 @@ export default function AfiliadoPage() {
       <div className="grid grid-cols-2 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Comissão devida</div>
+            <div className="text-sm text-muted-foreground">Comissão devida (a receber no fim do mês)</div>
             <div className="text-2xl font-bold text-amber-500">R$ {Number(stats.commission_due_brl).toFixed(2)}</div>
           </CardContent>
         </Card>
@@ -101,6 +161,21 @@ export default function AfiliadoPage() {
           </CardContent>
         </Card>
       </div>
+
+      {hasAffiliateToken && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">Uso ao longo do tempo</CardTitle>
+            <div className="flex gap-1">
+              <Button size="sm" variant={granularity === "day" ? "default" : "outline"} onClick={() => setGranularity("day")}>Dia</Button>
+              <Button size="sm" variant={granularity === "month" ? "default" : "outline"} onClick={() => setGranularity("month")}>Mês</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {ts ? <TimeseriesChart ts={ts} /> : <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
