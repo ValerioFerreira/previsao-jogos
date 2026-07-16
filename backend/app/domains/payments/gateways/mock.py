@@ -25,7 +25,7 @@ class MockGateway:
             },
         )
 
-    def verify_signature(self, headers: dict, body: bytes) -> bool:
+    def verify_signature(self, headers: dict, body: bytes, query_params: dict) -> bool:
         return True  # mock: sempre válido
 
     def parse_webhook(self, payload: dict) -> WebhookEvent:

@@ -61,4 +61,5 @@ async def webhook(provider: str, request: Request, db: Session = Depends(get_db)
         payload = json.loads(body or b"{}")
     except Exception:
         payload = {}
-    return service.handle_webhook(db, provider, payload, dict(request.headers), body)
+    return service.handle_webhook(db, provider, payload, dict(request.headers), body,
+                                  dict(request.query_params))

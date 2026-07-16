@@ -258,9 +258,10 @@ def poll_pending_invoices(db: Session) -> dict:
     return {"checked": checked, "issued": issued, "failed": failed, "errors": errors}
 
 
-def handle_webhook(db: Session, provider: str, payload: dict, headers: dict, body: bytes) -> dict:
+def handle_webhook(db: Session, provider: str, payload: dict, headers: dict, body: bytes,
+                    query_params: dict | None = None) -> dict:
     gateway = get_gateway()
-    if not gateway.verify_signature(headers, body):
+    if not gateway.verify_signature(headers, body, query_params or {}):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Assinatura inválida.")
     event = gateway.parse_webhook(payload)
 

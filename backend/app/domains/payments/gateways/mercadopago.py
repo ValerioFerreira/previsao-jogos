@@ -75,10 +75,15 @@ class MercadoPagoGateway:
             },
         )
 
-    def verify_signature(self, headers: dict, body: bytes) -> bool:
+    def verify_signature(self, headers: dict, body: bytes, query_params: dict) -> bool:
         """Valida `x-signature` (ts + hash) contra MP_WEBHOOK_SECRET.
         Formato: 'ts=<epoch>,v1=<hmac_sha256_hex>'. Manifest assinado:
         'id:<data.id>;request-id:<x-request-id>;ts:<ts>;'
+
+        `data.id` vem do **query string da URL da notificação** (`?data.id=...&type=payment`),
+        NÃO do corpo do POST — é um erro comum assumir que vem do JSON (o corpo pode até
+        conter um `data.id`, mas a MP assina com o valor da URL; usar o do corpo gera 100%
+        de falso-negativo em produção). Normalizado para minúsculas conforme a doc da MP.
         """
         secret = settings.mp_webhook_secret
         if not secret:
@@ -91,11 +96,14 @@ class MercadoPagoGateway:
         ts, v1 = parts.get("ts"), parts.get("v1")
         if not ts or not v1:
             return False
-        try:
-            import json
-            data_id = str(json.loads(body or b"{}").get("data", {}).get("id", ""))
-        except Exception:
-            data_id = ""
+        data_id = (query_params.get("data.id") or query_params.get("data_id") or "").lower()
+        if not data_id:
+            # fallback defensivo — algumas integrações também ecoam data.id no corpo
+            try:
+                import json
+                data_id = str(json.loads(body or b"{}").get("data", {}).get("id", "")).lower()
+            except Exception:
+                data_id = ""
         manifest = f"id:{data_id};request-id:{request_id};ts:{ts};"
         expected = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, v1)
