@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowDown, CheckCircle2, Target, ChevronDown, Sliders, Megaphone, Gift, X } from 'lucide-react';
+import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowDown, CheckCircle2, Target, ChevronDown, Sliders, Clock, X } from 'lucide-react';
 import { api, PredictionResponse, PlacarMotivo, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
@@ -54,16 +54,46 @@ function oddRangeStr(probPct: number): string {
 }
 
 const CLUB_LEAGUES = [
-  "Brasileirão Série A", "Brasileirão Série B", "Copa do Brasil",
-  "Premier League", "La Liga", "Serie A (Itália)", "Bundesliga", "Ligue 1",
+  "Brasileirão Série A", "Brasileirão Série B", "Copa do Brasil", "Libertadores",
+  "Champions League", "Premier League", "La Liga", "Bundesliga", "Serie A (Itália)", "Ligue 1",
 ];
 
-// Aviso informativo no topo da Análise — Copa do Mundo grátis, cota diária grátis,
-// expansão de mercados e a data de início dos mercados de clubes. Dispensável (fica
-// escondido em localStorage) para não incomodar quem já viu.
-const NEWS_BANNER_KEY = "apostai:news_banner_v1_dismissed";
+// Data/hora do lançamento dos mercados de clubes: 18/07/2026 10:00 (horário de Brasília, UTC-3).
+const CLUBS_LAUNCH_ISO = "2026-07-18T10:00:00-03:00";
+
+// Contador regressivo (dias/horas/min/seg) até o lançamento dos mercados de clubes.
+function useCountdown(targetIso: string) {
+  const calc = useCallback(() => Math.max(0, new Date(targetIso).getTime() - Date.now()), [targetIso]);
+  const [msLeft, setMsLeft] = useState(calc);
+  useEffect(() => {
+    const id = setInterval(() => setMsLeft(calc()), 1000);
+    return () => clearInterval(id);
+  }, [calc]);
+  const totalSeconds = Math.floor(msLeft / 1000);
+  return {
+    days: Math.floor(totalSeconds / 86400),
+    hours: Math.floor((totalSeconds % 86400) / 3600),
+    minutes: Math.floor((totalSeconds % 3600) / 60),
+    seconds: totalSeconds % 60,
+    done: msLeft <= 0,
+  };
+}
+
+function CountdownUnit({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="flex flex-col items-center bg-white/15 rounded-lg px-2 py-1 min-w-[44px] sm:min-w-[52px]">
+      <span className="text-base sm:text-xl font-mono font-extrabold tabular-nums leading-none">{String(value).padStart(2, "0")}</span>
+      <span className="text-[8px] sm:text-[9px] uppercase tracking-wide text-white/70 mt-0.5">{label}</span>
+    </div>
+  );
+}
+
+// Aviso informativo no topo da Análise — Copa do Mundo grátis e contagem regressiva para os
+// mercados de clubes. Dispensável (fica escondido em localStorage) para não incomodar quem já viu.
+const NEWS_BANNER_KEY = "apostai:news_banner_v2_dismissed";
 function NewsBanner() {
   const [dismissed, setDismissed] = useState(true);
+  const countdown = useCountdown(CLUBS_LAUNCH_ISO);
   useEffect(() => {
     try { setDismissed(localStorage.getItem(NEWS_BANNER_KEY) === "1"); } catch { setDismissed(false); }
   }, []);
@@ -73,27 +103,78 @@ function NewsBanner() {
     setDismissed(true);
   }
   return (
-    <div className="relative rounded-lg bg-gradient-to-r from-sky-700 to-cyan-600 text-white p-4">
-      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-2.5 right-2.5 text-white/70 hover:text-white transition-colors">
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-600 via-cyan-600 to-sky-700 text-white p-4 sm:p-5 shadow-lg shadow-cyan-900/20"
+    >
+      {/* brilho animado de fundo */}
+      <motion.div
+        aria-hidden
+        animate={{ opacity: [0.2, 0.45, 0.2], scale: [1, 1.2, 1] }}
+        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+        className="pointer-events-none absolute -top-16 -right-10 w-48 h-48 rounded-full bg-white/10 blur-3xl"
+      />
+
+      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-2.5 right-2.5 text-white/70 hover:text-white transition-colors z-10">
         <X className="w-4 h-4" />
       </button>
-      <div className="flex items-start gap-3 pr-6">
-        <Megaphone className="w-5 h-5 shrink-0 mt-0.5" />
-        <div className="space-y-1.5 text-sm">
-          <p className="flex items-center gap-1.5"><Gift className="w-3.5 h-3.5 shrink-0" /> Análises da <b>Copa do Mundo são grátis</b>, sem gastar créditos.</p>
-          <p>Todo dia, <b>1 análise grátis</b> para qualquer confronto — não retém crédito.</p>
-          <p>O site vai <b>expandir para mais mercados</b> em breve.</p>
-          <p>
-            <b>Mercados de clubes começam em 18/07/2026</b>, com destaque para:{" "}
-            <span className="inline-flex flex-wrap gap-1 mt-1">
-              {CLUB_LEAGUES.map((l) => (
-                <span key={l} className="text-[11px] font-medium bg-white/15 rounded-full px-2 py-0.5">{l}</span>
-              ))}
-            </span>
+
+      <div className="relative space-y-3 pr-6">
+        <div className="flex items-start gap-2">
+          <motion.span
+            animate={{ rotate: [0, -8, 8, -8, 0] }}
+            transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 2 }}
+            className="text-xl sm:text-2xl shrink-0"
+          >
+            🏆
+          </motion.span>
+          <p className="text-sm sm:text-base leading-snug">
+            Copa do Mundo? É{" "}
+            <motion.span
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+              className="inline-block font-extrabold text-amber-300"
+            >
+              GRÁTIS
+            </motion.span>
+            ! 🎉 Aproveita que as análises da <b>final</b> e da <b>disputa do 3º colocado</b> não vão consumir créditos, e boa sorte! 🍀
           </p>
         </div>
+
+        <div className="flex items-start gap-2">
+          <span className="text-xl sm:text-2xl shrink-0">😌</span>
+          <p className="text-sm sm:text-base leading-snug">
+            E quando a Copa acabar? Tem calma → <span className="font-extrabold text-cyan-100">NOVOS MERCADOS DE CLUBES</span> estão chegando! 🚀
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          <span className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-white/80">
+            <Clock className="w-3.5 h-3.5" /> Lançamento em:
+          </span>
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <CountdownUnit value={countdown.days} label="dias" />
+            <span className="font-bold text-white/40">:</span>
+            <CountdownUnit value={countdown.hours} label="hrs" />
+            <span className="font-bold text-white/40">:</span>
+            <CountdownUnit value={countdown.minutes} label="min" />
+            <span className="font-bold text-white/40">:</span>
+            <CountdownUnit value={countdown.seconds} label="seg" />
+          </div>
+        </div>
+
+        <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
+          <span className="inline-flex flex-wrap gap-1 align-middle">
+            {CLUB_LEAGUES.map((l) => (
+              <span key={l} className="text-[11px] font-medium bg-white/15 rounded-full px-2 py-0.5">{l}</span>
+            ))}
+          </span>{" "}
+          <b>e muito mais!</b>
+        </p>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

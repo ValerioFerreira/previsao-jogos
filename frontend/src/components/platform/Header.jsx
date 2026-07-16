@@ -66,7 +66,7 @@ export default function Header() {
             </nav>
 
             {/* Right Controls */}
-            <div className="flex items-center gap-3 shrink-0 justify-self-end">
+            <div className="col-start-3 flex items-center gap-3 shrink-0 justify-self-end">
               {/* Theme Toggle */}
               {mounted && (
                 <button

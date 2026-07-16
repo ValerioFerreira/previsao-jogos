@@ -2,7 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { BookOpen, Layers, Cpu, Gauge, Wrench, PlayCircle, Trophy, Sparkles, ArrowRight, RotateCcw, CheckCircle2 } from "lucide-react";
+import { BookOpen, Layers, Cpu, Gauge, Wrench, PlayCircle, Trophy, Sparkles, ArrowRight, RotateCcw, CheckCircle2, ChevronDown } from "lucide-react";
 
 // Card de destaque da oferta "ParcerIA" — no topo da página, com movimento e fonte diferenciada.
 function ParcerIAHighlight() {
@@ -156,15 +156,31 @@ function Section({ id, title, children }: { id: string; title: string; children:
 }
 
 export default function ComoFunciona() {
+  const [tocOpen, setTocOpen] = React.useState(false);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
       {/* Índice */}
       <aside className="lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-2">
-        <div className="flex items-center gap-2 mb-3 sticky top-0 bg-background/95 backdrop-blur-sm pb-1">
+        <div className="flex items-center justify-center lg:justify-start gap-2 mb-3 sticky top-0 bg-background/95 backdrop-blur-sm pb-1">
           <BookOpen className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-bold">Como Funciona?</h1>
         </div>
-        <nav className="space-y-4 text-sm">
+
+        {/* Menu de links rápidos retraído no mobile — centralizado, expande sob demanda */}
+        <div className="lg:hidden flex justify-center mb-3">
+          <button
+            type="button"
+            onClick={() => setTocOpen((o) => !o)}
+            aria-expanded={tocOpen}
+            className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-4 py-2 text-xs font-semibold shadow-sm"
+          >
+            <Layers className="w-3.5 h-3.5 text-primary" />
+            Índice rápido
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${tocOpen ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+
+        <nav className={`${tocOpen ? "block" : "hidden"} lg:block space-y-4 text-sm`}>
           {TOC.map((g) => (
             <div key={g.group}>
               <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">{g.icon} {g.group}</p>
