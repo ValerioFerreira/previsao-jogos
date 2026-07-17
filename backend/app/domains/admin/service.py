@@ -572,6 +572,16 @@ def demo_usage_by_cpf(db: Session) -> dict:
     return {"items": items}
 
 
+def delete_affiliate(db: Session, admin: User, affiliate_id: str, ip) -> None:
+    """Exclui o parceiro (cascade já cobre atribuições/comissões/pagamentos/logs de conta
+    demo/vínculo com campanhas; o cupom do parceiro, se houver, só perde o vínculo —
+    Coupon.affiliate_id vira NULL, ver promotions/models.py)."""
+    a = _get_affiliate(db, affiliate_id)
+    audit(db, admin, "affiliate_delete", "affiliate", a.id, before=_affiliate_out(a, db), ip=ip)
+    db.delete(a)
+    db.commit()
+
+
 def list_affiliates(db: Session, status_filter: str | None = None) -> dict:
     stmt = select(Affiliate)
     if status_filter:
@@ -913,7 +923,52 @@ def analytics_dashboard(db: Session) -> dict:
             "conversion_rate": conversion_rate, "abandon_rate": abandon_rate,
         },
         "users": {"active_30d": active_users_30d, "paying_total": paying_users},
+        "by_partner": revenue_by_partner(db),
     }
+
+
+def revenue_by_partner(db: Session) -> list[dict]:
+    """Faturamento/comissão/lucro/pagamentos por parceiro, em queries agregadas (sem N+1 —
+    nada de chamar compute_portal_stats em loop). Lucro = faturamento atribuído ao parceiro
+    menos a comissão (devida+paga) gerada por ele; pagamentos = lotes já efetivamente pagos
+    (AffiliatePayment.status='paid'), não a comissão devida."""
+    revenue_rows = db.execute(
+        select(AffiliateCommission.affiliate_id, func.coalesce(func.sum(PaymentOrder.amount_brl), 0))
+        .join(PaymentOrder, PaymentOrder.id == AffiliateCommission.order_id)
+        .where(PaymentOrder.status == PaymentStatus.paid)
+        .group_by(AffiliateCommission.affiliate_id)
+    ).all()
+    revenue_by_id = {aff_id: Decimal(rev) for aff_id, rev in revenue_rows}
+
+    commission_rows = db.execute(
+        select(AffiliateCommission.affiliate_id, func.coalesce(func.sum(AffiliateCommission.amount_brl), 0))
+        .group_by(AffiliateCommission.affiliate_id)
+    ).all()
+    commission_by_id = {aff_id: Decimal(c) for aff_id, c in commission_rows}
+
+    payment_rows = db.execute(
+        select(AffiliatePayment.affiliate_id, func.coalesce(func.sum(AffiliatePayment.amount_brl), 0))
+        .where(AffiliatePayment.status == "paid")
+        .group_by(AffiliatePayment.affiliate_id)
+    ).all()
+    payments_by_id = {aff_id: Decimal(p) for aff_id, p in payment_rows}
+
+    affiliate_ids = set(revenue_by_id) | set(commission_by_id) | set(payments_by_id)
+    if not affiliate_ids:
+        return []
+    names = {a.id: a.name for a in db.execute(select(Affiliate).where(Affiliate.id.in_(affiliate_ids))).scalars()}
+
+    out = []
+    for aff_id in affiliate_ids:
+        revenue = revenue_by_id.get(aff_id, Decimal("0"))
+        commission = commission_by_id.get(aff_id, Decimal("0"))
+        out.append({
+            "affiliate_id": str(aff_id), "name": names.get(aff_id, "—"),
+            "revenue_brl": str(revenue), "commission_brl": str(commission),
+            "profit_brl": str(revenue - commission),
+            "payments_brl": str(payments_by_id.get(aff_id, Decimal("0"))),
+        })
+    return out
 
 
 # --------------------------------------------------------------- suporte

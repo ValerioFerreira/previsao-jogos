@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
 
 function fmt(d: string) { return new Date(d).toLocaleString("pt-BR"); }
 
@@ -99,6 +100,57 @@ function RevenueChart({ rev }: { rev: Record<string, string> | undefined }) {
   );
 }
 
+type PartnerMetric = "revenue_brl" | "profit_brl" | "payments_brl";
+const PARTNER_METRICS: { key: PartnerMetric; label: string }[] = [
+  { key: "revenue_brl", label: "Faturamento" },
+  { key: "profit_brl", label: "Lucro" },
+  { key: "payments_brl", label: "Pagamentos" },
+];
+
+// ---------- gráfico de barras: faturamento/lucro/pagamentos por parceiro ----------
+function PartnerRevenueChart({ items }: { items: Record<string, unknown>[] }) {
+  const [metric, setMetric] = useState<PartnerMetric>("revenue_brl");
+  const [topN, setTopN] = useState("10");
+  const n = Math.max(1, Number(topN) || 10);
+
+  const data = [...items]
+    .map((p) => ({ name: String(p.name), value: Number(p[metric] ?? 0) }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, n);
+
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="text-sm font-medium">Faturamento/lucro/pagamentos por parceiro</div>
+        <div className="flex gap-2 items-center">
+          <select className="border rounded-md px-2 py-1.5 text-xs bg-background" value={metric} onChange={(e) => setMetric(e.target.value as PartnerMetric)}>
+            {PARTNER_METRICS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+          <label className="text-xs text-muted-foreground flex items-center gap-1">
+            Top
+            <Input className="w-16 h-8" type="number" min="1" value={topN} onChange={(e) => setTopN(e.target.value)} />
+          </label>
+        </div>
+      </div>
+      {data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum parceiro com dados ainda.</p>
+      ) : (
+        <div style={{ width: "100%", height: Math.max(200, data.length * 36) }}>
+          <ResponsiveContainer>
+            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" tickFormatter={(v) => `R$ ${Number(v).toFixed(0)}`} fontSize={11} />
+              <YAxis type="category" dataKey="name" width={120} fontSize={11} />
+              <RTooltip formatter={(v: number) => [`R$ ${Number(v).toFixed(2)}`, PARTNER_METRICS.find((m) => m.key === metric)?.label]} />
+              <Bar dataKey="value" fill="var(--primary)" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -131,6 +183,7 @@ export default function AdminPage() {
     name: "", code: "", commission_pct: "10", contact_email: "", contact_phone: "",
     cpf: "", payment_type: "", discount_pct: "",
   });
+  const [promoSection, setPromoSection] = useState<"promocoes" | "cupons" | "pacotes" | "banners" | "campanhas">("promocoes");
   const [partnerFilter, setPartnerFilter] = useState("");
   const [partnerSortByCommission, setPartnerSortByCommission] = useState(false);
   const [approveCodeDrafts, setApproveCodeDrafts] = useState<Record<string, string>>({});
@@ -353,6 +406,18 @@ export default function AdminPage() {
     try { await adminApi.setAffiliateDemoAccess(String(a.id), !a.demo_access_enabled); await loadAffiliates(); } catch (e) { setErr((e as Error).message); }
   }
 
+  function deleteAffiliate(a: Record<string, unknown>) {
+    setConfirmState({
+      message: `Excluir o parceiro ${a.name}? Isso remove atribuições, comissões, pagamentos e logs de acesso à conta demo. Não pode ser desfeito.`,
+      onConfirm: async () => {
+        try {
+          await adminApi.deleteAffiliate(String(a.id));
+          await loadAffiliates();
+        } catch (e) { setErr((e as Error).message); }
+      },
+    });
+  }
+
   async function createBanner(e: React.FormEvent) {
     e.preventDefault();
     try {
@@ -539,6 +604,7 @@ export default function AdminPage() {
   const rev = dashboard?.revenue as Record<string, string> | undefined;
   const users_ = dashboard?.users as Record<string, number> | undefined;
   const credits_ = dashboard?.credits as Record<string, string> | undefined;
+  const byPartner = (dashboard?.by_partner as Record<string, unknown>[] | undefined) ?? [];
   const pickerCampaign = pickerModal ? campaigns.find((c) => String(c.id) === pickerModal.campaignId) : null;
 
   return (
@@ -552,11 +618,7 @@ export default function AdminPage() {
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="promocoes">Promoções</TabsTrigger>
-          <TabsTrigger value="cupons">Cupons</TabsTrigger>
-          <TabsTrigger value="pacotes">Pacotes</TabsTrigger>
           <TabsTrigger value="afiliados">Parceiros</TabsTrigger>
-          <TabsTrigger value="banners">Banners</TabsTrigger>
-          <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="config">Configurações</TabsTrigger>
           <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
@@ -567,6 +629,7 @@ export default function AdminPage() {
           <Card>
             <CardContent className="space-y-4 pt-6">
               <RevenueChart rev={rev} />
+              <PartnerRevenueChart items={byPartner} />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Ticket médio</div><div className="text-xl font-bold">R$ {Number(rev?.ticket_medio_brl ?? 0).toFixed(2)}</div></div>
                 <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Créditos vendidos</div><div className="text-xl font-bold">{Math.round(Number(credits_?.vendidos ?? 0))}</div></div>
@@ -640,8 +703,23 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
-        {/* ---------------- Promoções ---------------- */}
+        {/* ---------------- Promoções (unificada: Promoções + Cupons + Pacotes + Banners + Campanhas) ---------------- */}
         <TabsContent value="promocoes">
+          <div className="flex gap-1.5 flex-wrap mb-4">
+            {([
+              { key: "promocoes", label: "Promoções" },
+              { key: "cupons", label: "Cupons" },
+              { key: "pacotes", label: "Pacotes" },
+              { key: "banners", label: "Banners" },
+              { key: "campanhas", label: "Campanhas" },
+            ] as const).map((s) => (
+              <Button key={s.key} size="sm" variant={promoSection === s.key ? "default" : "outline"} onClick={() => setPromoSection(s.key)}>
+                {s.label}
+              </Button>
+            ))}
+          </div>
+
+          {promoSection === "promocoes" && (
           <Card>
             <CardHeader><CardTitle className="text-lg">Promoções</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -663,10 +741,9 @@ export default function AdminPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+          )}
 
-        {/* ---------------- Cupons ---------------- */}
-        <TabsContent value="cupons">
+          {promoSection === "cupons" && (
           <Card>
             <CardHeader><CardTitle className="text-lg">Cupons</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -742,10 +819,9 @@ export default function AdminPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+          )}
 
-        {/* ---------------- Pacotes ---------------- */}
-        <TabsContent value="pacotes">
+          {promoSection === "pacotes" && (
           <Card>
             <CardHeader><CardTitle className="text-lg">Pacotes de crédito</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -775,9 +851,88 @@ export default function AdminPage() {
               </div>
             </CardContent>
           </Card>
+          )}
+
+          {promoSection === "banners" && (
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Banners promocionais</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={createBanner} className="flex flex-wrap gap-2 items-end">
+                <Field label="Título"><Input className="w-56" value={newBanner.title} onChange={(e) => setNewBanner({ ...newBanner, title: e.target.value })} required /></Field>
+                <Field label="Texto" className="flex-1 min-w-40"><Input value={newBanner.body} onChange={(e) => setNewBanner({ ...newBanner, body: e.target.value })} /></Field>
+                <Field label="Imagem de fundo (URL)" className="flex-1 min-w-56"><Input value={newBanner.image_url} onChange={(e) => setNewBanner({ ...newBanner, image_url: e.target.value })} placeholder="https://..." /></Field>
+                <Field label="Prioridade"><Input className="w-24" type="number" value={newBanner.priority} onChange={(e) => setNewBanner({ ...newBanner, priority: e.target.value })} /></Field>
+                <Field label="Ordem"><Input className="w-24" type="number" value={newBanner.sort_order} onChange={(e) => setNewBanner({ ...newBanner, sort_order: e.target.value })} /></Field>
+                <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Criar</Button>
+              </form>
+              <div className="space-y-3">
+                {banners.map((b) => (
+                  <div key={String(b.id)} className="relative overflow-hidden rounded-lg border">
+                    {!!b.image_url && (
+                      <div className="absolute inset-0">
+                        <img src={String(b.image_url)} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/85 to-background/50" />
+                      </div>
+                    )}
+                    <div className="relative flex items-center justify-between py-2.5 px-3 gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <div className="font-medium">{String(b.title)} <span className="text-xs text-muted-foreground">(prioridade {String(b.priority)} · ordem {String(b.sort_order)} · {(b.active as boolean) ? "ativo" : "inativo"})</span></div>
+                        {!!b.body && <div className="text-xs text-muted-foreground">{String(b.body)}</div>}
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Button size="sm" variant="outline" onClick={() => openEditBanner(b)}>Editar</Button>
+                        <Button size="sm" variant="outline" onClick={() => toggleBanner(b)}>{(b.active as boolean) ? "Desativar" : "Ativar"}</Button>
+                        <Button size="sm" variant="destructive" onClick={() => deleteBanner(b)}>Excluir</Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {banners.length === 0 && <p className="text-sm text-muted-foreground">Nenhum banner.</p>}
+              </div>
+            </CardContent>
+          </Card>
+          )}
+
+          {promoSection === "campanhas" && (
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Campanhas</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground">Uma campanha amarra banner + cupons + pacotes + afiliados + período + prioridade.</p>
+              <form onSubmit={createCampaign} className="flex flex-wrap gap-2 items-end">
+                <Field label="Nome" className="flex-1 min-w-40"><Input value={newCampaign.name} onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })} required /></Field>
+                <Field label="Prioridade"><Input className="w-24" type="number" value={newCampaign.priority} onChange={(e) => setNewCampaign({ ...newCampaign, priority: e.target.value })} /></Field>
+                <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Criar</Button>
+              </form>
+              <div className="divide-y text-sm">
+                {campaigns.map((c) => (
+                  <div key={String(c.id)} className="py-3 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-medium">{String(c.name)} <span className="text-xs text-muted-foreground">(prioridade {String(c.priority)} · {(c.active as boolean) ? "ativa" : "inativa"})</span></span>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Button size="sm" variant="outline" onClick={() => openCampaignDashboard(c)}>Dashboard</Button>
+                        <Button size="sm" variant="outline" onClick={() => toggleCampaign(c)}>{(c.active as boolean) ? "Desativar" : "Ativar"}</Button>
+                        <Button size="sm" variant="destructive" onClick={() => deleteCampaign(c)}>Excluir</Button>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      banner: {banners.find((b) => String(b.id) === c.banner_id)?.title as string ?? "nenhum"} · pacotes: {(c.package_ids as string[]).length} · cupons: {(c.coupon_ids as string[]).length} · afiliados: {(c.affiliate_ids as string[]).length}
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <Button size="sm" variant="outline" onClick={() => setPickerModal({ campaignId: String(c.id), kind: "banner" })}>+ banner</Button>
+                      <Button size="sm" variant="outline" onClick={() => setPickerModal({ campaignId: String(c.id), kind: "package" })}>+ pacote</Button>
+                      <Button size="sm" variant="outline" onClick={() => setPickerModal({ campaignId: String(c.id), kind: "coupon" })}>+ cupom</Button>
+                      <Button size="sm" variant="outline" onClick={() => setPickerModal({ campaignId: String(c.id), kind: "affiliate" })}>+ afiliado</Button>
+                    </div>
+                  </div>
+                ))}
+                {campaigns.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma campanha.</p>}
+              </div>
+            </CardContent>
+          </Card>
+          )}
         </TabsContent>
 
-        {/* ---------------- Afiliados ---------------- */}
+        {/* ---------------- Parceiros (afiliados) ---------------- */}
         <TabsContent value="afiliados">
           <Card>
             <CardHeader><CardTitle className="text-lg">Parceiros</CardTitle></CardHeader>
@@ -899,6 +1054,7 @@ export default function AdminPage() {
                             <Link href={`/admin/parceiros/${a.id}`}>
                               <Button size="sm" variant="ghost" className="w-full">Ver detalhes</Button>
                             </Link>
+                            <Button size="sm" variant="destructive" onClick={() => deleteAffiliate(a)}>Excluir</Button>
                           </div>
                         </td>
                       </tr>
@@ -962,86 +1118,6 @@ export default function AdminPage() {
               <Button type="submit" variant="destructive" className="w-full">Confirmar rejeição</Button>
             </form>
           </Modal>
-        </TabsContent>
-
-        {/* ---------------- Banners ---------------- */}
-        <TabsContent value="banners">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Banners promocionais</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <form onSubmit={createBanner} className="flex flex-wrap gap-2 items-end">
-                <Field label="Título"><Input className="w-56" value={newBanner.title} onChange={(e) => setNewBanner({ ...newBanner, title: e.target.value })} required /></Field>
-                <Field label="Texto" className="flex-1 min-w-40"><Input value={newBanner.body} onChange={(e) => setNewBanner({ ...newBanner, body: e.target.value })} /></Field>
-                <Field label="Imagem de fundo (URL)" className="flex-1 min-w-56"><Input value={newBanner.image_url} onChange={(e) => setNewBanner({ ...newBanner, image_url: e.target.value })} placeholder="https://..." /></Field>
-                <Field label="Prioridade"><Input className="w-24" type="number" value={newBanner.priority} onChange={(e) => setNewBanner({ ...newBanner, priority: e.target.value })} /></Field>
-                <Field label="Ordem"><Input className="w-24" type="number" value={newBanner.sort_order} onChange={(e) => setNewBanner({ ...newBanner, sort_order: e.target.value })} /></Field>
-                <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Criar</Button>
-              </form>
-              <div className="space-y-3">
-                {banners.map((b) => (
-                  <div key={String(b.id)} className="relative overflow-hidden rounded-lg border">
-                    {!!b.image_url && (
-                      <div className="absolute inset-0">
-                        <img src={String(b.image_url)} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/85 to-background/50" />
-                      </div>
-                    )}
-                    <div className="relative flex items-center justify-between py-2.5 px-3 gap-2 flex-wrap">
-                      <div className="min-w-0">
-                        <div className="font-medium">{String(b.title)} <span className="text-xs text-muted-foreground">(prioridade {String(b.priority)} · ordem {String(b.sort_order)} · {(b.active as boolean) ? "ativo" : "inativo"})</span></div>
-                        {!!b.body && <div className="text-xs text-muted-foreground">{String(b.body)}</div>}
-                      </div>
-                      <div className="flex gap-1.5 shrink-0">
-                        <Button size="sm" variant="outline" onClick={() => openEditBanner(b)}>Editar</Button>
-                        <Button size="sm" variant="outline" onClick={() => toggleBanner(b)}>{(b.active as boolean) ? "Desativar" : "Ativar"}</Button>
-                        <Button size="sm" variant="destructive" onClick={() => deleteBanner(b)}>Excluir</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {banners.length === 0 && <p className="text-sm text-muted-foreground">Nenhum banner.</p>}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ---------------- Campanhas ---------------- */}
-        <TabsContent value="campanhas">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Campanhas</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">Uma campanha amarra banner + cupons + pacotes + afiliados + período + prioridade.</p>
-              <form onSubmit={createCampaign} className="flex flex-wrap gap-2 items-end">
-                <Field label="Nome" className="flex-1 min-w-40"><Input value={newCampaign.name} onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })} required /></Field>
-                <Field label="Prioridade"><Input className="w-24" type="number" value={newCampaign.priority} onChange={(e) => setNewCampaign({ ...newCampaign, priority: e.target.value })} /></Field>
-                <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Criar</Button>
-              </form>
-              <div className="divide-y text-sm">
-                {campaigns.map((c) => (
-                  <div key={String(c.id)} className="py-3 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="font-medium">{String(c.name)} <span className="text-xs text-muted-foreground">(prioridade {String(c.priority)} · {(c.active as boolean) ? "ativa" : "inativa"})</span></span>
-                      <div className="flex gap-1.5 shrink-0">
-                        <Button size="sm" variant="outline" onClick={() => openCampaignDashboard(c)}>Dashboard</Button>
-                        <Button size="sm" variant="outline" onClick={() => toggleCampaign(c)}>{(c.active as boolean) ? "Desativar" : "Ativar"}</Button>
-                        <Button size="sm" variant="destructive" onClick={() => deleteCampaign(c)}>Excluir</Button>
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      banner: {banners.find((b) => String(b.id) === c.banner_id)?.title as string ?? "nenhum"} · pacotes: {(c.package_ids as string[]).length} · cupons: {(c.coupon_ids as string[]).length} · afiliados: {(c.affiliate_ids as string[]).length}
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      <Button size="sm" variant="outline" onClick={() => setPickerModal({ campaignId: String(c.id), kind: "banner" })}>+ banner</Button>
-                      <Button size="sm" variant="outline" onClick={() => setPickerModal({ campaignId: String(c.id), kind: "package" })}>+ pacote</Button>
-                      <Button size="sm" variant="outline" onClick={() => setPickerModal({ campaignId: String(c.id), kind: "coupon" })}>+ cupom</Button>
-                      <Button size="sm" variant="outline" onClick={() => setPickerModal({ campaignId: String(c.id), kind: "affiliate" })}>+ afiliado</Button>
-                    </div>
-                  </div>
-                ))}
-                {campaigns.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma campanha.</p>}
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* ---------------- Documentos legais ---------------- */}

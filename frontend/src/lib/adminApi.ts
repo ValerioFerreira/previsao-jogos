@@ -64,6 +64,7 @@ export const adminApi = {
   resendAffiliateInvite: (id: string) => authFetch(`/admin/affiliates/${id}/resend-invite`, { method: "POST" }),
   setAffiliateDemoAccess: (id: string, enabled: boolean) =>
     authFetch(`/admin/affiliates/${id}/demo-access`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
+  deleteAffiliate: (id: string) => authFetch(`/admin/affiliates/${id}`, { method: "DELETE" }),
   affiliatePayments: (affiliateId: string) =>
     authFetch<{ items: Record<string, unknown>[] }>(`/admin/affiliates/${affiliateId}/payments`),
   createAffiliatePayment: (affiliateId: string, body: Record<string, unknown>) =>

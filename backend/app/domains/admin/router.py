@@ -154,6 +154,13 @@ def approve_affiliate(affiliate_id: str, request: Request,
     return service.approve_affiliate(db, admin, affiliate_id, client_ip(request), code=data.code)
 
 
+@router.delete("/affiliates/{affiliate_id}", response_model=schemas.OkResponse)
+def delete_affiliate(affiliate_id: str, request: Request,
+                     admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    service.delete_affiliate(db, admin, affiliate_id, client_ip(request))
+    return schemas.OkResponse(detail="Parceiro excluído.")
+
+
 @router.get("/demo-usage")
 def demo_usage(_: User = Depends(require_admin), db: Session = Depends(get_db)):
     return service.demo_usage_by_cpf(db)
