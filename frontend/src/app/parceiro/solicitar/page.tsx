@@ -136,7 +136,7 @@ export default function SolicitarParceriaPage() {
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
               <CardDescription className="text-white/90 max-w-sm text-sm sm:text-base">
-                Divulgue o ApostAIinfo com seu próprio código de desconto e ganhe comissão!
+                Divulgue o ApostAInfo com seu próprio código de desconto e ganhe comissão!
               </CardDescription>
             </motion.div>
           </div>
