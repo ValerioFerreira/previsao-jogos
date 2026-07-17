@@ -13,11 +13,31 @@ import InfoTooltip from "@/components/platform/InfoTooltip";
 
 const DISCOUNT_TIERS = [5, 10, 15, 20, 25];
 const COMMISSION_BUDGET_PCT = 30;
+const HERO_BG_URL =
+  "https://media.istockphoto.com/id/1262691718/photo/man-giving-fist-bump-monochrome-black-and-white-image.jpg?s=612x612&w=0&k=20&c=wLXYOXzge6nsMC4f-KSYvP2d8G2nNREmFVQbGFsKzWU=";
 
 function commissionPer100(discountPct: number): string {
   const commissionRatePct = COMMISSION_BUDGET_PCT - discountPct;
   const paidPer100 = 100 - discountPct;
   return ((commissionRatePct * paidPer100) / 100).toFixed(2);
+}
+
+function maskCpf(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 11);
+  let out = d.slice(0, 3);
+  if (d.length > 3) out += "." + d.slice(3, 6);
+  if (d.length > 6) out += "." + d.slice(6, 9);
+  if (d.length > 9) out += "-" + d.slice(9, 11);
+  return out;
+}
+
+function maskPhone(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 11);
+  if (!d) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7, 11)}`;
 }
 
 export default function SolicitarParceriaPage() {
@@ -29,8 +49,14 @@ export default function SolicitarParceriaPage() {
   const [paymentType, setPaymentType] = useState<"pf" | "pj">("pf");
   const [discountPct, setDiscountPct] = useState(15);
 
-  const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const updName = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, full_name: e.target.value.toUpperCase() }));
+  const updEmail = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, email: e.target.value.toLowerCase() }));
+  const updCpf = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, cpf: maskCpf(e.target.value) }));
+  const updPhone = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, phone: maskPhone(e.target.value) }));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,33 +99,53 @@ export default function SolicitarParceriaPage() {
 
   return (
     <div className="max-w-md mx-auto mt-6 sm:mt-12 mb-12">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Seja um Parceiro</CardTitle>
-          <CardDescription>
-            Divulgue o ApostAI com seu próprio código de desconto e ganhe comissão por venda.
-          </CardDescription>
+      <Card className="overflow-hidden">
+        <CardHeader className="relative p-0">
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${HERO_BG_URL})` }}
+          />
+          <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-slate-950/55 via-slate-950/80 to-card" />
+          <div className="relative px-6 py-10 sm:py-12 flex flex-col items-center text-center gap-2">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+              <CardTitle className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+                Seja um <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Parceiro</span>
+              </CardTitle>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
+              <CardDescription className="text-white/90 max-w-sm text-sm sm:text-base">
+                Divulgue o ApostAIinfo com seu próprio código de desconto e ganhe comissão!
+              </CardDescription>
+            </motion.div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {err && <div className="mb-4 text-sm rounded-md bg-red-500/10 text-red-600 p-3">{err}</div>}
 
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="nome">Nome completo</Label>
-              <Input id="nome" value={form.full_name} onChange={upd("full_name")} placeholder="Maria da Silva" required />
+              <Input id="nome" value={form.full_name} onChange={updName} required />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">E-mail</Label>
-              <Input id="email" type="email" value={form.email} onChange={upd("email")} placeholder="voce@email.com" required />
+              <Input id="email" type="email" value={form.email} onChange={updEmail} required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cpf">CPF</Label>
-                <Input id="cpf" value={form.cpf} onChange={upd("cpf")} placeholder="000.000.000-00" required />
+                <Input
+                  id="cpf" value={form.cpf} onChange={updCpf} placeholder="000.000.000-00"
+                  className="placeholder:text-muted-foreground/40" inputMode="numeric" maxLength={14} required
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="tel">Telefone (WhatsApp)</Label>
-                <Input id="tel" value={form.phone} onChange={upd("phone")} placeholder="(11) 90000-0000" required />
+                <Input
+                  id="tel" value={form.phone} onChange={updPhone} placeholder="(11) 90000-0000"
+                  className="placeholder:text-muted-foreground/40" inputMode="numeric" maxLength={15} required
+                />
               </div>
             </div>
 
@@ -149,7 +195,7 @@ export default function SolicitarParceriaPage() {
                   <div className="text-lg font-bold font-mono text-foreground">{discountPct}%</div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">Você recebe a cada R$100 vendidos</div>
+                  <div className="text-xs text-muted-foreground">A cada R$100 em compras no site com seu código, você recebe:</div>
                   <div className="text-lg font-bold font-mono text-emerald-500">R$ {commissionPer100(discountPct)}</div>
                 </div>
               </motion.div>
