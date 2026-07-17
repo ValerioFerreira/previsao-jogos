@@ -3,6 +3,13 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+# Precisa vir antes de allowed_origins() (usado no add_middleware abaixo): é este import
+# que carrega backend/.env (app/db/connection.py::_load_local_dotenv), então CORS_ORIGINS
+# só existe em os.environ se isso rodar primeiro. Sem essa ordem, um CORS_ORIGINS só
+# definido no .env (não como env var real do processo) é lido como ausente e a origem
+# configurada localmente cai silenciosamente no default http://localhost:3000.
+import app.db.connection  # noqa: F401,E402
+
 from app.schemas import (
     H2HResponse,
     HealthResponse,

@@ -97,12 +97,23 @@ def attach_user_on_signup(db: Session, anon_id: str, user_id: uuid.UUID) -> None
         a.user_id = user_id
 
 
+def _utc(dt: datetime | None) -> datetime | None:
+    """Normaliza para aware-UTC — no SQLite (dev/testes), DateTime(timezone=True) não
+    preserva tzinfo na volta (ao contrário do Postgres em produção), então um
+    `expires_at` gravado aware pode voltar naive e quebrar a comparação abaixo
+    (mesmo padrão de auth/service.py::_utc)."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 def _active_attribution_for_order(db: Session, user_id: uuid.UUID, paid_at: datetime) -> AffiliateAttribution | None:
     rows = db.execute(select(AffiliateAttribution).where(
         AffiliateAttribution.user_id == user_id, AffiliateAttribution.converted_at.is_(None),
     ).order_by(AffiliateAttribution.attributed_at.desc())).scalars().all()
+    paid_at = _utc(paid_at)
     for a in rows:
-        if a.expires_at is None or a.expires_at >= paid_at:
+        if a.expires_at is None or _utc(a.expires_at) >= paid_at:
             return a
     return None
 

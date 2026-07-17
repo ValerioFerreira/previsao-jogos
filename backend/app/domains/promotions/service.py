@@ -19,14 +19,24 @@ from app.domains.promotions.models import Coupon
 logger = logging.getLogger(__name__)
 
 
+def _utc(dt: datetime | None) -> datetime | None:
+    """Normaliza para aware-UTC — no SQLite (dev/testes), DateTime(timezone=True) não
+    preserva tzinfo na volta (ao contrário do Postgres em produção), então
+    valid_from/valid_to gravados aware podem voltar naive e quebrar a comparação
+    abaixo (mesmo padrão de affiliates/service.py::_utc / auth/service.py::_utc)."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 def _get_active_coupon(db: Session, code: str) -> Coupon:
     coupon = db.execute(select(Coupon).where(Coupon.code == code.strip().upper())).scalar_one_or_none()
     if coupon is None or not coupon.active:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Cupom inválido.")
     now = datetime.now(timezone.utc)
-    if coupon.valid_from and now < coupon.valid_from:
+    if coupon.valid_from and now < _utc(coupon.valid_from):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cupom ainda não é válido.")
-    if coupon.valid_to and now > coupon.valid_to:
+    if coupon.valid_to and now > _utc(coupon.valid_to):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cupom expirado.")
     if coupon.usage_limit is not None and coupon.redemptions >= coupon.usage_limit:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cupom esgotado.")
