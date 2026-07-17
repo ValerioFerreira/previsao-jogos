@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.domains.auth.deps import client_ip, get_current_user, get_db
+from app.domains.enums import LegalDocumentType, UserRole
 from app.domains.legal import schemas, service
 from app.domains.users.models import User
 
@@ -34,10 +35,15 @@ def pending(user: User = Depends(get_current_user), db: Session = Depends(get_db
     if user.is_demo:
         return []  # conta demo compartilhada não precisa assinar documentos
     service.seed_default_documents(db)
+    docs = service.pending_for_user(db, user.id)
+    if user.role != UserRole.partner:
+        # Programa de Parceiros só é exigido de quem de fato é parceiro (role=partner) —
+        # contas comuns não devem ficar bloqueadas por um documento que não se aplica a elas.
+        docs = [d for d in docs if d.type != LegalDocumentType.partners_program]
     return [schemas.LegalDocumentSummary(
         id=str(d.id), type=d.type.value, version=d.version, title=d.title,
         published_at=d.published_at, accepted=False,
-    ) for d in service.pending_for_user(db, user.id)]
+    ) for d in docs]
 
 
 @router.post("/accept", response_model=schemas.AcceptResponse)

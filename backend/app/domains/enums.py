@@ -43,6 +43,7 @@ class LegalDocumentType(str, enum.Enum):
     lgpd = "lgpd"
     credits_policy = "credits_policy"
     promo_regulation = "promo_regulation"
+    partners_program = "partners_program"  # só exigido de contas role=partner, ver legal/router.py::pending
 
 
 class CreditTxType(str, enum.Enum):
