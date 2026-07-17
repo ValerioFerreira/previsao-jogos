@@ -124,10 +124,15 @@ def coupon_analytics(_: User = Depends(require_admin), db: Session = Depends(get
     return service.coupon_analytics(db)
 
 
-# ---------- afiliados ----------
+# ---------- parceiros (afiliados) ----------
 @router.get("/affiliates")
-def list_affiliates(_: User = Depends(require_admin), db: Session = Depends(get_db)):
-    return service.list_affiliates(db)
+def list_affiliates(status: str | None = None, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.list_affiliates(db, status)
+
+
+@router.get("/affiliates/{affiliate_id}")
+def affiliate_detail(affiliate_id: str, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.get_affiliate_detail(db, affiliate_id)
 
 
 @router.post("/affiliates", status_code=201)
@@ -140,6 +145,30 @@ def create_affiliate(data: schemas.AffiliateRequest, request: Request,
 def patch_affiliate(affiliate_id: str, data: schemas.AffiliatePatch, request: Request,
                     admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return service.patch_affiliate(db, admin, affiliate_id, data, client_ip(request))
+
+
+@router.post("/affiliates/{affiliate_id}/approve")
+def approve_affiliate(affiliate_id: str, request: Request,
+                      admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.approve_affiliate(db, admin, affiliate_id, client_ip(request))
+
+
+@router.post("/affiliates/{affiliate_id}/reject")
+def reject_affiliate(affiliate_id: str, data: schemas.AffiliateRejectRequest, request: Request,
+                     admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.reject_affiliate(db, admin, affiliate_id, data, client_ip(request))
+
+
+@router.post("/affiliates/{affiliate_id}/resend-invite")
+def resend_affiliate_invite(affiliate_id: str, request: Request,
+                            admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.resend_affiliate_invite(db, admin, affiliate_id, client_ip(request))
+
+
+@router.patch("/affiliates/{affiliate_id}/demo-access")
+def set_affiliate_demo_access(affiliate_id: str, data: schemas.AffiliateDemoAccessRequest, request: Request,
+                              admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.set_affiliate_demo_access(db, admin, affiliate_id, data, client_ip(request))
 
 
 @router.post("/affiliates/{affiliate_id}/payments", status_code=201)

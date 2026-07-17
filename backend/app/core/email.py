@@ -187,6 +187,55 @@ def _otp_email_html(titulo: str, code: str, ttl_min: int) -> str:
 </html>"""
 
 
+def _invite_email_html(titulo: str, subtitulo: str, cta_text: str, link: str) -> str:
+    """E-mail HTML com um botão de call-to-action (link), mesma identidade visual de
+    `_otp_email_html` — usado para o convite de parceiro (definir senha)."""
+    return f"""\
+<!doctype html>
+<html lang="pt-BR">
+<body style="margin:0;padding:0;background:#0b0f0e;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f0e;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#131a18;border-radius:16px;overflow:hidden;border:1px solid #1f2a27;">
+        <tr><td style="background:#10b981;padding:20px 28px;">
+          <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.02em;">ApostAI</span>
+        </td></tr>
+        <tr><td style="padding:32px 28px 8px;">
+          <p style="color:#e6efec;font-size:16px;font-weight:600;margin:0 0 12px;">{titulo}</p>
+          <p style="color:#9fb0ac;font-size:14px;line-height:1.6;margin:0 0 24px;">{subtitulo}</p>
+        </td></tr>
+        <tr><td style="padding:0 28px 28px;" align="center">
+          <a href="{link}" style="display:inline-block;background:#10b981;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:10px;">{cta_text}</a>
+        </td></tr>
+        <tr><td style="padding:0 28px 28px;">
+          <p style="color:#647670;font-size:12px;line-height:1.6;margin:0;">
+            Se o botão não funcionar, copie e cole este link no navegador:<br>
+            <span style="color:#9fb0ac;word-break:break-all;">{link}</span>
+          </p>
+        </td></tr>
+      </table>
+      <p style="color:#4a5852;font-size:11px;margin:16px 0 0;">ApostAI · previsão probabilística de partidas</p>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_partner_invite_email(to: str, link: str) -> None:
+    assunto = "Você foi aprovado como Parceiro ApostAI"
+    corpo = (
+        "Sua solicitação de parceria foi aprovada!\n"
+        f"Defina sua senha para acessar o portal do parceiro: {link}\n"
+        "Se você não solicitou, ignore este e-mail."
+    )
+    html = _invite_email_html(
+        "Bem-vindo(a) ao programa de parceiros",
+        "Sua solicitação foi aprovada. Defina sua senha para acessar o portal do parceiro e acompanhar seus resultados.",
+        "Definir minha senha", link,
+    )
+    get_email_sender().send(to, assunto, corpo, html_body=html)
+
+
 def send_otp_email(to: str, code: str, purpose: str) -> None:
     assunto = "Seu código de verificação" if purpose == "email_verify" else "Recuperação de senha"
     titulo = "Confirme seu e-mail" if purpose == "email_verify" else "Recuperação de senha"

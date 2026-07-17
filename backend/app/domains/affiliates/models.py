@@ -1,16 +1,21 @@
-"""Programa de afiliados/influenciadores. Independente de cupom (ver PaymentOrder.coupon_id
-vs affiliate_attribution_id em payments/models.py) — o link atribui a comissão, o cupom
-concede o benefício ao usuário; um pedido pode ter os dois, um só, ou nenhum."""
+"""Programa de parceiros (rótulo em português; nomes internos seguem em inglês —
+"affiliate"). Independente de cupom (ver PaymentOrder.coupon_id vs
+affiliate_attribution_id em payments/models.py) — a atribuição gera a comissão, o cupom
+concede o benefício ao usuário; um pedido pode ter os dois, um só, ou nenhum. Exceção
+deliberada: o cupom de um parceiro (Coupon.affiliate_id) atribui a venda automaticamente
+no checkout, ver payments/service.py::create_order — mas o CÁLCULO de desconto e de
+comissão continua sendo feito por cada domínio de forma independente."""
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_type
+from app.domains.enums import PartnerPaymentType
 
 
 class Affiliate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -20,17 +25,38 @@ class Affiliate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(60), unique=True, index=True, nullable=False)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_users.id", ondelete="SET NULL"), unique=True, nullable=True
-    )  # login do afiliado no portal (opcional)
+    )  # conta do parceiro no portal (role=partner) — criada na aprovação, ver affiliates/service.py
     commission_pct: Mapped[Decimal | None] = mapped_column(Numeric(6, 3), nullable=True)
     commission_fixed_brl: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
-    status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)  # active|paused
+    # pending (solicitação aguardando análise) | active | paused | rejected
+    status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    # credencial do portal do afiliado (email+CPF, ver affiliates/router.py::login) —
-    # deliberadamente mais fraca que senha+OTP (CPF não é segredo rotativo), aceitável
-    # porque só expõe estatísticas agregadas do próprio código, nunca dados de terceiros.
+    # CPF do parceiro — usado hoje para validar o acesso individual à conta demo
+    # compartilhada (ver DemoAccessLog / auth/service.py::login_demo).
     cpf: Mapped[str | None] = mapped_column(String(11), nullable=True)
+
+    # Forma de remuneração do parceiro (informativo, negociação de pagamento é externa).
+    payment_type: Mapped[PartnerPaymentType | None] = mapped_column(enum_type(PartnerPaymentType), nullable=True)
+    # Tier de desconto escolhido na solicitação (5/10/15/20/25) — orçamento de 30 pontos
+    # percentuais: comission_pct é derivado como (30 - discount_pct) na aprovação.
+    discount_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    # Permite ao admin revogar o acesso deste parceiro específico à conta demo
+    # compartilhada, sem precisar bloquear a conta demo inteira.
+    demo_access_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class DemoAccessLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Auditoria de uso da conta demo compartilhada — cada login-demo bem-sucedido grava
+    quem (via CPF do parceiro) acessou, para o admin controlar quem tem acesso."""
+    __tablename__ = "app_demo_access_logs"
+
+    affiliate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("app_affiliates.id", ondelete="CASCADE"), index=True
+    )
+    cpf_used: Mapped[str] = mapped_column(String(11), nullable=False)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class AffiliateAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):

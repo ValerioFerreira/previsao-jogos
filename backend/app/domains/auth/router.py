@@ -49,6 +49,14 @@ def login(data: schemas.LoginRequest, request: Request, db: Session = Depends(ge
     return service.login(db, data.email, data.password, ip, ua)
 
 
+@router.post("/login-demo", response_model=schemas.TokenResponse)
+def login_demo(data: schemas.DemoLoginRequest, request: Request, db: Session = Depends(get_db)):
+    ip = client_ip(request)
+    rate_limit.hit(f"login-demo:{ip}", max_events=10, window_sec=60)
+    ua = request.headers.get("user-agent")
+    return service.login_demo(db, data.email, data.password, data.cpf, ip, ua)
+
+
 @router.post("/refresh", response_model=schemas.TokenResponse)
 def refresh(data: schemas.RefreshRequest, request: Request, db: Session = Depends(get_db)):
     ua = request.headers.get("user-agent")

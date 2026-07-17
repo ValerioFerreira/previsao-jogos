@@ -122,7 +122,9 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
     # dia numa requisição que ia falhar de qualquer forma.
     is_wc_free = req.tournament == FREE_TOURNAMENT
     used_daily_free = False
-    if is_wc_free:
+    if is_wc_free or user.is_demo:
+        # Conta demo compartilhada (créditos ilimitados p/ parceiros divulgarem a
+        # plataforma) — tratada como gratuita: nunca debita nem toca no ledger da carteira.
         is_free = True
     else:
         used_daily_free = _try_claim_daily_free(db, user.id)

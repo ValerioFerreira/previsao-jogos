@@ -11,14 +11,16 @@ from sqlalchemy.orm import Session
 
 from datetime import datetime, timedelta, timezone
 
+from app.core.config import settings
 from app.domains.admin import schemas
 from app.domains.admin.models import AdminAuditLog, Banner, PlatformSetting
-from app.domains.affiliates.models import Affiliate, AffiliateCommission, AffiliatePayment
+from app.domains.affiliates import service as affiliates_service
+from app.domains.affiliates.models import Affiliate, AffiliateCommission, AffiliatePayment, DemoAccessLog
 from app.domains.analysis.models import Analysis
 from app.domains.analytics.models import Event
 from app.domains.bets.models import Bet
 from app.domains.campaigns.models import Campaign, CampaignAffiliate, CampaignCoupon, CampaignPackage
-from app.domains.enums import CreditTxType, PaymentStatus, UserStatus
+from app.domains.enums import CreditTxType, PaymentStatus, UserRole, UserStatus
 from app.domains.legal import service as legal_service
 from app.domains.payments.models import CreditPackage, PaymentOrder
 from app.domains.promotions.models import Coupon, Promotion
@@ -27,6 +29,8 @@ from app.domains.support import service as support_service
 from app.domains.users.models import User
 from app.domains.wallet.models import CreditTransaction, Wallet
 from app.domains.wallet.service import get_or_create_wallet, post_transaction
+
+_PARTNER_PROMOTION_CODE = "parceiros"
 
 _CREDIT_KINDS = {
     "manual_adjustment": CreditTxType.manual_adjustment,
@@ -305,58 +309,218 @@ def coupon_analytics(db: Session) -> dict:
     return {"items": out}
 
 
-# --------------------------------------------------------------- afiliados
+# --------------------------------------------------------------- parceiros (afiliados)
 def _affiliate_out(a: Affiliate, db: Session) -> dict:
     due = db.execute(select(func.coalesce(func.sum(AffiliateCommission.amount_brl), 0)).where(
         AffiliateCommission.affiliate_id == a.id, AffiliateCommission.status == "devida")).scalar_one()
     paid = db.execute(select(func.coalesce(func.sum(AffiliateCommission.amount_brl), 0)).where(
         AffiliateCommission.affiliate_id == a.id, AffiliateCommission.status == "paga")).scalar_one()
+    account_status = None
+    if a.user_id:
+        u = db.get(User, a.user_id)
+        account_status = u.status.value if u else None
     return {"id": str(a.id), "name": a.name, "code": a.code, "user_id": str(a.user_id) if a.user_id else None,
            "commission_pct": str(a.commission_pct) if a.commission_pct else None,
            "commission_fixed_brl": str(a.commission_fixed_brl) if a.commission_fixed_brl else None,
            "status": a.status, "notes": a.notes,
            "contact_email": a.contact_email, "contact_phone": a.contact_phone,
+           "payment_type": a.payment_type.value if a.payment_type else None,
+           "discount_pct": str(a.discount_pct) if a.discount_pct is not None else None,
+           "demo_access_enabled": a.demo_access_enabled, "account_status": account_status,
            "commission_due_brl": str(due), "commission_paid_brl": str(paid)}
 
 
+def _get_affiliate(db: Session, affiliate_id: str) -> Affiliate:
+    try:
+        a = db.get(Affiliate, uuid.UUID(affiliate_id))
+    except ValueError:
+        a = None
+    if a is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Parceiro não encontrado.")
+    return a
+
+
+def _get_or_create_partner_promotion(db: Session) -> Promotion:
+    from app.domains.enums import PromotionType
+    promo = db.execute(select(Promotion).where(Promotion.code == _PARTNER_PROMOTION_CODE)).scalar_one_or_none()
+    if promo is None:
+        promo = Promotion(code=_PARTNER_PROMOTION_CODE, name="Cupons de parceiros",
+                          type=PromotionType.coupon, active=True)
+        db.add(promo)
+        db.flush()
+    return promo
+
+
+def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -> None:
+    """Cria (ou reaproveita) a conta do parceiro (role=partner) + o cupom vinculado ao seu
+    código, e envia o e-mail com o link para definir senha (mesmo padrão de token de
+    escopo restrito usado no cadastro comum — ver auth/service.py::set_password)."""
+    from app.core import security
+    from app.core.email import EmailSendError, send_partner_invite_email
+    from app.domains.enums import CouponDiscountType
+
+    if not (affiliate.cpf and affiliate.contact_email and affiliate.contact_phone):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            detail="CPF, e-mail e telefone são obrigatórios para enviar o convite.")
+
+    user = db.get(User, affiliate.user_id) if affiliate.user_id else None
+    if user is None:
+        user = db.execute(select(User).where(User.email == affiliate.contact_email.lower())).scalar_one_or_none()
+    if user is None:
+        user = User(
+            full_name=affiliate.name, email=affiliate.contact_email.lower(),
+            cpf=affiliate.cpf, phone=affiliate.contact_phone,
+            status=UserStatus.pending_verification, role=UserRole.partner,
+        )
+        db.add(user)
+        db.flush()
+    else:
+        user.role = UserRole.partner
+    affiliate.user_id = user.id
+
+    if affiliate.discount_pct is not None:
+        promo = _get_or_create_partner_promotion(db)
+        coupon = db.execute(select(Coupon).where(Coupon.affiliate_id == affiliate.id)).scalar_one_or_none()
+        if coupon is None:
+            db.add(Coupon(
+                promotion_id=promo.id, code=affiliate.code.strip().upper(),
+                discount_type=CouponDiscountType.percentage, discount_value=affiliate.discount_pct,
+                affiliate_id=affiliate.id, active=True,
+            ))
+        else:
+            coupon.discount_value = affiliate.discount_pct
+            coupon.active = True
+
+    token = security.create_access_token(str(user.id), extra={"scope": "partner_invite"})
+    link = f"{settings.frontend_base_url}/parceiro/definir-senha?token={token}"
+    try:
+        send_partner_invite_email(affiliate.contact_email, link)
+    except EmailSendError as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY,
+                            detail="Não foi possível enviar o e-mail de convite. Tente novamente em instantes.") from e
+
+
 def create_affiliate(db: Session, admin: User, data: schemas.AffiliateRequest, ip) -> dict:
+    from app.domains.enums import PartnerPaymentType
     if db.execute(select(Affiliate).where(Affiliate.code == data.code)).scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Código de afiliado já existe.")
     a = Affiliate(name=data.name, code=data.code.strip().lower(),
                  user_id=uuid.UUID(data.user_id) if data.user_id else None,
                  commission_pct=data.commission_pct, commission_fixed_brl=data.commission_fixed_brl,
                  contact_email=data.contact_email, contact_phone=data.contact_phone,
-                 cpf=data.cpf, notes=data.notes)
+                 cpf=data.cpf, notes=data.notes,
+                 payment_type=PartnerPaymentType(data.payment_type) if data.payment_type else None,
+                 discount_pct=data.discount_pct, status="active")
     db.add(a); db.flush()
     audit(db, admin, "affiliate_create", "affiliate", a.id, after={"code": a.code}, ip=ip)
+    # Recrutamento direto pelo admin (sem passar pela fila de solicitação): já provisiona
+    # a conta do parceiro e envia o convite, se houver contato completo o bastante e o
+    # afiliado não estiver sendo linkado a uma conta de usuário já existente.
+    if data.user_id is None and a.cpf and a.contact_email and a.contact_phone:
+        _create_partner_invite(db, admin, a, ip)
     db.commit()
     return _affiliate_out(a, db)
 
 
 def patch_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.AffiliatePatch, ip) -> dict:
-    try:
-        a = db.get(Affiliate, uuid.UUID(affiliate_id))
-    except ValueError:
-        a = None
-    if a is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Afiliado não encontrado.")
+    from app.domains.enums import PartnerPaymentType
+    a = _get_affiliate(db, affiliate_id)
     before = {"status": a.status, "commission_pct": str(a.commission_pct) if a.commission_pct else None}
     if data.name is not None: a.name = data.name
-    if data.commission_pct is not None: a.commission_pct = data.commission_pct
     if data.commission_fixed_brl is not None: a.commission_fixed_brl = data.commission_fixed_brl
     if data.status is not None: a.status = data.status
     if data.contact_email is not None: a.contact_email = data.contact_email
     if data.contact_phone is not None: a.contact_phone = data.contact_phone
     if data.cpf is not None: a.cpf = data.cpf
     if data.notes is not None: a.notes = data.notes
+    if data.payment_type is not None: a.payment_type = PartnerPaymentType(data.payment_type)
+    if data.discount_pct is not None:
+        a.discount_pct = data.discount_pct
+        coupon = db.execute(select(Coupon).where(Coupon.affiliate_id == a.id)).scalar_one_or_none()
+        if coupon is not None:
+            coupon.discount_value = data.discount_pct
+    # commission_pct explícito sempre vence; senão, se o tier de desconto mudou, deriva
+    # da fórmula (30 - desconto) — mesma regra usada na aprovação da solicitação.
+    if data.commission_pct is not None:
+        a.commission_pct = data.commission_pct
+    elif data.discount_pct is not None:
+        a.commission_pct = affiliates_service.COMMISSION_BUDGET_PCT - data.discount_pct
     audit(db, admin, "affiliate_update", "affiliate", a.id, before=before,
           after={"status": a.status}, ip=ip)
     db.commit()
     return _affiliate_out(a, db)
 
 
-def list_affiliates(db: Session) -> dict:
-    rows = db.execute(select(Affiliate).order_by(Affiliate.created_at.desc())).scalars().all()
+def approve_affiliate(db: Session, admin: User, affiliate_id: str, ip) -> dict:
+    a = _get_affiliate(db, affiliate_id)
+    if a.status != "pending":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Solicitação não está pendente.")
+    before = {"status": a.status}
+    a.status = "active"
+    _create_partner_invite(db, admin, a, ip)
+    audit(db, admin, "affiliate_approve", "affiliate", a.id, before=before, after={"status": a.status}, ip=ip)
+    db.commit()
+    return _affiliate_out(a, db)
+
+
+def reject_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.AffiliateRejectRequest, ip) -> dict:
+    a = _get_affiliate(db, affiliate_id)
+    if a.status != "pending":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Solicitação não está pendente.")
+    before = {"status": a.status}
+    a.status = "rejected"
+    if data.reason:
+        a.notes = data.reason
+    audit(db, admin, "affiliate_reject", "affiliate", a.id, before=before,
+          after={"status": a.status, "reason": data.reason}, ip=ip)
+    db.commit()
+    return _affiliate_out(a, db)
+
+
+def resend_affiliate_invite(db: Session, admin: User, affiliate_id: str, ip) -> dict:
+    a = _get_affiliate(db, affiliate_id)
+    if a.status != "active":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            detail="Só é possível reenviar convite para parceiros ativos.")
+    _create_partner_invite(db, admin, a, ip)
+    audit(db, admin, "affiliate_resend_invite", "affiliate", a.id, ip=ip)
+    db.commit()
+    return _affiliate_out(a, db)
+
+
+def set_affiliate_demo_access(db: Session, admin: User, affiliate_id: str,
+                              data: schemas.AffiliateDemoAccessRequest, ip) -> dict:
+    a = _get_affiliate(db, affiliate_id)
+    before = {"demo_access_enabled": a.demo_access_enabled}
+    a.demo_access_enabled = data.enabled
+    audit(db, admin, "affiliate_demo_access", "affiliate", a.id, before=before,
+          after={"demo_access_enabled": a.demo_access_enabled}, ip=ip)
+    db.commit()
+    return _affiliate_out(a, db)
+
+
+def get_affiliate_detail(db: Session, affiliate_id: str) -> dict:
+    a = _get_affiliate(db, affiliate_id)
+    stats = affiliates_service.compute_portal_stats(db, a) if a.user_id else {
+        "code": a.code, "link": f"{settings.frontend_base_url}/?ref={a.code}",
+        "clicks": 0, "signups": 0, "buyers": 0, "revenue_brl": "0",
+        "commission_due_brl": "0", "commission_paid_brl": "0",
+    }
+    demo_logs = db.execute(select(DemoAccessLog).where(
+        DemoAccessLog.affiliate_id == a.id).order_by(DemoAccessLog.created_at.desc()).limit(50)).scalars().all()
+    return {
+        **_affiliate_out(a, db), **stats,
+        "payments": list_affiliate_payments(db, affiliate_id)["items"],
+        "demo_access_logs": [{"cpf_used": l.cpf_used, "ip": l.ip, "created_at": l.created_at.isoformat()}
+                             for l in demo_logs],
+    }
+
+
+def list_affiliates(db: Session, status_filter: str | None = None) -> dict:
+    stmt = select(Affiliate)
+    if status_filter:
+        stmt = stmt.where(Affiliate.status == status_filter)
+    rows = db.execute(stmt.order_by(Affiliate.created_at.desc())).scalars().all()
     return {"items": [_affiliate_out(a, db) for a in rows]}
 
 

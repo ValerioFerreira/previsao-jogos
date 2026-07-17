@@ -74,6 +74,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class DemoLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+    cpf: str  # CPF do parceiro (allowlist da conta demo compartilhada)
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

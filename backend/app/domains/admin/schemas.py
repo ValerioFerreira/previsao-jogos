@@ -91,7 +91,7 @@ class CouponPatch(BaseModel):
     active: bool | None = None
 
 
-# ---------- afiliados ----------
+# ---------- parceiros (afiliados) ----------
 class AffiliateRequest(BaseModel):
     name: str
     code: str
@@ -100,19 +100,31 @@ class AffiliateRequest(BaseModel):
     commission_fixed_brl: Decimal | None = None
     contact_email: str | None = None
     contact_phone: str | None = None
-    cpf: str | None = None  # com contact_email, é a credencial de login do portal do afiliado
+    cpf: str | None = None  # também usado para validar o acesso à conta demo
     notes: str | None = None
+    payment_type: str | None = None  # pf | pj
+    discount_pct: Decimal | None = None  # tier de desconto (5/10/15/20/25) do cupom do parceiro
 
 
 class AffiliatePatch(BaseModel):
     name: str | None = None
     commission_pct: Decimal | None = None
     commission_fixed_brl: Decimal | None = None
-    status: str | None = None  # active | paused
+    status: str | None = None  # pending | active | paused | rejected
     contact_email: str | None = None
     contact_phone: str | None = None
     cpf: str | None = None
     notes: str | None = None
+    payment_type: str | None = None  # pf | pj
+    discount_pct: Decimal | None = None  # também atualiza o cupom do parceiro e recalcula commission_pct
+
+
+class AffiliateRejectRequest(BaseModel):
+    reason: str | None = None
+
+
+class AffiliateDemoAccessRequest(BaseModel):
+    enabled: bool
 
 
 # ---------- pacotes de crédito ----------

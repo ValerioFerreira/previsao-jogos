@@ -26,6 +26,7 @@ from app.domains.wallet.service import get_or_create_wallet, post_transaction
 logger = logging.getLogger("app.auth")
 
 _SETUP_SCOPE = "pw_setup"
+_PARTNER_INVITE_SCOPE = "partner_invite"
 
 # Bônus de boas-vindas: toda conta nova nasce com créditos grátis. Idempotente pela
 # idempotency_key (welcome-bonus:<user_id>) — reativar/repetir não credita de novo.
@@ -267,24 +268,33 @@ def set_password(db: Session, setup_token: str, password: str, ip: str | None) -
         payload = security.decode_access_token(setup_token)
     except Exception:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Token inválido ou expirado.")
-    if payload.get("scope") != _SETUP_SCOPE:
+    scope = payload.get("scope")
+    if scope not in (_SETUP_SCOPE, _PARTNER_INVITE_SCOPE):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Token inválido para esta operação.")
     user = db.get(User, uuid.UUID(payload["sub"]))
-    if user is None or user.email_verified_at is None:
+    if user is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Não foi possível ativar a conta.")
+    if scope == _SETUP_SCOPE and user.email_verified_at is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="E-mail não verificado.")
+
     user.password_hash = security.hash_password(password)
     user.status = UserStatus.active
-    wallet = get_or_create_wallet(db, user.id)   # carteira criada na ativação
-    # Bônus de boas-vindas (8 créditos grátis) — idempotente por conta.
-    if WELCOME_CREDITS > 0:
-        post_transaction(
-            db, wallet=wallet, tx_type=CreditTxType.bonus, amount=WELCOME_CREDITS,
-            idempotency_key=f"welcome-bonus:{user.id}",
-            description="Bônus de boas-vindas (créditos grátis)",
-        )
-    if user.referral_code is None:
-        user.referral_code = _generate_referral_code(db, user.full_name)
-    _grant_referral_bonus_if_pending(db, user)
+
+    if scope == _SETUP_SCOPE:
+        wallet = get_or_create_wallet(db, user.id)   # carteira criada na ativação
+        # Bônus de boas-vindas (8 créditos grátis) — idempotente por conta.
+        if WELCOME_CREDITS > 0:
+            post_transaction(
+                db, wallet=wallet, tx_type=CreditTxType.bonus, amount=WELCOME_CREDITS,
+                idempotency_key=f"welcome-bonus:{user.id}",
+                description="Bônus de boas-vindas (créditos grátis)",
+            )
+        if user.referral_code is None:
+            user.referral_code = _generate_referral_code(db, user.full_name)
+        _grant_referral_bonus_if_pending(db, user)
+    # scope partner_invite: só ativa a conta e define a senha — o parceiro não passa
+    # pelo cadastro comum (sem OTP/bônus de boas-vindas/indicação).
+
     _log(db, AuthEventType.password_set, user.id, ip)
     tokens = _issue_tokens(db, user, ip, None)
     db.commit()
@@ -336,6 +346,27 @@ def login(db: Session, email: str, password: str, ip: str | None, ua: str | None
     _log(db, AuthEventType.login_success, user.id, ip, ua)
     analytics_service.track(db, "login", user_id=user.id)
     tokens = _issue_tokens(db, user, ip, ua)
+    db.commit()
+    return tokens
+
+
+def login_demo(db: Session, email: str, password: str, cpf: str, ip: str | None, ua: str | None) -> schemas.TokenResponse:
+    """Conta demo compartilhada — só autentica se o CPF informado estiver na allowlist de
+    um parceiro ativo (`Affiliate.demo_access_enabled`), além do e-mail+senha da conta
+    demo em si. Reaproveita `login()` inteiro para não duplicar sessão/lockout/auditoria."""
+    from app.domains.affiliates import service as affiliates_service
+    from app.domains.affiliates.models import DemoAccessLog
+
+    generic = HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Acesso inválido.")
+    affiliate = affiliates_service.validate_demo_cpf(db, cpf)
+    if affiliate is None:
+        raise generic
+    user = db.execute(select(User).where(User.email == email.lower())).scalar_one_or_none()
+    if user is None or not user.is_demo:
+        raise generic
+
+    tokens = login(db, email, password, ip, ua)
+    db.add(DemoAccessLog(affiliate_id=affiliate.id, cpf_used=affiliate.cpf, ip=ip))
     db.commit()
     return tokens
 

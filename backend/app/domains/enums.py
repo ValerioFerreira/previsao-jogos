@@ -15,6 +15,7 @@ class UserRole(str, enum.Enum):
     user = "user"
     admin = "admin"
     superadmin = "superadmin"
+    partner = "partner"
 
 
 class OtpPurpose(str, enum.Enum):
@@ -135,3 +136,8 @@ class PromotionType(str, enum.Enum):
     cashback = "cashback"
     referral = "referral"
     seasonal = "seasonal"
+
+
+class PartnerPaymentType(str, enum.Enum):
+    pf = "pf"
+    pj = "pj"

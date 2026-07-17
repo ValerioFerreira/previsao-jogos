@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
-  const { login, isAuthenticated } = useAuth();
+  const { isAuthenticated, user, setSession } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,16 +21,17 @@ export default function LoginPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated) router.replace("/");
-  }, [isAuthenticated, router]);
+    if (isAuthenticated) router.replace(user?.role === "partner" ? "/parceiro" : "/");
+  }, [isAuthenticated, user, router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     setBusy(true);
     try {
-      await login(email.trim(), password);
-      router.push("/");
+      const t = await authApi.login(email.trim(), password);
+      await setSession(t);
+      router.push(t.user.role === "partner" ? "/parceiro" : "/");
     } catch (e) {
       setErr((e as Error).message || "Não foi possível entrar.");
     } finally {

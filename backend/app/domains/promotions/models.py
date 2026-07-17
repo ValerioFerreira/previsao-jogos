@@ -55,8 +55,11 @@ class Coupon(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     redemptions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # Campos tipados (a atribuição de afiliado é INDEPENDENTE do cupom — ver
-    # PaymentOrder.affiliate_attribution_id no domínio payments/affiliates).
+    # Campos tipados (o CÁLCULO de desconto é independente do de comissão de afiliado —
+    # ver PaymentOrder.affiliate_attribution_id no domínio payments/affiliates). Exceção
+    # deliberada de atribuição (não de cálculo): quando affiliate_id está setado, este é
+    # o "cupom de parceiro" — usá-lo no checkout também atribui a venda ao parceiro para
+    # fins de comissão (ver payments/service.py::create_order).
     discount_type: Mapped[CouponDiscountType | None] = mapped_column(
         enum_type(CouponDiscountType), nullable=True
     )
@@ -65,6 +68,9 @@ class Coupon(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     min_purchase_brl: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     package_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_credit_packages.id", ondelete="SET NULL"), nullable=True
+    )
+    affiliate_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_affiliates.id", ondelete="SET NULL"), nullable=True
     )
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

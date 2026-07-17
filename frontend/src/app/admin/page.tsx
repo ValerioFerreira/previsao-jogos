@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Shield, Ban, CheckCircle2, Coins, Plus, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
@@ -126,7 +127,12 @@ export default function AdminPage() {
     min_purchase_brl: "", first_purchase_only: false, description: "", valid_days: "30",
   });
   const [newPackage, setNewPackage] = useState({ name: "", credits: "10", price_brl: "10.00", bonus_credits: "0" });
-  const [newAffiliate, setNewAffiliate] = useState({ name: "", code: "", commission_pct: "10", contact_email: "", contact_phone: "" });
+  const [newAffiliate, setNewAffiliate] = useState({
+    name: "", code: "", commission_pct: "10", contact_email: "", contact_phone: "",
+    cpf: "", payment_type: "", discount_pct: "",
+  });
+  const [partnerFilter, setPartnerFilter] = useState("");
+  const [partnerSortByCommission, setPartnerSortByCommission] = useState(false);
   const [newBanner, setNewBanner] = useState({ title: "", body: "", image_url: "", priority: "0", sort_order: "0" });
   const [newCampaign, setNewCampaign] = useState({ name: "", priority: "0" });
   const [newSetting, setNewSetting] = useState({ key: "", value: "" });
@@ -150,6 +156,8 @@ export default function AdminPage() {
   const [affPaymentForm, setAffPaymentForm] = useState({ amount_brl: "0", method: "pix" });
   const [affPaymentsListModal, setAffPaymentsListModal] = useState<{ affiliate: Record<string, unknown>; items: Record<string, unknown>[] } | null>(null);
   const [campaignDashModal, setCampaignDashModal] = useState<Record<string, unknown> | null>(null);
+  const [rejectModal, setRejectModal] = useState<Record<string, unknown> | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [pickerModal, setPickerModal] = useState<{ campaignId: string; kind: "banner" | "package" | "coupon" | "affiliate" } | null>(null);
 
   useEffect(() => { if (!loading && !isAdmin) router.replace("/"); }, [loading, isAdmin, router]);
@@ -296,13 +304,47 @@ export default function AdminPage() {
     } catch (e) { setErr((e as Error).message); }
   }
 
+  async function loadAffiliates(status = partnerFilter) {
+    try { setAffiliates((await adminApi.affiliates(status || undefined)).items); } catch (e) { setErr((e as Error).message); }
+  }
+
   async function createAffiliate(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await adminApi.createAffiliate({ ...newAffiliate, commission_pct: Number(newAffiliate.commission_pct) });
-      setNewAffiliate({ name: "", code: "", commission_pct: "10", contact_email: "", contact_phone: "" });
-      setAffiliates((await adminApi.affiliates()).items);
+      await adminApi.createAffiliate({
+        ...newAffiliate, commission_pct: Number(newAffiliate.commission_pct),
+        payment_type: newAffiliate.payment_type || undefined,
+        discount_pct: newAffiliate.discount_pct ? Number(newAffiliate.discount_pct) : undefined,
+      });
+      setNewAffiliate({ name: "", code: "", commission_pct: "10", contact_email: "", contact_phone: "", cpf: "", payment_type: "", discount_pct: "" });
+      await loadAffiliates();
     } catch (e) { setErr((e as Error).message); }
+  }
+
+  async function approveAffiliate(a: Record<string, unknown>) {
+    try { await adminApi.approveAffiliate(String(a.id)); await loadAffiliates(); } catch (e) { setErr((e as Error).message); }
+  }
+
+  function openReject(a: Record<string, unknown>) {
+    setRejectModal(a);
+    setRejectReason("");
+  }
+  async function submitReject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!rejectModal) return;
+    try {
+      await adminApi.rejectAffiliate(String(rejectModal.id), rejectReason || undefined);
+      setRejectModal(null);
+      await loadAffiliates();
+    } catch (e) { setErr((e as Error).message); }
+  }
+
+  async function resendInvite(a: Record<string, unknown>) {
+    try { await adminApi.resendAffiliateInvite(String(a.id)); await loadAffiliates(); } catch (e) { setErr((e as Error).message); }
+  }
+
+  async function toggleDemoAccess(a: Record<string, unknown>) {
+    try { await adminApi.setAffiliateDemoAccess(String(a.id), !a.demo_access_enabled); await loadAffiliates(); } catch (e) { setErr((e as Error).message); }
   }
 
   async function createBanner(e: React.FormEvent) {
@@ -506,7 +548,7 @@ export default function AdminPage() {
           <TabsTrigger value="promocoes">Promoções</TabsTrigger>
           <TabsTrigger value="cupons">Cupons</TabsTrigger>
           <TabsTrigger value="pacotes">Pacotes</TabsTrigger>
-          <TabsTrigger value="afiliados">Afiliados</TabsTrigger>
+          <TabsTrigger value="afiliados">Parceiros</TabsTrigger>
           <TabsTrigger value="banners">Banners</TabsTrigger>
           <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
@@ -732,16 +774,53 @@ export default function AdminPage() {
         {/* ---------------- Afiliados ---------------- */}
         <TabsContent value="afiliados">
           <Card>
-            <CardHeader><CardTitle className="text-lg">Afiliados</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Parceiros</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <form onSubmit={createAffiliate} className="flex flex-wrap gap-2 items-end">
                 <Field label="Nome" className="flex-1 min-w-40"><Input value={newAffiliate.name} onChange={(e) => setNewAffiliate({ ...newAffiliate, name: e.target.value })} required /></Field>
                 <Field label="Código (link)"><Input className="w-32" value={newAffiliate.code} onChange={(e) => setNewAffiliate({ ...newAffiliate, code: e.target.value })} required /></Field>
                 <Field label="Comissão (%)"><Input className="w-24" type="number" value={newAffiliate.commission_pct} onChange={(e) => setNewAffiliate({ ...newAffiliate, commission_pct: e.target.value })} /></Field>
+                <Field label="CPF"><Input className="w-32" value={newAffiliate.cpf} onChange={(e) => setNewAffiliate({ ...newAffiliate, cpf: e.target.value })} /></Field>
                 <Field label="E-mail de contato"><Input className="w-52" type="email" value={newAffiliate.contact_email} onChange={(e) => setNewAffiliate({ ...newAffiliate, contact_email: e.target.value })} /></Field>
                 <Field label="Telefone de contato"><Input className="w-40" value={newAffiliate.contact_phone} onChange={(e) => setNewAffiliate({ ...newAffiliate, contact_phone: e.target.value })} /></Field>
-                <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Criar</Button>
+                <Field label="Forma de pagamento">
+                  <select className="border rounded-md px-2 py-2 text-sm bg-background w-28" value={newAffiliate.payment_type} onChange={(e) => setNewAffiliate({ ...newAffiliate, payment_type: e.target.value })}>
+                    <option value="">—</option>
+                    <option value="pf">PF</option>
+                    <option value="pj">PJ</option>
+                  </select>
+                </Field>
+                <Field label="Desconto do cupom (%)">
+                  <select className="border rounded-md px-2 py-2 text-sm bg-background w-28" value={newAffiliate.discount_pct} onChange={(e) => setNewAffiliate({ ...newAffiliate, discount_pct: e.target.value })}>
+                    <option value="">—</option>
+                    {[5, 10, 15, 20, 25].map((d) => <option key={d} value={d}>{d}%</option>)}
+                  </select>
+                </Field>
+                <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Criar (já aprovado)</Button>
               </form>
+              <p className="text-xs text-muted-foreground">
+                Preenchendo CPF + e-mail + telefone, o convite para definir senha é enviado automaticamente.
+                Solicitações públicas (via /parceiro/solicitar) aparecem abaixo como &quot;pendente&quot;.
+              </p>
+
+              <div className="flex gap-1.5 flex-wrap">
+                {[
+                  { key: "", label: "Todos" },
+                  { key: "pending", label: "Pendentes" },
+                  { key: "active", label: "Ativos" },
+                  { key: "paused", label: "Pausados" },
+                  { key: "rejected", label: "Rejeitados" },
+                ].map((f) => (
+                  <Button key={f.key} size="sm" variant={partnerFilter === f.key ? "default" : "outline"}
+                    onClick={() => { setPartnerFilter(f.key); loadAffiliates(f.key); }}>
+                    {f.label}
+                  </Button>
+                ))}
+                <Button size="sm" variant={partnerSortByCommission ? "default" : "outline"}
+                  onClick={() => setPartnerSortByCommission((v) => !v)}>
+                  Ordenar por comissão
+                </Button>
+              </div>
 
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-sm">
@@ -757,9 +836,20 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {affiliates.map((a) => (
+                    {(partnerSortByCommission
+                      ? [...affiliates].sort((a, b) =>
+                          (Number(b.commission_due_brl) + Number(b.commission_paid_brl)) -
+                          (Number(a.commission_due_brl) + Number(a.commission_paid_brl)))
+                      : affiliates
+                    ).map((a) => (
                       <tr key={String(a.id)} className="hover:bg-muted/30 align-top">
-                        <td className="px-3 py-2 font-medium">{String(a.name)} <span className="block text-[10px] text-muted-foreground">{a.status === "active" ? "ativo" : "pausado"}</span></td>
+                        <td className="px-3 py-2 font-medium">
+                          <Link href={`/admin/parceiros/${a.id}`} className="hover:underline">{String(a.name)}</Link>
+                          <span className="block text-[10px] text-muted-foreground">
+                            {{ pending: "pendente", active: "ativo", paused: "pausado", rejected: "rejeitado" }[String(a.status)] ?? String(a.status)}
+                            {a.account_status ? ` · conta ${a.account_status}` : ""}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 font-mono text-xs">{String(a.code)}</td>
                         <td className="px-3 py-2 text-xs text-muted-foreground">
                           {a.contact_email ? <div>{String(a.contact_email)}</div> : null}
@@ -770,24 +860,43 @@ export default function AdminPage() {
                         <td className="px-3 py-2 text-right font-mono">R$ {String(a.commission_due_brl)}</td>
                         <td className="px-3 py-2 text-right font-mono">R$ {String(a.commission_paid_brl)}</td>
                         <td className="px-3 py-2">
-                          <div className="flex flex-col gap-1 items-stretch">
-                            <Button size="sm" variant="outline" onClick={() => openAffPayment(a)}>Registrar pagamento</Button>
-                            <Button size="sm" variant="outline" onClick={() => openAffPaymentsList(a)}>Ver pagamentos</Button>
-                            <Button size="sm" variant="outline" onClick={async () => { await adminApi.patchAffiliate(String(a.id), { status: a.status === "active" ? "paused" : "active" }); setAffiliates((await adminApi.affiliates()).items); }}>
-                              {a.status === "active" ? "Pausar" : "Ativar"}
-                            </Button>
+                          <div className="flex flex-col gap-1 items-stretch min-w-36">
+                            {a.status === "pending" && (
+                              <>
+                                <Button size="sm" onClick={() => approveAffiliate(a)}>Aprovar</Button>
+                                <Button size="sm" variant="destructive" onClick={() => openReject(a)}>Rejeitar</Button>
+                              </>
+                            )}
+                            {a.status === "active" && (
+                              <>
+                                <Button size="sm" variant="outline" onClick={() => resendInvite(a)}>Reenviar convite</Button>
+                                <Button size="sm" variant="outline" onClick={() => openAffPayment(a)}>Registrar pagamento</Button>
+                                <Button size="sm" variant="outline" onClick={() => openAffPaymentsList(a)}>Ver pagamentos</Button>
+                                <Button size="sm" variant="outline" onClick={() => toggleDemoAccess(a)}>
+                                  {a.demo_access_enabled ? "Revogar conta demo" : "Permitir conta demo"}
+                                </Button>
+                              </>
+                            )}
+                            {(a.status === "active" || a.status === "paused") && (
+                              <Button size="sm" variant="outline" onClick={async () => { await adminApi.patchAffiliate(String(a.id), { status: a.status === "active" ? "paused" : "active" }); await loadAffiliates(); }}>
+                                {a.status === "active" ? "Pausar" : "Ativar"}
+                              </Button>
+                            )}
+                            <Link href={`/admin/parceiros/${a.id}`}>
+                              <Button size="sm" variant="ghost" className="w-full">Ver detalhes</Button>
+                            </Link>
                           </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {affiliates.length === 0 && <p className="text-sm text-muted-foreground p-3">Nenhum afiliado.</p>}
+                {affiliates.length === 0 && <p className="text-sm text-muted-foreground p-3">Nenhum parceiro nesse filtro.</p>}
               </div>
 
               <div className="rounded-lg border p-4">
-                <div className="text-sm font-medium mb-2">Janela de atribuição de afiliado</div>
-                <p className="text-xs text-muted-foreground mb-3">Por quantos dias um clique no link de afiliado continua valendo para atribuir a comissão de uma compra futura.</p>
+                <div className="text-sm font-medium mb-2">Janela de atribuição de parceiro</div>
+                <p className="text-xs text-muted-foreground mb-3">Por quantos dias um clique no link do parceiro continua valendo para atribuir a comissão de uma compra futura (o cupom do parceiro atribui na hora, independente dessa janela).</p>
                 <form onSubmit={saveAttributionDays} className="flex flex-wrap gap-2 items-end">
                   <Field label="Dias"><Input className="w-32" type="number" min="1" value={attributionDays} onChange={(e) => setAttributionDays(e.target.value)} required /></Field>
                   <Button type="submit" size="sm">Salvar</Button>
@@ -795,6 +904,15 @@ export default function AdminPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Modal open={!!rejectModal} onClose={() => setRejectModal(null)} title={`Rejeitar solicitação — ${rejectModal?.name ?? ""}`}>
+            <form onSubmit={submitReject} className="space-y-3">
+              <Field label="Motivo (opcional, fica registrado)">
+                <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} />
+              </Field>
+              <Button type="submit" variant="destructive" className="w-full">Confirmar rejeição</Button>
+            </form>
+          </Modal>
         </TabsContent>
 
         {/* ---------------- Banners ---------------- */}

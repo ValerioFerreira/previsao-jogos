@@ -54,6 +54,7 @@ def create_order(db: Session, user: User, data: schemas.CheckoutRequest) -> sche
     coupon_id = None
     if data.coupon_code:
         from app.domains.promotions import schemas as promo_schemas
+        from app.domains.promotions.models import Coupon
         preview = promotions_service.validate_coupon(db, user.id, promo_schemas.CouponValidateRequest(
             code=data.coupon_code, amount_brl=amount, credits=credits,
             package_id=str(package_id) if package_id else None,
@@ -62,6 +63,13 @@ def create_order(db: Session, user: User, data: schemas.CheckoutRequest) -> sche
         amount = preview.final_amount_brl
         credits += preview.bonus_credits
         analytics_service.track(db, "coupon_applied", user_id=user.id, code=data.coupon_code)
+
+        # Cupom de parceiro (Coupon.affiliate_id) — usá-lo no checkout já atribui a venda
+        # ao parceiro para fins de comissão, sem depender de clique prévio em ?ref=código
+        # (o CÁLCULO de desconto e de comissão continuam totalmente independentes).
+        coupon = db.get(Coupon, coupon_id)
+        if coupon is not None and coupon.affiliate_id is not None:
+            affiliates_service.attach_checkout_attribution(db, user_id=user.id, affiliate_id=coupon.affiliate_id)
 
     discount_amount = (original_amount - amount) if original_amount > amount else Decimal("0")
 

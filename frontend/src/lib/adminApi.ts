@@ -50,11 +50,19 @@ export const adminApi = {
   patchPackage: (id: string, body: Record<string, unknown>) =>
     authFetch(`/admin/packages/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
-  affiliates: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/affiliates"),
+  affiliates: (status?: string) =>
+    authFetch<{ items: Record<string, unknown>[] }>(`/admin/affiliates${status ? `?status=${status}` : ""}`),
+  affiliateDetail: (id: string) => authFetch<Record<string, unknown>>(`/admin/affiliates/${id}`),
   createAffiliate: (body: Record<string, unknown>) =>
     authFetch("/admin/affiliates", { method: "POST", body: JSON.stringify(body) }),
   patchAffiliate: (id: string, body: Record<string, unknown>) =>
     authFetch(`/admin/affiliates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  approveAffiliate: (id: string) => authFetch(`/admin/affiliates/${id}/approve`, { method: "POST" }),
+  rejectAffiliate: (id: string, reason?: string) =>
+    authFetch(`/admin/affiliates/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+  resendAffiliateInvite: (id: string) => authFetch(`/admin/affiliates/${id}/resend-invite`, { method: "POST" }),
+  setAffiliateDemoAccess: (id: string, enabled: boolean) =>
+    authFetch(`/admin/affiliates/${id}/demo-access`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
   affiliatePayments: (affiliateId: string) =>
     authFetch<{ items: Record<string, unknown>[] }>(`/admin/affiliates/${affiliateId}/payments`),
   createAffiliatePayment: (affiliateId: string, body: Record<string, unknown>) =>

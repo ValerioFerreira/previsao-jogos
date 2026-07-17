@@ -26,6 +26,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         enum_type(UserStatus), default=UserStatus.pending_verification, nullable=False
     )
     role: Mapped[UserRole] = mapped_column(enum_type(UserRole), default=UserRole.user, nullable=False)
+    # Conta demo compartilhada (créditos ilimitados p/ parceiros divulgarem a plataforma)
+    # — ver auth/service.py::login_demo e analysis/service.py::create_analysis.
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # código próprio de indicação (gerado na ativação da conta, ver auth/service.py::set_password)
     referral_code: Mapped[str | None] = mapped_column(String(30), unique=True, index=True, nullable=True)
