@@ -127,6 +127,8 @@ export const authApi = {
   loginDemo: (email: string, password: string, cpf: string) =>
     raw<TokenResponse>("/auth/login-demo", { method: "POST", body: JSON.stringify({ email, password, cpf }) }),
 
+  enterDemo: () => authFetch<TokenResponse>("/auth/enter-demo", { method: "POST" }),
+
   logout: () => {
     const r = tokens.refresh();
     tokens.clear();

@@ -350,6 +350,31 @@ def login(db: Session, email: str, password: str, ip: str | None, ua: str | None
     return tokens
 
 
+def enter_demo_as_partner(db: Session, user: User, ip: str | None, ua: str | None) -> schemas.TokenResponse:
+    """Atalho pro parceiro JÁ logado na própria conta (role=partner) entrar direto na conta
+    demo compartilhada, sem digitar de novo e-mail/senha/CPF — a identidade já veio do
+    login normal, então só localizamos o Affiliate dele e emitimos tokens da conta demo
+    (mesma auditoria de acesso do login-demo manual, ver `login_demo` abaixo)."""
+    from app.domains.affiliates import service as affiliates_service
+    from app.domains.affiliates.models import Affiliate, DemoAccessLog
+
+    affiliate = db.execute(select(Affiliate).where(Affiliate.user_id == user.id)).scalar_one_or_none()
+    if affiliate is None or affiliate.status != "active":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Sua conta não tem acesso à conta demo.")
+    if not affiliate.demo_access_enabled:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Seu acesso à conta demo foi revogado.")
+
+    demo_user = db.execute(select(User).where(User.is_demo.is_(True))).scalars().first()
+    if demo_user is None or demo_user.status != UserStatus.active:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Conta demo não está disponível no momento.")
+
+    _log(db, AuthEventType.login_success, demo_user.id, ip, ua, meta={"via": "partner_enter_demo", "partner_user_id": str(user.id)})
+    tokens = _issue_tokens(db, demo_user, ip, ua)
+    db.add(DemoAccessLog(affiliate_id=affiliate.id, cpf_used=affiliate.cpf, ip=ip))
+    db.commit()
+    return tokens
+
+
 def login_demo(db: Session, email: str, password: str, cpf: str, ip: str | None, ua: str | None) -> schemas.TokenResponse:
     """Conta demo compartilhada — só autentica se o CPF informado estiver na allowlist de
     um parceiro ativo (`Affiliate.demo_access_enabled`), além do e-mail+senha da conta

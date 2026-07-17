@@ -21,6 +21,10 @@ class PartnerApplicationRequest(BaseModel):
     phone: str
     payment_type: str  # pf | pj
     discount_pct: Decimal
+    # Prefixo de texto do código (ex. "VALERIO" em "VALERIO15") — o sufixo numérico do
+    # desconto é sempre calculado pelo servidor, nunca vem do cliente (ver
+    # affiliates/service.py::resolve_partner_code). None/vazio = sistema sugere sozinho.
+    code_prefix: str | None = None
 
     @field_validator("cpf")
     @classmethod
@@ -62,6 +66,11 @@ class PartnerApplicationRequest(BaseModel):
 class PartnerApplicationResponse(BaseModel):
     ok: bool = True
     message: str = "Solicitação enviada. Entraremos em contato em breve."
+
+
+class CodeSuggestionResponse(BaseModel):
+    prefix: str
+    code: str
 
 
 class AttachSignupRequest(BaseModel):

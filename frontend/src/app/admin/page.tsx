@@ -133,6 +133,8 @@ export default function AdminPage() {
   });
   const [partnerFilter, setPartnerFilter] = useState("");
   const [partnerSortByCommission, setPartnerSortByCommission] = useState(false);
+  const [approveCodeDrafts, setApproveCodeDrafts] = useState<Record<string, string>>({});
+  const [demoUsage, setDemoUsage] = useState<{ cpf: string; affiliate_name: string | null; logins: number; analyses: number; last_login_at: string }[]>([]);
   const [newBanner, setNewBanner] = useState({ title: "", body: "", image_url: "", priority: "0", sort_order: "0" });
   const [newCampaign, setNewCampaign] = useState({ name: "", priority: "0" });
   const [newSetting, setNewSetting] = useState({ key: "", value: "" });
@@ -169,14 +171,16 @@ export default function AdminPage() {
   const loadAll = useCallback(async () => {
     await loadUsers();
     try {
-      const [p, pr, a, d, cp, ca, pk, af, bn, cm, st, ld] = await Promise.all([
+      const [p, pr, a, d, cp, ca, pk, af, bn, cm, st, ld, du] = await Promise.all([
         adminApi.payments(), adminApi.promotions(), adminApi.audit(), adminApi.dashboard(),
         adminApi.coupons(), adminApi.couponAnalytics(), adminApi.packages(), adminApi.affiliates(),
         adminApi.banners(), adminApi.campaigns(), adminApi.settings(), legalApi.documents(),
+        adminApi.demoUsage(),
       ]);
       setPayments(p.items); setPromos(pr.items); setAudit(a.items); setDashboard(d);
       setCoupons(cp.items); setCouponAnalytics(ca.items); setPackages(pk.items); setAffiliates(af.items);
       setBanners(bn.items); setCampaigns(cm.items); setSettings(st.items); setLegalDocs(ld);
+      setDemoUsage(du.items);
     } catch (e) { setErr((e as Error).message); }
   }, [loadUsers]);
 
@@ -322,7 +326,9 @@ export default function AdminPage() {
   }
 
   async function approveAffiliate(a: Record<string, unknown>) {
-    try { await adminApi.approveAffiliate(String(a.id)); await loadAffiliates(); } catch (e) { setErr((e as Error).message); }
+    const draft = approveCodeDrafts[String(a.id)];
+    const code = draft && draft.trim() && draft.trim().toUpperCase() !== String(a.code).toUpperCase() ? draft.trim() : undefined;
+    try { await adminApi.approveAffiliate(String(a.id), code); await loadAffiliates(); } catch (e) { setErr((e as Error).message); }
   }
 
   function openReject(a: Record<string, unknown>) {
@@ -850,7 +856,15 @@ export default function AdminPage() {
                             {a.account_status ? ` · conta ${a.account_status}` : ""}
                           </span>
                         </td>
-                        <td className="px-3 py-2 font-mono text-xs">{String(a.code)}</td>
+                        <td className="px-3 py-2 font-mono text-xs">
+                          {a.status === "pending" ? (
+                            <Input
+                              className="h-7 w-28 font-mono text-xs uppercase"
+                              value={approveCodeDrafts[String(a.id)] ?? String(a.code)}
+                              onChange={(e) => setApproveCodeDrafts((d) => ({ ...d, [String(a.id)]: e.target.value.toUpperCase() }))}
+                            />
+                          ) : String(a.code)}
+                        </td>
                         <td className="px-3 py-2 text-xs text-muted-foreground">
                           {a.contact_email ? <div>{String(a.contact_email)}</div> : null}
                           {a.contact_phone ? <div>{String(a.contact_phone)}</div> : null}
@@ -901,6 +915,41 @@ export default function AdminPage() {
                   <Field label="Dias"><Input className="w-32" type="number" min="1" value={attributionDays} onChange={(e) => setAttributionDays(e.target.value)} required /></Field>
                   <Button type="submit" size="sm">Salvar</Button>
                 </form>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Conta demo — uso por CPF</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Quantas análises cada CPF gerou usando a conta demo compartilhada (aproximado por janela de
+                sessão entre logins) — útil para flagrar parceiro revendendo análises por fora.
+              </p>
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="text-left font-medium px-3 py-2">CPF</th>
+                      <th className="text-left font-medium px-3 py-2">Parceiro</th>
+                      <th className="text-right font-medium px-3 py-2">Logins</th>
+                      <th className="text-right font-medium px-3 py-2">Análises</th>
+                      <th className="text-right font-medium px-3 py-2">Último acesso</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {demoUsage.map((d) => (
+                      <tr key={d.cpf} className="hover:bg-muted/30">
+                        <td className="px-3 py-2 font-mono text-xs">{d.cpf}</td>
+                        <td className="px-3 py-2">{d.affiliate_name ?? "—"}</td>
+                        <td className="px-3 py-2 text-right">{d.logins}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{d.analyses}</td>
+                        <td className="px-3 py-2 text-right text-xs text-muted-foreground">{fmt(d.last_login_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {demoUsage.length === 0 && <p className="text-sm text-muted-foreground p-3">Nenhum acesso à conta demo registrado ainda.</p>}
               </div>
             </CardContent>
           </Card>

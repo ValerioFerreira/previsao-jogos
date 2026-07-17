@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
@@ -49,6 +49,26 @@ export default function SolicitarParceriaPage() {
   const [paymentType, setPaymentType] = useState<"pf" | "pj">("pf");
   const [discountPct, setDiscountPct] = useState(15);
 
+  const [codePrefix, setCodePrefix] = useState("");
+  const [codeTouched, setCodeTouched] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sugestão automática de código (nome + desconto) enquanto o parceiro não editar o
+  // prefixo manualmente — o sufixo numérico do desconto nunca é editável (ver backend).
+  useEffect(() => {
+    if (codeTouched || !form.full_name.trim()) return;
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    suggestTimer.current = setTimeout(() => {
+      setSuggesting(true);
+      affiliatesApi.suggestCode(form.full_name.trim(), discountPct)
+        .then((s) => setCodePrefix(s.prefix))
+        .catch(() => {})
+        .finally(() => setSuggesting(false));
+    }, 400);
+    return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
+  }, [form.full_name, discountPct, codeTouched]);
+
   const updName = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, full_name: e.target.value.toUpperCase() }));
   const updEmail = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -70,6 +90,7 @@ export default function SolicitarParceriaPage() {
         phone: form.phone.replace(/\D/g, ""),
         payment_type: paymentType,
         discount_pct: discountPct,
+        code_prefix: codePrefix.trim() || undefined,
       });
       setDone(true);
     } catch (e) {
@@ -199,6 +220,29 @@ export default function SolicitarParceriaPage() {
                   <div className="text-lg font-bold font-mono text-emerald-500">R$ {commissionPer100(discountPct)}</div>
                 </div>
               </motion.div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="flex items-center" htmlFor="code_prefix">
+                Seu código de desconto
+                <InfoTooltip text="Sugerimos automaticamente a partir do seu nome. Você pode editar a parte em texto, mas o número do final é sempre o seu desconto e não pode ser alterado." />
+              </Label>
+              <div className="flex items-center gap-0 rounded-md border border-input bg-transparent overflow-hidden focus-within:ring-1 focus-within:ring-ring">
+                <input
+                  id="code_prefix"
+                  value={codePrefix}
+                  onChange={(e) => { setCodeTouched(true); setCodePrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")); }}
+                  placeholder="SEUNOME"
+                  maxLength={20}
+                  className="flex-1 h-9 px-3 py-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/40 font-mono uppercase"
+                />
+                <span className="h-9 px-3 flex items-center text-sm font-mono font-semibold bg-muted text-muted-foreground shrink-0">
+                  {discountPct}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {suggesting ? "Gerando sugestão…" : `Código final: ${(codePrefix || "SEUNOME").toUpperCase()}${discountPct}`}
+              </p>
             </div>
 
             <Button type="submit" className="w-full" disabled={busy}>

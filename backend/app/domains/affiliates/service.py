@@ -53,6 +53,91 @@ def _generate_affiliate_code(db: Session, full_name: str) -> str:
     raise RuntimeError("Não foi possível gerar um código de parceiro único.")
 
 
+def _ascii_upper_alnum(text: str) -> str:
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return "".join(ch for ch in ascii_text.upper() if ch.isalnum())
+
+
+def code_in_use(db: Session, code: str, exclude_affiliate_id: uuid.UUID | None = None) -> bool:
+    """Um código de parceiro vira o code do Coupon vinculado (ver _create_partner_invite em
+    admin/service.py) — então a unicidade precisa valer nas duas tabelas."""
+    from app.domains.promotions.models import Coupon
+
+    code = code.strip().upper()
+    aff_stmt = select(Affiliate.id).where(func.upper(Affiliate.code) == code)
+    if exclude_affiliate_id is not None:
+        aff_stmt = aff_stmt.where(Affiliate.id != exclude_affiliate_id)
+    if db.execute(aff_stmt).scalar_one_or_none() is not None:
+        return True
+    if db.execute(select(Coupon.id).where(func.upper(Coupon.code) == code)).scalar_one_or_none() is not None:
+        return True
+    return False
+
+
+def suggest_code_prefix(db: Session, full_name: str, discount_pct: Decimal | int) -> str:
+    """Sugestão de PREFIXO (sem o sufixo do desconto): primeiro nome; se colidir (prefixo +
+    desconto já em uso), soma letra a letra do(s) sobrenome(s) até desempatar — ex.
+    VALERIO15 -> VALERIOF15 -> VALERIOFE15... Esgotados os sobrenomes, cai num contador."""
+    discount_str = str(int(discount_pct))
+    parts = [_ascii_upper_alnum(p) for p in full_name.split() if _ascii_upper_alnum(p)]
+    if not parts:
+        parts = ["PARCEIRO"]
+
+    def taken(prefix: str) -> bool:
+        return code_in_use(db, f"{prefix}{discount_str}")
+
+    base = parts[0]
+    if not taken(base):
+        return base
+
+    prefix = base
+    for part in parts[1:]:
+        for i in range(1, len(part) + 1):
+            candidate = prefix + part[:i]
+            if not taken(candidate):
+                return candidate
+        prefix += part
+
+    for n in range(2, 1000):
+        candidate = f"{base}{n}"
+        if not taken(candidate):
+            return candidate
+    raise RuntimeError("Não foi possível sugerir um código de parceiro único.")
+
+
+def resolve_partner_code(db: Session, full_name: str, discount_pct: Decimal | int,
+                         requested_prefix: str | None) -> str:
+    """O sufixo numérico (desconto) é SEMPRE anexado pelo servidor — o parceiro só edita o
+    prefixo de texto, nunca o número (regra do pedido: o desconto não pode ser mudado
+    editando o código)."""
+    discount_str = str(int(discount_pct))
+    if requested_prefix and requested_prefix.strip():
+        prefix = _ascii_upper_alnum(requested_prefix)[:20]
+        if not prefix:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Código inválido.")
+        code = f"{prefix}{discount_str}"
+        if code_in_use(db, code):
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="Esse código já está em uso. Escolha outro.")
+        return code
+    return f"{suggest_code_prefix(db, full_name, discount_pct)}{discount_str}"
+
+
+def set_affiliate_code(db: Session, affiliate: Affiliate, code: str) -> None:
+    """Admin pode sobrescrever o código livremente (sem a restrição de sufixo que vale só
+    para a autoedição do parceiro) — mantém o Coupon vinculado em sincronia."""
+    from app.domains.promotions.models import Coupon
+
+    normalized = _ascii_upper_alnum(code)[:60]
+    if not normalized:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Código inválido.")
+    if normalized != affiliate.code.upper() and code_in_use(db, normalized, exclude_affiliate_id=affiliate.id):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Esse código já está em uso.")
+    affiliate.code = normalized
+    coupon = db.execute(select(Coupon).where(Coupon.affiliate_id == affiliate.id)).scalar_one_or_none()
+    if coupon is not None:
+        coupon.code = normalized
+
+
 def apply_for_partnership(db: Session, data: "schemas.PartnerApplicationRequest") -> Affiliate:
     """Solicitação pública de parceria — nasce `pending`, sem User/Coupon (só criados na
     aprovação, ver admin/service.py::approve_affiliate)."""
@@ -63,7 +148,7 @@ def apply_for_partnership(db: Session, data: "schemas.PartnerApplicationRequest"
         if a.status in ("pending", "active", "paused"):
             raise HTTPException(status.HTTP_409_CONFLICT,
                                 detail="Já existe uma solicitação ou parceria com este CPF/e-mail.")
-    code = _generate_affiliate_code(db, data.full_name)
+    code = resolve_partner_code(db, data.full_name, data.discount_pct, data.code_prefix)
     affiliate = Affiliate(
         name=data.full_name, code=code, status="pending",
         commission_pct=COMMISSION_BUDGET_PCT - data.discount_pct, discount_pct=data.discount_pct,
@@ -77,7 +162,7 @@ def apply_for_partnership(db: Session, data: "schemas.PartnerApplicationRequest"
 
 def track_click(db: Session, code: str, anon_id: str, user_id: uuid.UUID | None = None) -> AffiliateAttribution | None:
     affiliate = db.execute(select(Affiliate).where(
-        Affiliate.code == code.strip().lower(), Affiliate.status == "active")).scalar_one_or_none()
+        func.upper(Affiliate.code) == code.strip().upper(), Affiliate.status == "active")).scalar_one_or_none()
     if affiliate is None:
         return None
     now = datetime.now(timezone.utc)

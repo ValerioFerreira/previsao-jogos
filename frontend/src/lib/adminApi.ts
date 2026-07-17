@@ -57,7 +57,8 @@ export const adminApi = {
     authFetch("/admin/affiliates", { method: "POST", body: JSON.stringify(body) }),
   patchAffiliate: (id: string, body: Record<string, unknown>) =>
     authFetch(`/admin/affiliates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  approveAffiliate: (id: string) => authFetch(`/admin/affiliates/${id}/approve`, { method: "POST" }),
+  approveAffiliate: (id: string, code?: string) =>
+    authFetch(`/admin/affiliates/${id}/approve`, { method: "POST", body: JSON.stringify({ code: code || undefined }) }),
   rejectAffiliate: (id: string, reason?: string) =>
     authFetch(`/admin/affiliates/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   resendAffiliateInvite: (id: string) => authFetch(`/admin/affiliates/${id}/resend-invite`, { method: "POST" }),
@@ -67,6 +68,8 @@ export const adminApi = {
     authFetch<{ items: Record<string, unknown>[] }>(`/admin/affiliates/${affiliateId}/payments`),
   createAffiliatePayment: (affiliateId: string, body: Record<string, unknown>) =>
     authFetch(`/admin/affiliates/${affiliateId}/payments`, { method: "POST", body: JSON.stringify(body) }),
+  demoUsage: () =>
+    authFetch<{ items: { cpf: string; affiliate_name: string | null; logins: number; analyses: number; last_login_at: string }[] }>("/admin/demo-usage"),
 
   banners: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/banners"),
   createBanner: (body: Record<string, unknown>) =>

@@ -57,6 +57,13 @@ def login_demo(data: schemas.DemoLoginRequest, request: Request, db: Session = D
     return service.login_demo(db, data.email, data.password, data.cpf, ip, ua)
 
 
+@router.post("/enter-demo", response_model=schemas.TokenResponse)
+def enter_demo(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ip = client_ip(request)
+    ua = request.headers.get("user-agent")
+    return service.enter_demo_as_partner(db, user, ip, ua)
+
+
 @router.post("/refresh", response_model=schemas.TokenResponse)
 def refresh(data: schemas.RefreshRequest, request: Request, db: Session = Depends(get_db)):
     ua = request.headers.get("user-agent")

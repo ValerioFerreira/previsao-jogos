@@ -68,7 +68,10 @@ export type PartnerApplication = {
   phone: string;
   payment_type: "pf" | "pj";
   discount_pct: number;
+  code_prefix?: string;
 };
+
+export type CodeSuggestion = { prefix: string; code: string };
 
 export const affiliatesApi = {
   me: () => authFetch<AffiliatePortalStats>("/affiliates/me"),
@@ -82,6 +85,12 @@ export const affiliatesApi = {
       }
       return res.json() as Promise<{ ok: boolean; message: string }>;
     }),
+  suggestCode: (full_name: string, discount_pct: number) =>
+    fetch(`${API_URL}/affiliates/suggest-code?${new URLSearchParams({ full_name, discount_pct: String(discount_pct) })}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        return res.json() as Promise<CodeSuggestion>;
+      }),
   portalMe: () => authFetch<AffiliatePortalStats>("/affiliates/portal/me"),
   portalTimeseries: (granularity: "day" | "month" = "day") =>
     authFetch<TimeseriesResponse>(`/affiliates/portal/timeseries?granularity=${granularity}`),

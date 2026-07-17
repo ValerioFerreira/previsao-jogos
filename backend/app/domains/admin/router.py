@@ -149,8 +149,14 @@ def patch_affiliate(affiliate_id: str, data: schemas.AffiliatePatch, request: Re
 
 @router.post("/affiliates/{affiliate_id}/approve")
 def approve_affiliate(affiliate_id: str, request: Request,
+                      data: schemas.AffiliateApproveRequest = schemas.AffiliateApproveRequest(),
                       admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    return service.approve_affiliate(db, admin, affiliate_id, client_ip(request))
+    return service.approve_affiliate(db, admin, affiliate_id, client_ip(request), code=data.code)
+
+
+@router.get("/demo-usage")
+def demo_usage(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.demo_usage_by_cpf(db)
 
 
 @router.post("/affiliates/{affiliate_id}/reject")

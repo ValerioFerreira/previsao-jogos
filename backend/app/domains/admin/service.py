@@ -32,6 +32,14 @@ from app.domains.wallet.service import get_or_create_wallet, post_transaction
 
 _PARTNER_PROMOTION_CODE = "parceiros"
 
+
+def _utc(dt: datetime | None) -> datetime | None:
+    """Normaliza para aware-UTC — no SQLite (dev/testes) DateTime(timezone=True) não
+    preserva tzinfo na volta (mesmo padrão de affiliates/service.py::_utc)."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
 _CREDIT_KINDS = {
     "manual_adjustment": CreditTxType.manual_adjustment,
     "bonus": CreditTxType.bonus,
@@ -402,9 +410,9 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
 
 def create_affiliate(db: Session, admin: User, data: schemas.AffiliateRequest, ip) -> dict:
     from app.domains.enums import PartnerPaymentType
-    if db.execute(select(Affiliate).where(Affiliate.code == data.code)).scalar_one_or_none():
+    if affiliates_service.code_in_use(db, data.code):
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Código de afiliado já existe.")
-    a = Affiliate(name=data.name, code=data.code.strip().lower(),
+    a = Affiliate(name=data.name, code=data.code.strip().upper(),
                  user_id=uuid.UUID(data.user_id) if data.user_id else None,
                  commission_pct=data.commission_pct, commission_fixed_brl=data.commission_fixed_brl,
                  contact_email=data.contact_email, contact_phone=data.contact_phone,
@@ -427,6 +435,7 @@ def patch_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.A
     a = _get_affiliate(db, affiliate_id)
     before = {"status": a.status, "commission_pct": str(a.commission_pct) if a.commission_pct else None}
     if data.name is not None: a.name = data.name
+    if data.code is not None: affiliates_service.set_affiliate_code(db, a, data.code)
     if data.commission_fixed_brl is not None: a.commission_fixed_brl = data.commission_fixed_brl
     if data.status is not None: a.status = data.status
     if data.contact_email is not None: a.contact_email = data.contact_email
@@ -451,11 +460,13 @@ def patch_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.A
     return _affiliate_out(a, db)
 
 
-def approve_affiliate(db: Session, admin: User, affiliate_id: str, ip) -> dict:
+def approve_affiliate(db: Session, admin: User, affiliate_id: str, ip, code: str | None = None) -> dict:
     a = _get_affiliate(db, affiliate_id)
     if a.status != "pending":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Solicitação não está pendente.")
     before = {"status": a.status}
+    if code is not None and code.strip():
+        affiliates_service.set_affiliate_code(db, a, code)
     a.status = "active"
     _create_partner_invite(db, admin, a, ip)
     audit(db, admin, "affiliate_approve", "affiliate", a.id, before=before, after={"status": a.status}, ip=ip)
@@ -514,6 +525,51 @@ def get_affiliate_detail(db: Session, affiliate_id: str) -> dict:
         "demo_access_logs": [{"cpf_used": l.cpf_used, "ip": l.ip, "created_at": l.created_at.isoformat()}
                              for l in demo_logs],
     }
+
+
+def demo_usage_by_cpf(db: Session) -> dict:
+    """Quantas análises cada CPF gerou na conta demo compartilhada — para o admin flagar
+    parceiro revendendo análises por fora. A conta demo é UMA só (User.is_demo), então não
+    dá pra saber por CPF direto da Analysis; aproximamos por janelas de sessão: cada
+    DemoAccessLog marca o início de uma janela (até o próximo login-demo, de qualquer CPF,
+    ou agora) e contamos as análises da conta demo criadas dentro dela."""
+    demo_user = db.execute(select(User).where(User.is_demo.is_(True))).scalars().first()
+    if demo_user is None:
+        return {"items": []}
+    logs = db.execute(select(DemoAccessLog).order_by(DemoAccessLog.created_at.asc())).scalars().all()
+    if not logs:
+        return {"items": []}
+    analysis_times = [_utc(t) for t in db.execute(select(Analysis.created_at).where(
+        Analysis.user_id == demo_user.id).order_by(Analysis.created_at.asc())).scalars().all()]
+
+    now = datetime.now(timezone.utc)
+    per_cpf: dict[str, dict] = {}
+    n = len(logs)
+    for i, log in enumerate(logs):
+        window_start = _utc(log.created_at)
+        window_end = _utc(logs[i + 1].created_at) if i + 1 < n else now
+        count = sum(1 for t in analysis_times if window_start <= t < window_end)
+        entry = per_cpf.setdefault(log.cpf_used, {
+            "cpf": log.cpf_used, "affiliate_id": str(log.affiliate_id),
+            "logins": 0, "analyses": 0, "last_login_at": window_start,
+        })
+        entry["logins"] += 1
+        entry["analyses"] += count
+        if window_start > entry["last_login_at"]:
+            entry["last_login_at"] = window_start
+
+    affiliate_ids = {uuid.UUID(e["affiliate_id"]) for e in per_cpf.values()}
+    affiliates = {a.id: a for a in db.execute(select(Affiliate).where(Affiliate.id.in_(affiliate_ids))).scalars()}
+    items = []
+    for e in per_cpf.values():
+        aff = affiliates.get(uuid.UUID(e["affiliate_id"]))
+        items.append({
+            "cpf": e["cpf"], "affiliate_name": aff.name if aff else None,
+            "logins": e["logins"], "analyses": e["analyses"],
+            "last_login_at": e["last_login_at"].isoformat(),
+        })
+    items.sort(key=lambda e: e["analyses"], reverse=True)
+    return {"items": items}
 
 
 def list_affiliates(db: Session, status_filter: str | None = None) -> dict:

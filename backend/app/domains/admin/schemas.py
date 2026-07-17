@@ -108,6 +108,7 @@ class AffiliateRequest(BaseModel):
 
 class AffiliatePatch(BaseModel):
     name: str | None = None
+    code: str | None = None  # também atualiza o Coupon vinculado (ver affiliates/service.py::set_affiliate_code)
     commission_pct: Decimal | None = None
     commission_fixed_brl: Decimal | None = None
     status: str | None = None  # pending | active | paused | rejected
@@ -117,6 +118,10 @@ class AffiliatePatch(BaseModel):
     notes: str | None = None
     payment_type: str | None = None  # pf | pj
     discount_pct: Decimal | None = None  # também atualiza o cupom do parceiro e recalcula commission_pct
+
+
+class AffiliateApproveRequest(BaseModel):
+    code: str | None = None  # se o admin quiser mudar o código sugerido/pedido antes de aprovar
 
 
 class AffiliateRejectRequest(BaseModel):
