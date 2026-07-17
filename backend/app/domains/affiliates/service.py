@@ -21,6 +21,10 @@ from app.domains.enums import PartnerPaymentType
 _DEFAULT_ATTRIBUTION_DAYS = 30
 _CODE_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz"
 COMMISSION_BUDGET_PCT = Decimal(30)
+# CPF do administrador (valerioeducfin@gmail.com) — acesso à conta demo sempre liberado
+# para ele, independentemente do status/demo_access_enabled de qualquer Affiliate no banco
+# (não pode ser revogado sem querer pelo próprio painel admin).
+_ADMIN_ALWAYS_ON_CPF = "10341953440"
 
 
 def _attribution_window_days(db: Session) -> int:
@@ -176,9 +180,27 @@ def validate_demo_cpf(db: Session, cpf: str) -> Affiliate | None:
     """Allowlist da conta demo compartilhada — só parceiros ativos com acesso não
     revogado pelo admin (ver DemoAccessLog / auth/service.py::login_demo)."""
     digits = "".join(ch for ch in cpf if ch.isdigit())
+    if digits == _ADMIN_ALWAYS_ON_CPF:
+        return _get_or_create_admin_bypass_affiliate(db)
     return db.execute(select(Affiliate).where(
         Affiliate.cpf == digits, Affiliate.status == "active", Affiliate.demo_access_enabled.is_(True),
     )).scalar_one_or_none()
+
+
+def _get_or_create_admin_bypass_affiliate(db: Session) -> Affiliate:
+    """Registro (só para fins de log/rastreio em DemoAccessLog) do acesso sempre-ligado do
+    administrador — criado sob demanda no primeiro login-demo dele."""
+    affiliate = db.execute(select(Affiliate).where(Affiliate.cpf == _ADMIN_ALWAYS_ON_CPF)).scalar_one_or_none()
+    if affiliate is not None:
+        return affiliate
+    affiliate = Affiliate(
+        name="Admin (acesso sempre liberado)", code=_generate_affiliate_code(db, "admin"),
+        status="active", cpf=_ADMIN_ALWAYS_ON_CPF, demo_access_enabled=True,
+        contact_email="valerioeducfin@gmail.com",
+    )
+    db.add(affiliate)
+    db.flush()
+    return affiliate
 
 
 def compute_portal_stats(db: Session, affiliate: Affiliate) -> dict:
