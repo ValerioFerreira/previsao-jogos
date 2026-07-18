@@ -70,9 +70,21 @@ const Flag = ({ name, ids }: { name: string; ids: Record<string, number> }) => {
   return url ? <img src={url} alt="" className="w-5 h-5 object-contain shrink-0" loading="lazy" onError={onImgError} /> : null;
 };
 
+// Ordem de prioridade editorial das competições de clube -- essas aparecem primeiro
+// no grid, nessa ordem fixa; o restante entra depois, ordenado pela quantidade de
+// jogos em aberto (mais jogos primeiro).
+const PRIORITY_COMPS = [
+  'Brasileirao Serie A', 'Brasileirao Serie B', 'Copa do Brasil',
+  'Champions League', 'Premier League', 'La Liga',
+];
+const compRank = (label: string) => {
+  const i = PRIORITY_COMPS.indexOf(label);
+  return i === -1 ? PRIORITY_COMPS.length : i;
+};
+
 export function MatchPickerModal({
   open, onOpenChange, fixtures, teamIds, onSelect, title = 'Selecionar Partida', defaultScope = 'selecao',
-  dateDefault = 'today',
+  dateDefault = 'none',
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -81,8 +93,8 @@ export function MatchPickerModal({
   onSelect: (fx: PickerFixture) => void;
   title?: string;
   defaultScope?: 'selecao' | 'clube';
-  /** 'today' pré-seleciona a data atual (partidas futuras); 'none' deixa sem filtro
-   * de data (partidas passadas, onde "hoje" nunca bateria com nada). */
+  /** 'today' pré-seleciona a data atual; 'none' (padrão) deixa sem filtro de data,
+   * mostrando todas as competições/partidas em aberto. */
   dateDefault?: 'today' | 'none';
 }) {
   const [scope, setScope] = useState<'selecao' | 'clube'>(defaultScope);
@@ -114,7 +126,11 @@ export function MatchPickerModal({
       if (!map.has(label)) map.set(label, { label, leagueId: f.league_id ?? null, fixtures: [] });
       map.get(label)!.fixtures.push(f);
     });
-    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(map.values()).sort((a, b) => {
+      const ra = compRank(a.label), rb = compRank(b.label);
+      if (ra !== rb) return ra - rb;
+      return b.fixtures.length - a.fixtures.length || a.label.localeCompare(b.label);
+    });
   }, [dateFiltered]);
 
   const q = query.trim().toLowerCase();
@@ -136,9 +152,11 @@ export function MatchPickerModal({
     if (!comp) return [];
     const group = competitions.find(c => c.label === comp);
     if (!group) return [];
-    if (!q) return group.fixtures;
     // Se a busca bateu no nome da competição, mantém todas; senão, restringe pelo time buscado.
-    return group.label.toLowerCase().includes(q) ? group.fixtures : group.fixtures.filter(matchesTeamQuery);
+    const matches = !q || group.label.toLowerCase().includes(q)
+      ? group.fixtures : group.fixtures.filter(matchesTeamQuery);
+    // Da data mais próxima até a mais distante no futuro.
+    return [...matches].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   }, [comp, competitions, q]);
 
   return (
