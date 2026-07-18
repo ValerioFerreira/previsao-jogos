@@ -490,7 +490,7 @@ def get_team_history(team_name: str) -> dict[str, Any]:
     if not elo_history:
         predictor = get_predictor()
         current_elo = predictor.team_defaults(team_name).get("elo_rating", 1500)
-        elo_history.append({"date": "Current", "elo": float(current_elo)})
+        elo_history.append({"date": "Atual", "elo": float(current_elo)})
 
     # 1b. Tendência de gols nas últimas 10 partidas (marcados vs sofridos) — dado real,
     # substitui a antiga série de Elo (matches.parquet não tem Elo histórico).

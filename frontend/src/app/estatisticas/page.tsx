@@ -408,7 +408,7 @@ export default function Estatisticas() {
           </div>
 
           {/* Evolução de Elo */}
-          {eloHistoryData.length > 0 && (
+          {eloHistoryData.length > 1 && (
             <div className="bg-card border border-border/50 rounded-xl p-5">
               <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
                 <Activity className="w-4 h-4 text-cyan-500" />
