@@ -61,6 +61,48 @@ LEAGUES = [
     (17, "AFC Champions League Elite"),
     (12, "CAF Champions League"),
     (16, "CONCACAF Champions League"),
+    # --- Expansão 2026-07-18: assinatura expira 2026-07-19T01:21 UTC (última janela) --
+    # IDs confirmados agora via /leagues (nomes/anos/cobertura de stats). Ordem = fama/
+    # relevância editorial, para que se a cota acabar no meio, as ligas mais valiosas já
+    # tenham sido cobertas primeiro.
+    # Tier 1 -- grandes ligas asiáticas + 2as divisões dos "big five" europeus.
+    (98, "J1 League (Japao)"),
+    (169, "Chinese Super League"),
+    (79, "2. Bundesliga (Alemanha)"),
+    (141, "Segunda Division (Espanha)"),
+    (62, "Ligue 2 (Franca)"),
+    (136, "Serie B (Italia)"),
+    (235, "Premier League (Russia)"),
+    (292, "K League 1 (Coreia do Sul)"),
+    # Tier 2 -- ligas europeias tradicionais de primeira divisao.
+    (333, "Premier League (Ucrania)"),
+    (207, "Super League (Suica)"),
+    (218, "Bundesliga (Austria)"),
+    (119, "Superliga (Dinamarca)"),
+    (197, "Super League 1 (Grecia)"),
+    (106, "Ekstraklasa (Polonia)"),
+    (210, "HNL (Croacia)"),
+    (103, "Eliteserien (Noruega)"),
+    (113, "Allsvenskan (Suecia)"),
+    (345, "Czech Liga (Chequia)"),
+    # Tier 3 -- ligas sul-americanas de tradicao ainda nao cobertas.
+    (268, "Primera Division Apertura (Uruguai)"),
+    (270, "Primera Division Clausura (Uruguai)"),
+    (239, "Primera A (Colombia)"),
+    (265, "Primera Division (Chile)"),
+    (242, "Liga Pro (Equador)"),
+    (281, "Primera Division (Peru)"),
+    (250, "Division Profesional Apertura (Paraguai)"),
+    (252, "Division Profesional Clausura (Paraguai)"),
+    (299, "Primera Division (Venezuela)"),
+    (344, "Primera Division (Bolivia)"),
+    # Tier 4 -- outras ligas notaveis.
+    (188, "A-League (Australia)"),
+    (233, "Premier League (Egito)"),
+    (288, "Premier Soccer League (Africa do Sul)"),
+    (383, "Ligat Ha'al (Israel)"),
+    (305, "Stars League (Catar)"),
+    (301, "Pro League (Emirados Arabes)"),
 ]
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"
