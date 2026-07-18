@@ -58,8 +58,8 @@ const CLUB_LEAGUES = [
   "Champions League", "Premier League", "La Liga", "Bundesliga", "Serie A (Itália)", "Ligue 1",
 ];
 
-// Data/hora do lançamento dos mercados de clubes: 18/07/2026 10:00 (horário de Brasília, UTC-3).
-const CLUBS_LAUNCH_ISO = "2026-07-18T10:00:00-03:00";
+// Data/hora do lançamento dos mercados de clubes: 18/07/2026 11:00 (horário de Brasília, UTC-3).
+const CLUBS_LAUNCH_ISO = "2026-07-18T11:00:00-03:00";
 
 // Contador regressivo (dias/horas/min/seg) até o lançamento dos mercados de clubes.
 function useCountdown(targetIso: string) {
