@@ -133,7 +133,7 @@ export default function DestaquesRecentes({ home, away, homeMatches, awayMatches
     <div className="bg-card border border-border/50 rounded-xl p-5 h-full">
       <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
         Destaques Recentes
-        <InfoTooltip text="Panorama dos últimos 5 jogos de cada seleção: adversários e placares, médias das principais estatísticas (gols, finalizações, escanteios, faltas, impedimentos, cartões, posse) e os principais destaques automáticos de padrão." />
+        <InfoTooltip text="Panorama dos últimos 5 jogos de cada equipe: adversários e placares, médias das principais estatísticas (gols, finalizações, escanteios, faltas, impedimentos, cartões, posse) e os principais destaques automáticos de padrão." />
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 sm:divide-x divide-border/40">
         <TeamPanel team={home} matches={homeMatches} teamIds={teamIds} accent="#10b981" />

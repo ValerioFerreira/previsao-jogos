@@ -66,7 +66,7 @@ export default function BoletimDesfalques({ home, away }: {
     <div className="bg-card border border-border/50 rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
         Boletim de Desfalques
-        <InfoTooltip text="Jogadores fora ou em dúvida (lesão/suspensão) reportados pela API-Football para a temporada atual. Dados de seleções podem ser esparsos; ausência de registros não garante elenco completo." />
+        <InfoTooltip text="Jogadores fora ou em dúvida (lesão/suspensão) reportados pela API-Football para a temporada atual. Dados podem ser esparsos; ausência de registros não garante elenco completo." />
       </h3>
       <p className="text-xs text-muted-foreground mb-3">Lesões e suspensões reportadas</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">

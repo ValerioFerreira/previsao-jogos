@@ -111,10 +111,14 @@ class Predictor:
         if os.path.exists(_off_path):
             self.offsides = CornersNB.load(_off_path)
         # Mercados por tempo (1º/2º) — gols e cartões (CornersNB sobre base_feats).
-        self.gols_1t = CornersNB.load(f"{art_dir}/gols_1t_nb.joblib")
-        self.gols_2t = CornersNB.load(f"{art_dir}/gols_2t_nb.joblib")
-        self.cartoes_1t = CornersNB.load(f"{art_dir}/cartoes_1t_nb.joblib")
-        self.cartoes_2t = CornersNB.load(f"{art_dir}/cartoes_2t_nb.joblib")
+        # Opcional/retrocompatível (mesmo padrão do offsides acima): escopos sem esses
+        # artefatos (ex.: clubes, ainda não validados pela pesquisa) só não expõem "tempos".
+        self.gols_1t = self.gols_2t = self.cartoes_1t = self.cartoes_2t = None
+        if os.path.exists(f"{art_dir}/gols_1t_nb.joblib"):
+            self.gols_1t = CornersNB.load(f"{art_dir}/gols_1t_nb.joblib")
+            self.gols_2t = CornersNB.load(f"{art_dir}/gols_2t_nb.joblib")
+            self.cartoes_1t = CornersNB.load(f"{art_dir}/cartoes_1t_nb.joblib")
+            self.cartoes_2t = CornersNB.load(f"{art_dir}/cartoes_2t_nb.joblib")
         self.ortho_weights = joblib.load(f"{art_dir}/style_ortho_weights.joblib")
         # Calibradores isotonicos das linhas O/U do TOTAL (escanteios/a-gol/cartoes).
         # Validados por walk-forward: reduzem ECE e Bernoulli-LL out-of-time de forma
@@ -516,12 +520,14 @@ class Predictor:
                                                     self.ou_calibrators.get(f"{prefix}_away")),
                     "total": self._corners_market(d["total"][0], lines,
                                                   self.ou_calibrators.get(f"{prefix}_total"))}
-        tempos = {
-            "gols_1t": _half(self.gols_1t, GOALS_HALF_LINES, "gols_1t"),
-            "gols_2t": _half(self.gols_2t, GOALS_HALF_LINES, "gols_2t"),
-            "cartoes_1t": _half(self.cartoes_1t, CARDS_HALF_LINES, "cartoes_1t"),
-            "cartoes_2t": _half(self.cartoes_2t, CARDS_HALF_LINES, "cartoes_2t"),
-        }
+        tempos = {}
+        if self.gols_1t is not None:
+            tempos = {
+                "gols_1t": _half(self.gols_1t, GOALS_HALF_LINES, "gols_1t"),
+                "gols_2t": _half(self.gols_2t, GOALS_HALF_LINES, "gols_2t"),
+                "cartoes_1t": _half(self.cartoes_1t, CARDS_HALF_LINES, "cartoes_1t"),
+                "cartoes_2t": _half(self.cartoes_2t, CARDS_HALF_LINES, "cartoes_2t"),
+            }
 
         # Mercados DERIVADOS — transformações exatas da matriz conjunta do Dixon-Coles
         # e das PMFs de gols (já validadas). Sem modelo/gate próprio: são cortes da CDF.

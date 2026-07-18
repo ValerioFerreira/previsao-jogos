@@ -11,6 +11,8 @@ type PredictionContextType = {
   setCompetition: (comp: string) => void;
   neutralField: boolean;
   setNeutralField: (neutral: boolean) => void;
+  scope: "selecao" | "clube";
+  setScope: (s: "selecao" | "clube") => void;
 
   // --- estado da análise atual (persiste ao navegar entre páginas e voltar) ---
   analysis: AnalysisResponse | null;
@@ -37,6 +39,7 @@ type Persisted = {
   homeTeamId: string; awayTeamId: string; competition: string; neutralField: boolean;
   analysis: AnalysisResponse | null; mode: "independente" | "futura";
   fixtureId: number | null; matchDate: string | undefined;
+  scope: "selecao" | "clube";
 };
 
 function loadPersisted(): Partial<Persisted> {
@@ -56,6 +59,7 @@ export function PredictionProvider({ children }: { children: ReactNode }) {
   const [awayTeamId, setAwayTeamId] = useState(init.awayTeamId ?? "");
   const [competition, setCompetition] = useState(init.competition ?? "Copa do Mundo");
   const [neutralField, setNeutralField] = useState(init.neutralField ?? false);
+  const [scope, setScope] = useState<"selecao" | "clube">(init.scope ?? "selecao");
 
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(init.analysis ?? null);
   const [h2hData, setH2hData] = useState<any>(null);
@@ -68,13 +72,13 @@ export function PredictionProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
     try {
       const payload: Persisted = {
-        homeTeamId, awayTeamId, competition, neutralField, analysis, mode, fixtureId, matchDate,
+        homeTeamId, awayTeamId, competition, neutralField, analysis, mode, fixtureId, matchDate, scope,
       };
       window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
     } catch {
       /* localStorage cheio/indisponível — silencioso, não quebra a UI */
     }
-  }, [homeTeamId, awayTeamId, competition, neutralField, analysis, mode, fixtureId, matchDate]);
+  }, [homeTeamId, awayTeamId, competition, neutralField, analysis, mode, fixtureId, matchDate, scope]);
 
   return (
     <PredictionContext.Provider
@@ -83,6 +87,7 @@ export function PredictionProvider({ children }: { children: ReactNode }) {
         awayTeamId, setAwayTeamId,
         competition, setCompetition,
         neutralField, setNeutralField,
+        scope, setScope,
         analysis, setAnalysis,
         h2hData, setH2hData,
         mode, setMode,

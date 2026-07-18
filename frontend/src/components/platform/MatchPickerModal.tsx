@@ -34,6 +34,7 @@ export type PickerFixture = {
   tournament?: string;
   neutral?: boolean;
   league_name?: string;
+  scope?: 'selecao' | 'clube';
 };
 
 function fmtDateTime(iso: string): string {

@@ -151,7 +151,7 @@ export default function GoalTiming({ home, homeData, away, awayData }: {
     <div className="bg-card border border-border/50 rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
         Minutagem de Gols
-        <InfoTooltip text="Distribuição percentual dos gols marcados (acima) e sofridos (abaixo) por faixa de 15 minutos, no histórico com detalhe da seleção. Mostra QUANDO cada equipe tende a marcar e a ser mais vulnerável." />
+        <InfoTooltip text="Distribuição percentual dos gols marcados (acima) e sofridos (abaixo) por faixa de 15 minutos, no histórico com detalhe da equipe. Mostra QUANDO cada equipe tende a marcar e a ser mais vulnerável." />
       </h3>
       <p className="text-xs text-muted-foreground mb-3">% dos gols por faixa de 15′ (acréscimos entram na faixa do tempo)</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">

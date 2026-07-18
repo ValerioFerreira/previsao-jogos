@@ -80,7 +80,7 @@ export default function StyleRadar({ home, away, homeMatches, awayMatches }: {
     <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex flex-col">
       <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
         Radar de Estilo
-        <InfoTooltip text="Perfil comparativo (0–100) das duas seleções nos jogos recentes. Passe o mouse sobre cada vértice para ver o que o indicador mede. Quanto mais para fora, mais forte naquele quesito." />
+        <InfoTooltip text="Perfil comparativo (0–100) das duas equipes nos jogos recentes. Passe o mouse sobre cada vértice para ver o que o indicador mede. Quanto mais para fora, mais forte naquele quesito." />
       </h3>
       <p className="text-xs text-muted-foreground mb-1">Passe o mouse nos vértices para detalhes</p>
       <div className="flex-1 min-h-[260px]">

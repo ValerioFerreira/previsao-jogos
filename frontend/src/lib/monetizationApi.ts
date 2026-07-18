@@ -144,7 +144,7 @@ export type AnalysisSummary = {
 };
 
 export const analysisApi = {
-  create: (body: { home_team: string; away_team: string; tournament: string; neutral: boolean; type: string; fixture_id?: number | null }) =>
+  create: (body: { home_team: string; away_team: string; tournament: string; neutral: boolean; scope?: "selecao" | "clube"; type: string; fixture_id?: number | null }) =>
     authFetch<AnalysisResponse>("/analysis", { method: "POST", body: JSON.stringify(body) }),
   list: (limit = 20, offset = 0) =>
     authFetch<{ items: AnalysisSummary[]; total: number; limit: number; offset: number }>(`/analysis?limit=${limit}&offset=${offset}`),

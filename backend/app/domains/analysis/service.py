@@ -70,19 +70,21 @@ def _model_fingerprint() -> tuple[str, str]:
 def _generate_snapshot(req: schemas.AnalysisRequest) -> dict:
     """Chama o mesmo pipeline do endpoint /predict (previsão + odds)."""
     from app.schemas import PredictRequest
-    from app.services.predictor_service import get_predictor, predict_match
+    from app.services.predictor_service import _predictor_for, predict_match
 
-    predictor = get_predictor()
+    scope = req.scope if req.scope == "clube" else "selecao"
+    predictor = _predictor_for(scope)
     home = predictor.norm_team(req.home_team)
     away = predictor.norm_team(req.away_team)
     if home == away:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Escolha duas seleções diferentes.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Escolha duas equipes diferentes.")
     if home not in predictor.teams() or away not in predictor.teams():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Seleção não encontrada.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Time não encontrado.")
     if req.tournament not in predictor.meta["tournament_weights"]:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Competição inválida.")
-    payload = PredictRequest(home_team=home, away_team=away, neutral=req.neutral, tournament=req.tournament)
-    return predict_match(payload), home, away
+    payload = PredictRequest(home_team=home, away_team=away, neutral=req.neutral,
+                             tournament=req.tournament, scope=scope)
+    return predict_match(payload, scope=scope), home, away
 
 
 _FINISHED_OR_LIVE = {"FT", "AET", "PEN", "1H", "2H", "HT", "ET", "BT", "P", "LIVE"}

@@ -8,6 +8,7 @@ class PredictRequest(BaseModel):
     away_team: str = Field(..., examples=["Argentina"])
     neutral: bool = False
     tournament: str = "Copa do Mundo"
+    scope: str = "selecao"  # 'selecao' | 'clube' -- seleciona qual Predictor/artefatos usar
     home_vals: dict[str, float | int | None] | None = None
     away_vals: dict[str, float | int | None] | None = None
     context_overrides: dict[str, float | int | None] | None = None

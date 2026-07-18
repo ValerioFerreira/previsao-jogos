@@ -12,6 +12,7 @@ class AnalysisRequest(BaseModel):
     away_team: str
     tournament: str = "Amistoso"
     neutral: bool = False
+    scope: str = "selecao"  # 'selecao' | 'clube' -- qual Predictor/artefatos usar
     type: str = Field(default="independent")   # independent | future_match
     fixture_id: int | None = None              # obrigatório p/ future_match
 

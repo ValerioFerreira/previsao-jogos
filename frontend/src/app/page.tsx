@@ -94,7 +94,7 @@ function CountdownUnit({ value, label, big = false }: { value: number; label: st
 // requisições sem contexto de navegador com uma página HTML de verificação — em vez de servir a
 // imagem, o que fazia a seção inteira sumir em alguns celulares/redes). Fundo agora é 100% CSS.
 const NEWS_BANNER_KEY = "apostai:news_banner_v4_dismissed";
-function ClubMarketsBanner() {
+function ClubMarketsBanner({ onExplore }: { onExplore: () => void }) {
   const [dismissed, setDismissed] = useState(true);
   const countdown = useCountdown(CLUBS_LAUNCH_ISO);
   useEffect(() => {
@@ -166,6 +166,13 @@ function ClubMarketsBanner() {
             Houve um pequeno delay, mas tá no forno! 👨‍🍳
           </span>
         </div>
+
+        <button
+          onClick={() => { dismiss(); onExplore(); }}
+          className="mt-1 px-5 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 hover:opacity-90 transition-opacity"
+        >
+          Analisar um jogo de clube →
+        </button>
       </div>
     </motion.div>
   );
@@ -420,7 +427,7 @@ export default function Previsoes() {
   const router = useRouter();
   const {
     homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, setCompetition, neutralField, setNeutralField,
-    analysis, setAnalysis, mode, setMode, fixtureId, setFixtureId, matchDate, setMatchDate,
+    scope, setScope, analysis, setAnalysis, mode, setMode, fixtureId, setFixtureId, matchDate, setMatchDate,
   } = usePrediction();
   const { user, wallet, refreshWallet } = useAuth();
 
@@ -443,10 +450,11 @@ export default function Previsoes() {
   // "Alterar Equipes" (no cabeçalho flutuante) reabre para trocar.
   const [editingTeams, setEditingTeams] = useState(false);
 
-  // Prováveis goleadores (modelo de goleador) — busca ao gerar a análise.
+  // Prováveis goleadores (modelo de goleador) — busca ao gerar a análise. Sem props de
+  // jogador para clubes ainda (get_scorers retorna disponivel:false, ScorersCard some).
   React.useEffect(() => {
     if (analysis && homeTeamId && awayTeamId && homeTeamId !== awayTeamId) {
-      api.scorers(homeTeamId, awayTeamId).then(setScorers).catch(() => setScorers(null));
+      api.scorers(homeTeamId, awayTeamId, scope).then(setScorers).catch(() => setScorers(null));
     } else {
       setScorers(null);
     }
@@ -458,11 +466,11 @@ export default function Previsoes() {
   React.useEffect(() => {
     if (homeTeamId && awayTeamId && homeTeamId !== awayTeamId) {
       setLoadingH2H(true);
-      api.h2h(homeTeamId, awayTeamId).then(h => setH2hData(h?.metrics ?? null)).catch(() => setH2hData(null)).finally(() => setLoadingH2H(false));
+      api.h2h(homeTeamId, awayTeamId, scope).then(h => setH2hData(h?.metrics ?? null)).catch(() => setH2hData(null)).finally(() => setLoadingH2H(false));
     } else {
       setH2hData(null); setLoadingH2H(false);
     }
-  }, [homeTeamId, awayTeamId]);
+  }, [homeTeamId, awayTeamId, scope]);
 
   // Modo de análise (mode) e data (matchDate) vêm do contexto (persistem ao navegar).
   const [referee, setReferee] = useState('');
@@ -505,6 +513,7 @@ export default function Previsoes() {
   const selectFutureFixture = (fid: string) => {
     const fx = upcoming.find(f => f.fixture_id === fid);
     if (!fx) return;
+    setScope(fx.scope || 'selecao'); // o sistema identifica sozinho pela liga da partida
     setHomeTeamId(fx.home);
     setAwayTeamId(fx.away);
     setCompetition(fx.tournament);
@@ -515,38 +524,55 @@ export default function Previsoes() {
     setEditingTeams(false); // recolhe o card de configuração após escolher a partida
   };
 
+  // Troca de escopo (Seleções/Clubes) na Análise Independente: roster e competições são
+  // outros, então zera a escolha de times/competição em vez de manter algo inválido.
+  const changeScope = (s: 'selecao' | 'clube') => {
+    if (s === scope) return;
+    setScope(s);
+    setHomeTeamId('');
+    setAwayTeamId('');
+    setProjection(null);
+  };
+
   React.useEffect(() => {
-    api.teams().then(res => {
+    api.teams(scope).then(res => {
       setTeams(res.teams);
       setTournaments(res.tournaments);
+      // Só corrige a competição parada no ar quando o usuário está montando o confronto
+      // manualmente (Análise Independente) -- não mexe quando veio de uma partida agendada
+      // (selectFutureFixture já define a competição certa a partir da própria fixture).
+      if (mode === 'independente' && (!competition || !res.tournaments.includes(competition))) {
+        setCompetition(res.tournaments[0] || '');
+      }
     }).catch(console.error);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope]);
 
   React.useEffect(() => {
     if (homeTeamId) {
       setLoadingHome(true);
       Promise.all([
-        api.recentMatches(homeTeamId).then(res => setHomeForm({matches: res.matches, total: res.total_matches})),
-        api.teamAnomalies(homeTeamId).then(res => setHomeAnomalies(res.anomalies)),
+        api.recentMatches(homeTeamId, scope).then(res => setHomeForm({matches: res.matches, total: res.total_matches})),
+        api.teamAnomalies(homeTeamId, scope).then(res => setHomeAnomalies(res.anomalies)),
       ]).catch(() => {}).finally(() => setLoadingHome(false));
     } else {
       setHomeForm({matches: [], total: 0});
       setHomeAnomalies([]);
     }
-  }, [homeTeamId]);
+  }, [homeTeamId, scope]);
 
   React.useEffect(() => {
     if (awayTeamId) {
       setLoadingAway(true);
       Promise.all([
-        api.recentMatches(awayTeamId).then(res => setAwayForm({matches: res.matches, total: res.total_matches})),
-        api.teamAnomalies(awayTeamId).then(res => setAwayAnomalies(res.anomalies)),
+        api.recentMatches(awayTeamId, scope).then(res => setAwayForm({matches: res.matches, total: res.total_matches})),
+        api.teamAnomalies(awayTeamId, scope).then(res => setAwayAnomalies(res.anomalies)),
       ]).catch(() => {}).finally(() => setLoadingAway(false));
     } else {
       setAwayForm({matches: [], total: 0});
       setAwayAnomalies([]);
     }
-  }, [awayTeamId]);
+  }, [awayTeamId, scope]);
 
   const canGenerate = homeTeamId && awayTeamId && homeTeamId !== awayTeamId;
 
@@ -563,6 +589,7 @@ export default function Previsoes() {
         away_team: awayTeamId,
         tournament: competition,
         neutral: neutralField,
+        scope,
         type: mode === 'futura' ? 'future_match' : 'independent',
         fixture_id: mode === 'futura' ? fixtureId : null,
       });
@@ -573,11 +600,15 @@ export default function Previsoes() {
     } finally {
       setLoading(false);
     }
-  }, [canGenerate, user, homeTeamId, awayTeamId, competition, neutralField, mode, fixtureId, refreshWallet, router, setAnalysis]);
+  }, [canGenerate, user, homeTeamId, awayTeamId, competition, neutralField, scope, mode, fixtureId, refreshWallet, router, setAnalysis]);
 
   return (
     <div className="space-y-6">
-      <ClubMarketsBanner />
+      <ClubMarketsBanner onExplore={() => {
+        setMode('independente');
+        changeScope('clube');
+        setEditingTeams(true);
+      }} />
       {homeTeamId && awayTeamId && (
         <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} onEditTeams={() => setEditingTeams(true)} />
       )}
@@ -616,6 +647,19 @@ export default function Previsoes() {
           />
         </div>
 
+        {mode === 'independente' && (
+          <div className="inline-flex p-1 mb-4 ml-2 rounded-lg bg-muted text-xs font-medium">
+            <button
+              onClick={() => changeScope('selecao')}
+              className={`px-3 py-1.5 rounded-md transition-colors ${scope === 'selecao' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >Seleções</button>
+            <button
+              onClick={() => changeScope('clube')}
+              className={`px-3 py-1.5 rounded-md transition-colors ${scope === 'clube' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >Clubes</button>
+          </div>
+        )}
+
         {mode === 'futura' && (
           <div className="mb-2">
             <button onClick={() => !loadingUpcoming && setModalOpen(true)} disabled={loadingUpcoming}
@@ -635,11 +679,13 @@ export default function Previsoes() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
-              <TeamSelect value={homeTeamId} onValueChange={v => { setHomeTeamId(v); setProjection(null); }} teams={teams.filter(t => t !== awayTeamId)} />
+              <TeamSelect value={homeTeamId} onValueChange={v => { setHomeTeamId(v); setProjection(null); }} teams={teams.filter(t => t !== awayTeamId)}
+                placeholder={scope === 'clube' ? 'Buscar clube...' : undefined} searchPlaceholder={scope === 'clube' ? 'Buscar clube...' : undefined} />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">Time Visitante</Label>
-              <TeamSelect value={awayTeamId} onValueChange={v => { setAwayTeamId(v); setProjection(null); }} teams={teams.filter(t => t !== homeTeamId)} />
+              <TeamSelect value={awayTeamId} onValueChange={v => { setAwayTeamId(v); setProjection(null); }} teams={teams.filter(t => t !== homeTeamId)}
+                placeholder={scope === 'clube' ? 'Buscar clube...' : undefined} searchPlaceholder={scope === 'clube' ? 'Buscar clube...' : undefined} />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">Competição</Label>

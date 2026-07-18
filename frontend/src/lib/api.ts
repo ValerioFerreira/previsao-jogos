@@ -160,11 +160,14 @@ export type OddsBlock = {
   nota: string;
 };
 
+export type Scope = "selecao" | "clube";
+
 export type PredictPayload = {
   home_team: string;
   away_team: string;
   neutral: boolean;
   tournament: string;
+  scope?: Scope;
   home_vals?: Record<string, number>;
   away_vals?: Record<string, number>;
   context_overrides?: Record<string, number>;
@@ -338,34 +341,40 @@ export type RefereeStatsResponse = {
 
 export const api = {
   health: () => request<{ status: string; service: string }>("/health"),
-  teams: () => request<TeamsResponse>("/teams"),
-  team: (name: string) => request<TeamResponse>(`/team/${encodeURIComponent(name)}`),
-  h2h: (home: string, away: string) =>
-    request<H2HResponse>(`/h2h?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`),
+  teams: (scope: Scope = "selecao") => request<TeamsResponse>(`/teams?scope=${scope}`),
+  team: (name: string, scope: Scope = "selecao") =>
+    request<TeamResponse>(`/team/${encodeURIComponent(name)}?scope=${scope}`),
+  h2h: (home: string, away: string, scope: Scope = "selecao") =>
+    request<H2HResponse>(`/h2h?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&scope=${scope}`),
   predict: (payload: PredictPayload) =>
     request<PredictionResponse>("/predict", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   systemStatus: () => request<SystemStatusResponse>("/api/system/status"),
-  recentMatches: (name: string) => request<RecentMatchesResponse>(`/api/teams/${encodeURIComponent(name)}/recent`),
-  teamAnomalies: (name: string) => request<AnomaliesResponse>(`/api/teams/${encodeURIComponent(name)}/anomalies`),
-  teamHistory: (name: string) => request<TeamHistoryResponse>(`/api/teams/${encodeURIComponent(name)}/history`),
-  goalTiming: (name: string) => request<GoalTimingResponse>(`/api/teams/${encodeURIComponent(name)}/goal-timing`),
+  recentMatches: (name: string, scope: Scope = "selecao") =>
+    request<RecentMatchesResponse>(`/api/teams/${encodeURIComponent(name)}/recent?scope=${scope}`),
+  teamAnomalies: (name: string, scope: Scope = "selecao") =>
+    request<AnomaliesResponse>(`/api/teams/${encodeURIComponent(name)}/anomalies?scope=${scope}`),
+  teamHistory: (name: string, scope: Scope = "selecao") =>
+    request<TeamHistoryResponse>(`/api/teams/${encodeURIComponent(name)}/history?scope=${scope}`),
+  goalTiming: (name: string, scope: Scope = "selecao") =>
+    request<GoalTimingResponse>(`/api/teams/${encodeURIComponent(name)}/goal-timing?scope=${scope}`),
   refereeStats: (name: string) => request<RefereeStatsResponse>(`/api/referees/${encodeURIComponent(name)}/stats`),
-  injuries: (name: string) => request<InjuriesResponse>(`/api/teams/${encodeURIComponent(name)}/injuries`),
-  pmfPreview: (home: string, away: string, neutral: boolean, tournament: string) =>
-    request<PmfPreviewResponse>(`/api/pmf-preview?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&neutral=${neutral}&tournament=${encodeURIComponent(tournament)}`),
+  injuries: (name: string, scope: Scope = "selecao") =>
+    request<InjuriesResponse>(`/api/teams/${encodeURIComponent(name)}/injuries?scope=${scope}`),
+  pmfPreview: (home: string, away: string, neutral: boolean, tournament: string, scope: Scope = "selecao") =>
+    request<PmfPreviewResponse>(`/api/pmf-preview?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&neutral=${neutral}&tournament=${encodeURIComponent(tournament)}&scope=${scope}`),
   referees: () => request<{ referees: string[] }>("/api/referees"),
   teamIds: () => request<Record<string, number>>("/api/team-ids"),
-  competitionBenchmark: (tournament: string) =>
-    request<CompetitionBenchmarkResponse>(`/api/competition-benchmark?tournament=${encodeURIComponent(tournament)}`),
+  competitionBenchmark: (tournament: string, scope: Scope = "selecao") =>
+    request<CompetitionBenchmarkResponse>(`/api/competition-benchmark?tournament=${encodeURIComponent(tournament)}&scope=${scope}`),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),
   pastFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/past"),
   matchDetail: (home: string, away: string, date: string) =>
     request<MatchDetail>(`/api/match-detail?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&date=${encodeURIComponent(date)}`),
-  scorers: (home: string, away: string) =>
-    request<ScorersResponse>(`/api/scorers?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`),
+  scorers: (home: string, away: string, scope: Scope = "selecao") =>
+    request<ScorersResponse>(`/api/scorers?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&scope=${scope}`),
 };
 
 // Prop "jogador a marcar": P(marca | joga) calibrada + odd justa.
@@ -414,6 +423,7 @@ export type UpcomingFixture = {
   neutral: boolean;
   date: string;
   league_name: string;
+  scope: Scope;
 };
 
 // URL do logo da seleção (api-football media; não conta cota).

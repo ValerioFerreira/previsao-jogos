@@ -47,7 +47,7 @@ export default function KeyPlayerMatchup({ data, home, away, teamIds }: {
     <div className="bg-card border border-border/50 rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
         Duelo de Estrelas
-        <InfoTooltip text="O jogador mais provável de marcar de cada seleção, frente a frente (modelo de goleador: forma recente + defesa do adversário + mando). Odd justa = 1/probabilidade, sem margem." />
+        <InfoTooltip text="O jogador mais provável de marcar de cada equipe, frente a frente (modelo de goleador: forma recente + defesa do adversário + mando). Odd justa = 1/probabilidade, sem margem." />
       </h3>
       <p className="text-xs text-muted-foreground mb-4">Maior probabilidade de marcar em cada equipe</p>
       <div className="flex items-start gap-3">

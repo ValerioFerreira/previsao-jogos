@@ -48,7 +48,7 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
       <div className="text-center mb-3">
         <h3 className="text-sm font-bold uppercase mb-1 flex items-center justify-center gap-1.5">
           Resumo do Confronto Direto
-          <InfoTooltip text="Histórico de partidas entre as duas seleções (resultados da base martj42; estatísticas avançadas quando disponíveis)." />
+          <InfoTooltip text="Histórico de partidas entre as duas equipes (resultados da base martj42; estatísticas avançadas quando disponíveis)." />
         </h3>
         <p className="text-[10px] text-muted-foreground">
           {played} {played === 1 ? "jogo" : "jogos"}

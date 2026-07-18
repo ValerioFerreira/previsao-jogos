@@ -31,7 +31,13 @@ def _fair_odd(p: float) -> float:
     return max(1.0, round(1.0 / p, 2))
 
 
-def get_scorers(home: str, away: str, top: int = 12, min_recent_year: int = 2023) -> dict[str, Any]:
+def get_scorers(home: str, away: str, top: int = 12, min_recent_year: int = 2023,
+                scope: str = "selecao") -> dict[str, Any]:
+    if scope == "clube":
+        # scorer_model.joblib é treinado só com jogadores de seleção -- não expor
+        # prop errado para clube (fast-follow: retreinar com dados de clube, que
+        # têm cobertura de box-score muito melhor que seleção).
+        return {"disponivel": False, "motivo": "props de jogador ainda não disponíveis para clubes"}
     art = _load()
     if art is None:
         return {"disponivel": False, "motivo": "modelo de goleador ainda não construído"}

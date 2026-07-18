@@ -53,6 +53,7 @@ def _cache_nonempty(fn):
 API_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = API_ROOT
 ARTIFACT_DIR = API_ROOT / "model_artifacts"
+ARTIFACT_DIR_CLUBES = API_ROOT / "model_artifacts_clubes"
 PARQUET_PATH = REPO_ROOT / "data" / "built" / "matches.parquet"
 LAST_UPDATE_PATH = REPO_ROOT / "data" / "state" / "last_update.json"
 LOG_FILE_PATH = REPO_ROOT / "data" / "state" / "predictions_log.jsonl"
@@ -96,19 +97,35 @@ def _loose_team_key(s: str) -> str:
     return re.sub(r"\s+", " ", s)
 
 
-@_cache_nonempty
-def get_team_ids() -> dict[str, int]:
-    """Mapa nome_da_seleção -> team_id (para logo E busca de partidas antigas).
+_TEAM_IDS_MEMO: dict[str, dict[str, int]] = {}
+
+
+def get_team_ids(scope: str = "selecao") -> dict[str, int]:
+    """Mapa nome_do_time -> team_id (para logo E busca de partidas antigas).
     Resolve grafias divergentes (ex.: 'Bosnia and Herzegovina' vs 'Bosnia & Herzegovina',
     'North Macedonia' vs 'FYR Macedonia') casando os nomes canônicos por normalização
-    frouxa + aliases, para que toda seleção com id disponível fique acessível pelo nome."""
-    from app.db.connection import engine
-    try:
-        df = pd.read_sql("SELECT team_name, team_id FROM team_ids", con=engine)
-        raw = dict(zip(df["team_name"], df["team_id"]))
-    except Exception as e:
-        print(f"[ERRO DB] team_ids: {e}")
-        raw = {}
+    frouxa + aliases, para que todo time com id disponível fique acessível pelo nome.
+    A tabela `team_ids` do Neon só é preenchida para seleção (`build_referees_and_team_ids.py`,
+    fonte = cache de fixtures de seleção) -- clube resolve localmente a partir do próprio
+    `meta.json` do artefato (`team_ids`, já com nomes desambiguados/limpos, ver
+    `build_clubs_production_artifacts.py`), sem tocar o Neon."""
+    if scope in _TEAM_IDS_MEMO:
+        return _TEAM_IDS_MEMO[scope]
+
+    if scope == "clube":
+        try:
+            raw = dict(_predictor_for("clube").meta.get("team_ids", {}))
+        except Exception as e:
+            print(f"[ERRO] team_ids (clube): {e}")
+            raw = {}
+    else:
+        from app.db.connection import engine
+        try:
+            df = pd.read_sql("SELECT team_name, team_id FROM team_ids", con=engine)
+            raw = dict(zip(df["team_name"], df["team_id"]))
+        except Exception as e:
+            print(f"[ERRO DB] team_ids: {e}")
+            raw = {}
 
     out = dict(raw)
     for name, tid in raw.items():
@@ -119,9 +136,9 @@ def get_team_ids() -> dict[str, int]:
     for name, tid in raw.items():
         loose_idx.setdefault(_loose_team_key(name), tid)
 
-    # resolve cada nome canônico que ainda não tem id
+    # resolve cada nome canônico (do escopo pedido) que ainda não tem id
     try:
-        canon = get_predictor().teams()
+        canon = _predictor_for(scope).teams()
     except Exception:
         canon = []
     for name in canon:
@@ -135,6 +152,8 @@ def get_team_ids() -> dict[str, int]:
             tid = loose_idx.get(_loose_team_key(name))
         if tid is not None:
             out[name] = tid
+    if out:
+        _TEAM_IDS_MEMO[scope] = out
     return out
 
 
@@ -321,14 +340,29 @@ def _load_registry() -> dict[str, dict]:
     return {}
 
 
+def _load_club_registry() -> dict[str, dict]:
+    """Registry de jogos futuros de CLUBE -- tabela separada `club_odds_registry`
+    (nunca mistura com `odds_registry` de seleções, ver collect_club_odds_forward.py)."""
+    from app.db.connection import engine
+    try:
+        df = pd.read_sql("SELECT * FROM club_odds_registry", con=engine)
+        if not df.empty:
+            return {str(r["fixture_id"]): r for r in df.to_dict(orient="records")}
+    except Exception as e:
+        print(f"[ERRO DB] club_odds_registry: {e}")
+    return {}
+
+
 def get_upcoming_fixtures() -> list[dict[str, Any]]:
     """Partidas futuras a partir do registry do coletor de odds (sem cota nova).
-    Já traz tournament/neutral mapeados para o nosso sistema."""
-    reg = _load_registry()
-    if not reg:
-        return []
+    Já traz tournament/neutral mapeados para o nosso sistema. Mescla seleções
+    (odds_registry, scope='selecao') e clubes (club_odds_registry, scope='clube')
+    -- o front deriva a análise correta (predictor/mercados) a partir de `scope`,
+    sem o usuário precisar escolher manualmente."""
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     out = []
+
+    reg = _load_registry()
     for fid, info in reg.items():
         date = info.get("fixture_date", "")
         if date and date < now:
@@ -341,7 +375,26 @@ def get_upcoming_fixtures() -> list[dict[str, Any]]:
             "neutral": bool(info.get("neutral", False)),
             "date": date,
             "league_name": info.get("league_name", ""),
+            "scope": "selecao",
         })
+
+    club_reg = _load_club_registry()
+    for fid, info in club_reg.items():
+        date = info.get("fixture_date", "")
+        if date and date < now:
+            continue
+        tournament = info.get("league_name") or "Clubes"
+        out.append({
+            "fixture_id": fid,
+            "home": info.get("home"),
+            "away": info.get("away"),
+            "tournament": tournament,
+            "neutral": False,  # jogo de clube: mando real, salvo raras finais neutras (fora de escopo hoje)
+            "date": date,
+            "league_name": tournament,
+            "scope": "clube",
+        })
+
     out.sort(key=lambda x: x["date"] or "")
     return out
 
@@ -351,14 +404,26 @@ def get_predictor() -> Predictor:
     return Predictor(art_dir=str(ARTIFACT_DIR))
 
 
+@lru_cache(maxsize=1)
+def get_club_predictor() -> Predictor:
+    return Predictor(art_dir=str(ARTIFACT_DIR_CLUBES))
+
+
+def _predictor_for(scope: str = "selecao") -> Predictor:
+    """Escopo 'clube' usa o Predictor treinado em dados de clube (mesma arquitetura,
+    artefatos separados -- ver scripts/build_clubs_production_artifacts.py). Qualquer
+    valor != 'clube' cai no Predictor de seleções (compatibilidade retroativa)."""
+    return get_club_predictor() if scope == "clube" else get_predictor()
+
+
 def clean_values(values: dict[str, Any] | None) -> dict[str, Any]:
     if not values:
         return {}
     return {key: value for key, value in values.items() if value is not None}
 
 
-def predict_match(payload: Any) -> dict[str, Any]:
-    predictor = get_predictor()
+def predict_match(payload: Any, scope: str = "selecao") -> dict[str, Any]:
+    predictor = _predictor_for(scope)
     raw = predictor.predict(
         payload.home_team,
         payload.away_team,
@@ -408,13 +473,19 @@ def get_system_status() -> dict[str, str]:
     return {"last_successful_run": "2026-06-22 00:00:00"}
 
 
-def get_recent_matches(team_name: str) -> dict[str, Any]:
+def get_recent_matches(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     """Consulta PostgreSQL e extrai as últimas 10 partidas reais da equipe.
 
     10 (e não 5) para dar sinal suficiente aos cálculos de momentum/tendência da
     página de Estatísticas (metade recente x metade anterior da janela). A UI que só
     quer os últimos 5 jogos (ex.: DestaquesRecentes) já faz `.slice(0, 5)` no cliente.
+
+    Escopo 'clube': a tabela `matches` (agregado precomputado) só cobre seleções hoje
+    -- degrada com graça (lista vazia) até um `club_matches` equivalente existir
+    (fast-follow, ver DOCUMENTACAO_CENTRAL.md §14).
     """
+    if scope == "clube":
+        return {"matches": [], "total_matches": 0}
     from app.db.connection import engine
     from sqlalchemy import text as _text
     try:
@@ -458,8 +529,12 @@ def get_recent_matches(team_name: str) -> dict[str, Any]:
     return {"matches": matches, "total_matches": total_matches}
 
 
-def get_team_history(team_name: str) -> dict[str, Any]:
-    """Extrai histórico do time para os gráficos da página de Estatísticas."""
+def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
+    """Extrai histórico do time para os gráficos da página de Estatísticas.
+    Escopo 'clube': mesmo gap da `matches` que get_recent_matches -- vazio por ora."""
+    if scope == "clube":
+        return {"team": team_name, "elo_history": [], "attack_avg": 0.0,
+                "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
     from app.db.connection import engine
     from sqlalchemy import text as _text
     try:
@@ -551,15 +626,20 @@ def _timing_block_idx(elapsed: int) -> int:
     return min((elapsed - 1) // 15, 5)
 
 
-def get_goal_timing(team_name: str) -> dict[str, Any]:
+def get_goal_timing(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     """Distribuição de MINUTAGEM de gols (marcados e sofridos) por blocos de 15',
-    agregada do histórico já cacheado (match_detail_cache). Zero chamada à API."""
+    agregada do histórico já cacheado (match_detail_cache). Zero chamada à API.
+    Escopo 'clube': match_detail_cache/goal_timing_agg só cobrem seleções hoje --
+    degrada com graça (fast-follow: club_match_detail_cache já existe, falta o
+    agregado equivalente)."""
+    blocks = [{"label": lbl, "scored": 0, "conceded": 0} for _, _, lbl in _TIMING_BLOCKS]
+    empty = {"team": team_name, "n_matches": 0, "total_scored": 0, "total_conceded": 0, "blocks": blocks}
+    if scope == "clube":
+        return empty
     if team_name in _GOAL_TIMING_MEMO:
         return _GOAL_TIMING_MEMO[team_name]
 
     team_id = get_team_ids().get(team_name)
-    blocks = [{"label": lbl, "scored": 0, "conceded": 0} for _, _, lbl in _TIMING_BLOCKS]
-    empty = {"team": team_name, "n_matches": 0, "total_scored": 0, "total_conceded": 0, "blocks": blocks}
     if not team_id:
         return empty
 
@@ -740,13 +820,13 @@ _PMF_PREVIEW_MEMO: dict[str, dict] = {}
 
 
 def get_pmf_preview(home: str, away: str, neutral: bool = False,
-                    tournament: str = "Copa do Mundo") -> dict[str, Any]:
+                    tournament: str = "Copa do Mundo", scope: str = "selecao") -> dict[str, Any]:
     """Prévia REDUZIDA (grátis) da PMF: só a linha principal — distribuição de gols
     totais + Over/Under 2.5 + 1X2. Versão completa (todos os mercados) fica na Análise
     paga. Memoizado por confronto para não recomputar o modelo a cada visita."""
-    predictor = get_predictor()
+    predictor = _predictor_for(scope)
     h, a = predictor.norm_team(home), predictor.norm_team(away)
-    key = f"{h}|{a}|{int(bool(neutral))}|{tournament}"
+    key = f"{scope}|{h}|{a}|{int(bool(neutral))}|{tournament}"
     if key in _PMF_PREVIEW_MEMO:
         return _PMF_PREVIEW_MEMO[key]
 
@@ -772,10 +852,10 @@ def get_pmf_preview(home: str, away: str, neutral: bool = False,
     return out
 
 
-def get_injuries(team_name: str) -> dict[str, Any]:
-    """Boletim de desfalques (lesões/suspensões) atual da seleção. Consulta a API
+def get_injuries(team_name: str, scope: str = "selecao") -> dict[str, Any]:
+    """Boletim de desfalques (lesões/suspensões) atual da equipe. Consulta a API
     com cache diário no Neon; deduplica por jogador (registro mais recente)."""
-    team_id = get_team_ids().get(team_name)
+    team_id = get_team_ids(scope).get(team_name)
     if not team_id:
         return {"team": team_name, "season": None, "players": []}
 
@@ -820,9 +900,15 @@ _COMP_BUCKETS: dict[str, list[str]] = {
 }
 
 
-def get_competition_benchmark(tournament: str) -> dict[str, Any]:
+def get_competition_benchmark(tournament: str, scope: str = "selecao") -> dict[str, Any]:
     """Faixa típica de ataque/defesa (gols pró/contra por jogo) das seleções que disputam
-    a competição analisada — usada para desenhar o 'cardume' no gráfico de quadrantes."""
+    a competição analisada — usada para desenhar o 'cardume' no gráfico de quadrantes.
+    Escopo 'clube': a tabela `matches` só cobre seleções hoje -- degrada com graça
+    (fast-follow: precisaria do equivalente `club_matches`)."""
+    empty0 = {"attack_mean": 0.0, "attack_std": 0.0, "defense_mean": 0.0,
+              "defense_std": 0.0, "n_teams": 0, "scope": "global"}
+    if scope == "clube":
+        return empty0
     key = tournament or "_"
     if key in _COMP_BENCH_MEMO:
         return _COMP_BENCH_MEMO[key]
@@ -881,8 +967,12 @@ def get_competition_benchmark(tournament: str) -> dict[str, Any]:
     return out
 
 
-def get_team_anomalies(team_name: str) -> list[dict[str, Any]]:
-    """Detecta anomalias estatísticas recentes baseadas no Z-Score da equipe."""
+def get_team_anomalies(team_name: str, scope: str = "selecao") -> list[dict[str, Any]]:
+    """Detecta anomalias estatísticas recentes baseadas no Z-Score da equipe.
+    Escopo 'clube': feature pensada p/ o ciclo de seleção (competitivo vs amistoso
+    em torno de Copas) -- não se aplica a calendário de liga de clube; vazio."""
+    if scope == "clube":
+        return []
     # Obter o torneio padrão para determinar a classe competitivo/amistoso
     return detect_anomalies(team_name, target_competition="World Cup")
 

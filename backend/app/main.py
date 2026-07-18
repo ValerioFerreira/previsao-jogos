@@ -29,6 +29,8 @@ from app.schemas import (
 from app.services.predictor_service import (
     allowed_origins,
     get_predictor,
+    get_club_predictor,
+    _predictor_for,
     predict_match,
     get_system_status,
     get_recent_matches,
@@ -169,8 +171,8 @@ def cron_poll_invoices(token: str = Query(default="")) -> dict:
 
 
 @app.get("/teams", response_model=TeamsResponse)
-def teams() -> TeamsResponse:
-    predictor = get_predictor()
+def teams(scope: str = Query("selecao")) -> TeamsResponse:
+    predictor = _predictor_for(scope)
     return TeamsResponse(
         teams=predictor.teams(),
         tournaments=list(predictor.meta["tournament_weights"].keys()),
@@ -178,22 +180,22 @@ def teams() -> TeamsResponse:
 
 
 @app.get("/team/{nome:path}", response_model=TeamResponse)
-def team(nome: str) -> TeamResponse:
-    predictor = get_predictor()
+def team(nome: str, scope: str = Query("selecao")) -> TeamResponse:
+    predictor = _predictor_for(scope)
     defaults = predictor.team_defaults(nome)
     if not defaults:
-        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
     return TeamResponse(team=nome, defaults=defaults, bases=predictor.bases())
 
 
 @app.get("/h2h", response_model=H2HResponse)
-def h2h(home: str = Query(...), away: str = Query(...)) -> H2HResponse:
-    predictor = get_predictor()
+def h2h(home: str = Query(...), away: str = Query(...), scope: str = Query("selecao")) -> H2HResponse:
+    predictor = _predictor_for(scope)
     home, away = predictor.norm_team(home), predictor.norm_team(away)
     if home == away:
-        raise HTTPException(status_code=400, detail="Escolha duas selecoes diferentes.")
+        raise HTTPException(status_code=400, detail="Escolha duas equipes diferentes.")
     if home not in predictor.teams() or away not in predictor.teams():
-        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
     metrics = predictor.head_to_head(home, away)
     summary = metrics.pop("_resumo")
     return H2HResponse(home=home, away=away, summary=summary, metrics=metrics)
@@ -201,17 +203,17 @@ def h2h(home: str = Query(...), away: str = Query(...)) -> H2HResponse:
 
 @app.post("/predict")
 def predict(payload: PredictRequest) -> dict:
-    predictor = get_predictor()
+    predictor = _predictor_for(payload.scope)
     # canoniza nomes (jogos futuros podem vir como "Czechia", "Türkiye", etc.)
     payload.home_team = predictor.norm_team(payload.home_team)
     payload.away_team = predictor.norm_team(payload.away_team)
     if payload.home_team == payload.away_team:
-        raise HTTPException(status_code=400, detail="Escolha duas selecoes diferentes.")
+        raise HTTPException(status_code=400, detail="Escolha duas equipes diferentes.")
     if payload.home_team not in predictor.teams() or payload.away_team not in predictor.teams():
-        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
     if payload.tournament not in predictor.meta["tournament_weights"]:
         raise HTTPException(status_code=400, detail="Competicao invalida.")
-    return predict_match(payload)
+    return predict_match(payload, scope=payload.scope)
 
 
 @app.get("/api/referees")
@@ -225,13 +227,13 @@ def referee_stats(name: str) -> RefereeStatsResponse:
 
 
 @app.get("/api/team-ids")
-def team_ids() -> dict:
-    return get_team_ids()
+def team_ids(scope: str = Query("selecao")) -> dict:
+    return get_team_ids(scope)
 
 
 @app.get("/api/competition-benchmark", response_model=CompetitionBenchmarkResponse)
-def competition_benchmark(tournament: str = Query("")) -> CompetitionBenchmarkResponse:
-    return CompetitionBenchmarkResponse(**get_competition_benchmark(tournament))
+def competition_benchmark(tournament: str = Query(""), scope: str = Query("selecao")) -> CompetitionBenchmarkResponse:
+    return CompetitionBenchmarkResponse(**get_competition_benchmark(tournament, scope=scope))
 
 
 @app.get("/api/fixtures/upcoming")
@@ -253,17 +255,18 @@ def match_detail(home: str = Query(...), away: str = Query(...), date: str = Que
 
 @app.get("/api/pmf-preview", response_model=PmfPreviewResponse)
 def pmf_preview(home: str = Query(...), away: str = Query(...),
-                neutral: bool = Query(False), tournament: str = Query("Copa do Mundo")) -> PmfPreviewResponse:
+                neutral: bool = Query(False), tournament: str = Query("Copa do Mundo"),
+                scope: str = Query("selecao")) -> PmfPreviewResponse:
     """Prévia reduzida (grátis) da distribuição de gols + O/U 2.5 + 1X2."""
-    return PmfPreviewResponse(**get_pmf_preview(home, away, neutral=neutral, tournament=tournament))
+    return PmfPreviewResponse(**get_pmf_preview(home, away, neutral=neutral, tournament=tournament, scope=scope))
 
 
 @app.get("/api/scorers")
-def scorers(home: str = Query(...), away: str = Query(...)) -> dict:
+def scorers(home: str = Query(...), away: str = Query(...), scope: str = Query("selecao")) -> dict:
     """Prováveis goleadores (prop "jogador a marcar") de um confronto."""
     from app.services.scorer_service import get_scorers
-    predictor = get_predictor()
-    return get_scorers(predictor.norm_team(home), predictor.norm_team(away))
+    predictor = _predictor_for(scope)
+    return get_scorers(predictor.norm_team(home), predictor.norm_team(away), scope=scope)
 
 
 @app.get("/api/system/status", response_model=SystemStatusResponse)
@@ -272,76 +275,63 @@ def system_status() -> SystemStatusResponse:
     return SystemStatusResponse(**status)
 
 
-@app.get("/api/teams/{team_name:path}/recent", response_model=RecentMatchesResponse)
-def recent_matches(team_name: str) -> RecentMatchesResponse:
-    predictor = get_predictor()
-    # Case-insensitive check
-    team_match = None
+def _resolve_team(predictor, team_name: str) -> str | None:
+    """Casamento case-insensitive do nome de time contra o roster do predictor
+    (seleção ou clube, conforme o predictor passado)."""
     for t in predictor.teams():
         if t.lower() == team_name.lower():
-            team_match = t
-            break
+            return t
+    return None
+
+
+@app.get("/api/teams/{team_name:path}/recent", response_model=RecentMatchesResponse)
+def recent_matches(team_name: str, scope: str = Query("selecao")) -> RecentMatchesResponse:
+    predictor = _predictor_for(scope)
+    team_match = _resolve_team(predictor, team_name)
     if not team_match:
-        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
-        
-    data = get_recent_matches(team_match)
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
+
+    data = get_recent_matches(team_match, scope=scope)
     return RecentMatchesResponse(team=team_match, matches=data["matches"], total_matches=data["total_matches"])
 
 
 @app.get("/api/teams/{team_name:path}/anomalies", response_model=AnomaliesResponse)
-def team_anomalies(team_name: str) -> AnomaliesResponse:
-    predictor = get_predictor()
-    # Case-insensitive check
-    team_match = None
-    for t in predictor.teams():
-        if t.lower() == team_name.lower():
-            team_match = t
-            break
+def team_anomalies(team_name: str, scope: str = Query("selecao")) -> AnomaliesResponse:
+    predictor = _predictor_for(scope)
+    team_match = _resolve_team(predictor, team_name)
     if not team_match:
-        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
-        
-    anomalies = get_team_anomalies(team_match)
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
+
+    anomalies = get_team_anomalies(team_match, scope=scope)
     return AnomaliesResponse(team=team_match, anomalies=anomalies)
 
 
 @app.get("/api/teams/{team_name:path}/history", response_model=TeamHistoryResponse)
-def team_history(team_name: str) -> TeamHistoryResponse:
-    predictor = get_predictor()
-    team_match = None
-    for t in predictor.teams():
-        if t.lower() == team_name.lower():
-            team_match = t
-            break
+def team_history(team_name: str, scope: str = Query("selecao")) -> TeamHistoryResponse:
+    predictor = _predictor_for(scope)
+    team_match = _resolve_team(predictor, team_name)
     if not team_match:
-        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
-        
-    history = get_team_history(team_match)
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
+
+    history = get_team_history(team_match, scope=scope)
     return TeamHistoryResponse(**history)
 
 
 @app.get("/api/teams/{team_name:path}/goal-timing", response_model=GoalTimingResponse)
-def goal_timing(team_name: str) -> GoalTimingResponse:
-    predictor = get_predictor()
-    team_match = None
-    for t in predictor.teams():
-        if t.lower() == team_name.lower():
-            team_match = t
-            break
+def goal_timing(team_name: str, scope: str = Query("selecao")) -> GoalTimingResponse:
+    predictor = _predictor_for(scope)
+    team_match = _resolve_team(predictor, team_name)
     if not team_match:
-        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
 
-    return GoalTimingResponse(**get_goal_timing(team_match))
+    return GoalTimingResponse(**get_goal_timing(team_match, scope=scope))
 
 
 @app.get("/api/teams/{team_name:path}/injuries", response_model=InjuriesResponse)
-def injuries(team_name: str) -> InjuriesResponse:
-    predictor = get_predictor()
-    team_match = None
-    for t in predictor.teams():
-        if t.lower() == team_name.lower():
-            team_match = t
-            break
+def injuries(team_name: str, scope: str = Query("selecao")) -> InjuriesResponse:
+    predictor = _predictor_for(scope)
+    team_match = _resolve_team(predictor, team_name)
     if not team_match:
-        raise HTTPException(status_code=404, detail="Selecao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
 
-    return InjuriesResponse(**get_injuries(team_match))
+    return InjuriesResponse(**get_injuries(team_match, scope=scope))
