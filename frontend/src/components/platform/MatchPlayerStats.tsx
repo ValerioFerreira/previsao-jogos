@@ -1,10 +1,8 @@
 "use client";
 import React from "react";
-import { MatchDetail as MD, MatchPlayer, teamLogoUrl, playerPhotoUrl } from "@/lib/api";
+import { MatchDetail as MD, MatchPlayer, teamLogoUrl, playerPhotoUrl, onImgError as hideOnError } from "@/lib/api";
 import { teamPt } from "@/lib/teamNames";
 import InfoTooltip from "@/components/platform/InfoTooltip";
-
-const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = "none"; };
 const num = (v: number | null | undefined) => (v == null ? 0 : v);
 const rf = (r: string | null | undefined): number => { const v = r ? parseFloat(r) : NaN; return isNaN(v) ? NaN : v; };
 

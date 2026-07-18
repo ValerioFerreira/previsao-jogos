@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { MatchDetail as MD, MatchPlayer, LineupPlayer, teamLogoUrl, playerPhotoUrl } from '@/lib/api';
+import { MatchDetail as MD, MatchPlayer, LineupPlayer, teamLogoUrl, playerPhotoUrl, onImgError as hideOnError } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 import InfoTooltip from '@/components/platform/InfoTooltip';
@@ -39,8 +39,6 @@ function eventIcon(type: string, detail: string): string {
   if (t === 'var') return '📺';
   return '•';
 }
-
-const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none'; };
 
 const Logo = ({ id, size = 24 }: { id?: number | null; size?: number }) => {
   const url = teamLogoUrl(id ?? undefined);

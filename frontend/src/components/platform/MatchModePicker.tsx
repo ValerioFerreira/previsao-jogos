@@ -45,7 +45,8 @@ export function MatchModePicker({
 
   React.useEffect(() => {
     api.upcomingFixtures().then(r => setUpcoming(r.fixtures)).catch(() => {});
-    api.teamIds().then(setTeamIds).catch(() => {});
+    Promise.all([api.teamIds("selecao"), api.teamIds("clube")])
+      .then(([sel, clu]) => setTeamIds({ ...sel, ...clu })).catch(() => {});
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
     api.teams().then(r => { setTeams(r.teams); setTournaments(r.tournaments); }).catch(() => {});
     if (onSelectPast) api.pastFixtures().then(r => setPast(r.fixtures)).catch(() => {});

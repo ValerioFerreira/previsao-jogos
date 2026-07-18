@@ -1,10 +1,10 @@
 "use client";
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { teamLogoUrl, leagueLogoUrl } from '@/lib/api';
+import { teamLogoUrl, leagueLogoUrl, onImgError } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 
@@ -49,20 +49,6 @@ function todayISO(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-// Em dev, o primeiro carregamento de imagem cross-origin às vezes é abortado pelo
-// double-render do React StrictMode -- um retry único evita esconder um brasão válido.
-function onImgError(e: React.SyntheticEvent<HTMLImageElement>) {
-  const img = e.currentTarget;
-  if (!img.dataset.retried) {
-    img.dataset.retried = '1';
-    const src = img.src;
-    img.src = '';
-    img.src = src;
-  } else {
-    img.style.display = 'none';
-  }
 }
 
 const Flag = ({ name, ids }: { name: string; ids: Record<string, number> }) => {

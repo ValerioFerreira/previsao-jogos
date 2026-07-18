@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowDown, CheckCircle2, Target, ChevronDown, Sliders, Clock, X } from 'lucide-react';
-import { api, PredictionResponse, PlacarMotivo, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl } from '@/lib/api';
+import { api, PredictionResponse, PlacarMotivo, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl, onImgError } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
@@ -375,7 +375,7 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onO
       <div>
         <div className="flex items-center justify-center gap-2 mb-2">
           {teamLogoUrl(teamIds[teamId]) && (
-            <img src={teamLogoUrl(teamIds[teamId])!} alt="" className="w-6 h-6 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <img src={teamLogoUrl(teamIds[teamId])!} alt="" className="w-6 h-6 object-contain" loading="lazy" onError={onImgError} />
           )}
           <div className="text-center">
             <span className="text-[9px] uppercase tracking-wide text-muted-foreground block leading-none">{label}</span>
@@ -503,7 +503,10 @@ export default function Previsoes() {
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
     setLoadingUpcoming(true);
     api.upcomingFixtures().then(r => setUpcoming(r.fixtures)).catch(() => {}).finally(() => setLoadingUpcoming(false));
-    api.teamIds().then(setTeamIds).catch(() => {});
+    // Uma única lista com os dois escopos -- evita ter que refazer o fetch a cada troca
+    // de Seleções/Clubes; nomes de seleção e de clube não colidem entre si.
+    Promise.all([api.teamIds("selecao"), api.teamIds("clube")])
+      .then(([sel, clu]) => setTeamIds({ ...sel, ...clu })).catch(() => {});
   }, []);
 
   // Confronto selecionado que já começou (aba aberta há horas, ou seleção reidratada do
@@ -862,7 +865,7 @@ export default function Previsoes() {
                 <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
                   <div className="text-center w-[30%] min-w-[82px]">
                     {teamLogoUrl(teamIds[homeTeamId]) && (
-                      <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={onImgError} />
                     )}
                     <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
                     <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
@@ -875,7 +878,7 @@ export default function Previsoes() {
                   </div>
                   <div className="text-center w-[30%] min-w-[82px]">
                     {teamLogoUrl(teamIds[awayTeamId]) && (
-                      <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={onImgError} />
                     )}
                     <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
                     <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>

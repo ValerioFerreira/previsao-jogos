@@ -66,7 +66,8 @@ export default function Estatisticas() {
 
   React.useEffect(() => {
     api.teams().then(res => setTeams(res.teams)).catch(console.error);
-    api.teamIds().then(setTeamIds).catch(() => {});
+    Promise.all([api.teamIds("selecao"), api.teamIds("clube")])
+      .then(([sel, clu]) => setTeamIds({ ...sel, ...clu })).catch(() => {});
     const sp = new URLSearchParams(window.location.search);
     const home = sp.get('home'), away = sp.get('away'), date = sp.get('date');
     if (home && away && date) openMatch(home, away, date);

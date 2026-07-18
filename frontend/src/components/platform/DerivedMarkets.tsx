@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { DerivedMarkets, DerivedOutcome, teamLogoUrl } from "@/lib/api";
+import { DerivedMarkets, DerivedOutcome, teamLogoUrl, onImgError } from "@/lib/api";
 import InfoTooltip from "@/components/platform/InfoTooltip";
 import { teamPt } from "@/lib/teamNames";
 
@@ -92,7 +92,7 @@ export function HandicapsCard({ d, home, away, teamIds }: DProps & { teamIds: Re
             <div className="flex flex-col items-center mb-2">
               <span className="text-xs font-semibold leading-tight text-center truncate max-w-full">{teamPt(team)}</span>
               {teamLogoUrl(teamIds[team]) && (
-                <img src={teamLogoUrl(teamIds[team])!} alt="" className="w-6 h-6 object-contain mt-1" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                <img src={teamLogoUrl(teamIds[team])!} alt="" className="w-6 h-6 object-contain mt-1" loading="lazy" onError={onImgError} />
               )}
             </div>
             {/* Cabeçalho das colunas */}

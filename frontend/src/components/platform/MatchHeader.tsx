@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { teamLogoUrl } from '@/lib/api';
+import { teamLogoUrl, onImgError } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
 
 function fmtDateTime(iso?: string): string {
@@ -15,7 +15,7 @@ const Side = ({ name, id, role, align }: { name: string; id?: number; role: stri
   const url = teamLogoUrl(id);
   return (
     <div className={`flex items-center gap-2 min-w-0 ${align === 'right' ? 'flex-row-reverse text-right' : ''}`}>
-      {url && <img src={url} alt="" className="w-[2.1rem] h-[2.1rem] object-contain shrink-0" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+      {url && <img src={url} alt="" className="w-[2.1rem] h-[2.1rem] object-contain shrink-0" loading="lazy" onError={onImgError} />}
       <div className="min-w-0">
         <p className="text-[1.05rem] font-semibold truncate">{teamPt(name)}</p>
         <p className="text-[12px] uppercase tracking-wide text-muted-foreground">{role}</p>

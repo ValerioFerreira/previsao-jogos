@@ -2,7 +2,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, ShieldAlert, ShieldCheck, Target } from "lucide-react";
-import { PredictionResponse, PlacarMotivo, teamLogoUrl } from "@/lib/api";
+import { PredictionResponse, PlacarMotivo, teamLogoUrl, onImgError } from "@/lib/api";
 import InfoTooltip from "@/components/platform/InfoTooltip";
 import { MarketCard } from "@/components/platform/MarketCard";
 import DerivedMarketsBlock from "@/components/platform/DerivedMarkets";
@@ -57,13 +57,13 @@ function PlacarExatoCard({ data, home, away, teamIds }: { data: NonNullable<Pred
       </h4>
       <div className="flex items-center justify-center gap-2 mb-3">
         {teamLogoUrl(teamIds[home]) && (
-          <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-5 h-5 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+          <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-5 h-5 object-contain" loading="lazy" onError={onImgError} />
         )}
         <p className="text-[10px] text-muted-foreground">{teamPt(home)}</p>
         <span className="text-[10px] text-muted-foreground">×</span>
         <p className="text-[10px] text-muted-foreground">{teamPt(away)}</p>
         {teamLogoUrl(teamIds[away]) && (
-          <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-5 h-5 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+          <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-5 h-5 object-contain" loading="lazy" onError={onImgError} />
         )}
       </div>
       <div className="grid grid-cols-3 gap-2 mb-4">
@@ -148,7 +148,7 @@ export default function PredictionDisplay({
                 ) : (
                   <div key={side.id} className="flex flex-col items-center w-24">
                     {teamLogoUrl(teamIds[side.id]) && (
-                      <img src={teamLogoUrl(teamIds[side.id])!} alt="" className="w-9 h-9 object-contain mb-1" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                      <img src={teamLogoUrl(teamIds[side.id])!} alt="" className="w-9 h-9 object-contain mb-1" loading="lazy" onError={onImgError} />
                     )}
                     <span className="text-xs font-semibold leading-tight">{teamPt(side.id)}</span>
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground mt-1">Vitórias</span>
@@ -175,7 +175,7 @@ export default function PredictionDisplay({
             <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">RESULTADOS</p>
             <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8">
               <div className="text-center w-full sm:w-1/4">
-                {teamLogoUrl(teamIds[home]) && <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+                {teamLogoUrl(teamIds[home]) && <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={onImgError} />}
                 <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(home)}</p>
                 <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[home]}%</p>
                 <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[home])}</p>
@@ -186,7 +186,7 @@ export default function PredictionDisplay({
                 <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades["Empate"])}</p>
               </div>
               <div className="text-center w-full sm:w-1/4">
-                {teamLogoUrl(teamIds[away]) && <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+                {teamLogoUrl(teamIds[away]) && <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={onImgError} />}
                 <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(away)}</p>
                 <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[away]}%</p>
                 <p className="text-[10px] text-muted-foreground mt-1">Faixa de odd justa: {oddRangeStr(projection.vencedor.probabilidades[away])}</p>

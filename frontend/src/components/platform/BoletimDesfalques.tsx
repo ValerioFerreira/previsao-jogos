@@ -1,10 +1,7 @@
 "use client";
-import React from "react";
-import { InjuriesResponse, InjuryPlayer, playerPhotoUrl } from "@/lib/api";
+import { InjuriesResponse, InjuryPlayer, playerPhotoUrl, onImgError as hideOnError } from "@/lib/api";
 import { teamPt } from "@/lib/teamNames";
 import InfoTooltip from "@/components/platform/InfoTooltip";
-
-const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = "none"; };
 
 // Tradução leve dos rótulos mais comuns da API-Football.
 const REASON_PT: Record<string, string> = {

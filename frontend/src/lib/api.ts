@@ -1,3 +1,5 @@
+import type { SyntheticEvent } from "react";
+
 export type TeamResponse = {
   team: string;
   defaults: Record<string, number>;
@@ -367,7 +369,7 @@ export const api = {
   pmfPreview: (home: string, away: string, neutral: boolean, tournament: string, scope: Scope = "selecao") =>
     request<PmfPreviewResponse>(`/api/pmf-preview?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&neutral=${neutral}&tournament=${encodeURIComponent(tournament)}&scope=${scope}`),
   referees: () => request<{ referees: string[] }>("/api/referees"),
-  teamIds: () => request<Record<string, number>>("/api/team-ids"),
+  teamIds: (scope: Scope = "selecao") => request<Record<string, number>>(`/api/team-ids?scope=${scope}`),
   competitionBenchmark: (tournament: string, scope: Scope = "selecao") =>
     request<CompetitionBenchmarkResponse>(`/api/competition-benchmark?tournament=${encodeURIComponent(tournament)}&scope=${scope}`),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),
@@ -436,5 +438,20 @@ export function teamLogoUrl(teamId?: number): string | null {
 // URL do logo da competição (api-football media; não conta cota).
 export function leagueLogoUrl(leagueId?: number | null): string | null {
   return leagueId ? `https://media.api-sports.io/football/leagues/${leagueId}.png` : null;
+}
+
+// Handler compartilhado p/ <img onError> de brasão/foto (api-football media). Em dev, o
+// primeiro carregamento cross-origin às vezes é abortado (double-render do React) --
+// um retry único evita esconder uma imagem válida; só desiste se falhar de novo.
+export function onImgError(e: SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if (!img.dataset.retried) {
+    img.dataset.retried = "1";
+    const src = img.src;
+    img.src = "";
+    img.src = src;
+  } else {
+    img.style.display = "none";
+  }
 }
 

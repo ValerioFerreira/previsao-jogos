@@ -62,7 +62,30 @@ def _trained_target_leagues() -> dict[int, str]:
     return {lid: name for lid, name in LEAGUES if name in trained}
 
 
+def _trained_team_names_by_id() -> dict[int, str]:
+    """Mapa id (api-football) -> nome CANÔNICO já desambiguado do artefato treinado
+    (`team_ids` do meta.json, name->id -- ver disambiguate_collisions em
+    build_clubs_production_artifacts.py). A API de odds devolve o nome cru (ex.:
+    "Athletic Club"), que não bate com o nome desambiguado do roster quando há
+    colisão entre ligas (ex.: "Athletic Club (Brasileirao Serie B)" vs "(La Liga)")
+    -- sem essa correção, brasão/H2H/histórico do time colidente ficam vazios."""
+    meta_path = ROOT / "model_artifacts_clubes" / "meta.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        team_ids = meta.get("team_ids", {})
+    except Exception:
+        team_ids = {}
+    return {int(tid): name for name, tid in team_ids.items()}
+
+
 TARGET_LEAGUES = _trained_target_leagues()
+TEAM_NAMES_BY_ID = _trained_team_names_by_id()
+
+
+def _canonical_name(raw_name: str | None, team_id: int | None) -> str | None:
+    if team_id is not None and team_id in TEAM_NAMES_BY_ID:
+        return TEAM_NAMES_BY_ID[team_id]
+    return raw_name
 
 # Prioridade pedida pelo usuário p/ a coleta de odds de clube (cota apertada, assinatura
 # expirando 2026-07-19) -- essas ligas são processadas primeiro; o restante entra na
@@ -151,8 +174,10 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50) -> dict:
             if status not in ("NS", "TBD"):
                 continue
             teams = item.get("teams", {})
+            home_name = _canonical_name(teams.get("home", {}).get("name"), teams.get("home", {}).get("id"))
+            away_name = _canonical_name(teams.get("away", {}).get("name"), teams.get("away", {}).get("id"))
             candidates.append((
-                fx.get("id"), teams.get("home", {}).get("name"), teams.get("away", {}).get("name"),
+                fx.get("id"), home_name, away_name,
                 TARGET_LEAGUES[lid], lid, fx.get("date"), status,
             ))
         if remaining is not None and int(remaining) <= quota_buffer:

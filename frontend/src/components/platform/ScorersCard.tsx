@@ -1,10 +1,7 @@
 "use client";
-import React from "react";
-import { ScorersResponse, ScorerPlayer, teamLogoUrl, playerPhotoUrl } from "@/lib/api";
+import { ScorersResponse, ScorerPlayer, teamLogoUrl, playerPhotoUrl, onImgError as hideOnError } from "@/lib/api";
 import { teamPt } from "@/lib/teamNames";
 import InfoTooltip from "@/components/platform/InfoTooltip";
-
-const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = "none"; };
 
 const FIN_LINES = ["0.5", "1.5", "2.5"];
 

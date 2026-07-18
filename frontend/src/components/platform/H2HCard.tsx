@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Link from "next/link";
-import { teamLogoUrl } from "@/lib/api";
+import { teamLogoUrl, onImgError } from "@/lib/api";
 import { teamPt } from "@/lib/teamNames";
 import { competitionPt } from "@/lib/competitionNames";
 import InfoTooltip from "@/components/platform/InfoTooltip";
@@ -67,7 +67,7 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
           <div key={i} className="flex flex-col items-center">
             {s.id ? (
               teamLogoUrl(teamIds[s.id]) && (
-                <img src={teamLogoUrl(teamIds[s.id])!} alt="" className="w-8 h-8 object-contain mb-1" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                <img src={teamLogoUrl(teamIds[s.id])!} alt="" className="w-8 h-8 object-contain mb-1" loading="lazy" onError={onImgError} />
               )
             ) : <div className="h-8 mb-1 flex items-center"><span className="text-[10px] uppercase tracking-wide text-muted-foreground">Empates</span></div>}
             {s.id && <span className="text-[11px] font-semibold leading-tight text-center truncate max-w-full">{teamPt(s.id)}</span>}

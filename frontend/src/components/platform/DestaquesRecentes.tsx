@@ -1,11 +1,8 @@
 "use client";
-import React from "react";
-import { RecentMatch, teamLogoUrl } from "@/lib/api";
+import { RecentMatch, teamLogoUrl, onImgError as hideOnError } from "@/lib/api";
 import { teamPt } from "@/lib/teamNames";
 import { competitionPt } from "@/lib/competitionNames";
 import InfoTooltip from "@/components/platform/InfoTooltip";
-
-const hideOnError = (e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = "none"; };
 function fmtBR(s?: string): string { const d = (s || "").slice(0, 10).split("-"); return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : (s || ""); }
 
 type R = "V" | "E" | "D";
