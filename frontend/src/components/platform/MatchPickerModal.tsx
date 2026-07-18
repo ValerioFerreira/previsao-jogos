@@ -51,9 +51,23 @@ function todayISO(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+// Em dev, o primeiro carregamento de imagem cross-origin às vezes é abortado pelo
+// double-render do React StrictMode -- um retry único evita esconder um brasão válido.
+function onImgError(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if (!img.dataset.retried) {
+    img.dataset.retried = '1';
+    const src = img.src;
+    img.src = '';
+    img.src = src;
+  } else {
+    img.style.display = 'none';
+  }
+}
+
 const Flag = ({ name, ids }: { name: string; ids: Record<string, number> }) => {
   const url = teamLogoUrl(ids[name]);
-  return url ? <img src={url} alt="" className="w-5 h-5 object-contain shrink-0" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : null;
+  return url ? <img src={url} alt="" className="w-5 h-5 object-contain shrink-0" loading="lazy" onError={onImgError} /> : null;
 };
 
 export function MatchPickerModal({
@@ -168,7 +182,7 @@ export function MatchPickerModal({
                   className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60 transition-colors">
                   {logo && (
                     <img src={logo} alt="" className="w-8 h-8 object-contain" loading="lazy"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      onError={onImgError} />
                   )}
                   <span className="text-[11px] font-medium text-center leading-snug">{c.label}</span>
                 </button>
