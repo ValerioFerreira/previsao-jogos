@@ -359,8 +359,9 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onO
   teamId: string; form: { matches: RecentMatch[]; total: number }; anomalies: Anomaly[];
   label: string; loading: boolean; teamIds: Record<string, number>; onOpenMatch: (m: RecentMatch) => void;
 }) {
-  const [visibleCount, setVisibleCount] = React.useState(5);
-  const ms = React.useMemo(() => (form.matches || []).slice(0, visibleCount), [form.matches, visibleCount]);
+  const [showMore, setShowMore] = React.useState(false);
+  const totalAvailable = React.useMemo(() => Math.min(10, (form.matches || []).length), [form.matches]);
+  const ms = React.useMemo(() => (form.matches || []).slice(0, showMore ? 10 : 5), [form.matches, showMore]);
 
   return (
     <div className="bg-card border border-border/50 rounded-xl p-4 h-full flex flex-col justify-between">
@@ -380,7 +381,7 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onO
           </div>
         ) : (<>
           <div className="flex items-center justify-between gap-2 mb-1.5">
-            <p className="text-[11px] text-muted-foreground">Últimos {form.matches.length} jogos</p>
+            <p className="text-[11px] text-muted-foreground">Últimos {totalAvailable} jogos</p>
             <DataReliabilityBadge totalMatches={form.total} />
           </div>
           <div className="flex gap-2">
@@ -397,13 +398,13 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onO
               ))}
               {ms.length === 0 && <p className="text-xs text-muted-foreground italic py-2">Sem jogos recentes.</p>}
               
-              {form.matches.length > visibleCount && (
+              {totalAvailable > 5 && (
                 <button
                   type="button"
-                  onClick={() => setVisibleCount((c) => c + 5)}
+                  onClick={() => setShowMore((prev) => !prev)}
                   className="mt-2 text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold transition-colors flex items-center justify-center gap-1 mx-auto"
                 >
-                  + Mostrar mais 5 jogos ({form.matches.length - visibleCount} restantes)
+                  {showMore ? "- Mostrar menos" : "+ Mostrar mais 5 jogos"}
                 </button>
               )}
             </div>
