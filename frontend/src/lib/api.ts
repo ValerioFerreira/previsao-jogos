@@ -250,6 +250,7 @@ export type CompetitionBenchmarkResponse = {
   defense_std: number;
   n_teams: number;
   scope: string;
+  team_stats?: Record<string, { attack: number; defense: number }>;
 };
 
 export type RecentMatchesResponse = {

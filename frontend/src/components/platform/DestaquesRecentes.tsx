@@ -107,19 +107,29 @@ function TeamPanel({ team, matches, teamIds, accent }: { team: string; matches: 
         </>
       )}
 
-      {/* Principais Destaques — título centralizado, dados à esquerda */}
+      {/* Principais Destaques — chips estilizados de alta qualidade */}
       {hl.length > 0 && (
-        <>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 text-center">Principais Destaques</p>
-          <ul className="space-y-1">
-            {hl.map((h, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-[11px]">
-                <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${DOT[h.tone]}`} />
-                <span className="text-muted-foreground">{h.text}</span>
-              </li>
-            ))}
-          </ul>
-        </>
+        <div className="mt-4">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2 text-center font-semibold">Principais Destaques</p>
+          <div className="space-y-1.5 w-full flex flex-col items-center">
+            {hl.map((h, i) => {
+              const bgTone = h.tone === "g" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15"
+                : h.tone === "r" ? "bg-red-500/10 text-red-400 border-red-500/15"
+                : h.tone === "y" ? "bg-amber-500/10 text-amber-400 border-amber-500/15"
+                : "bg-muted/30 text-muted-foreground border-border/25";
+              const icon = h.tone === "g" ? "✓"
+                : h.tone === "r" ? "⚠"
+                : h.tone === "y" ? "★"
+                : "•";
+              return (
+                <div key={i} className={`text-[10.5px] px-2.5 py-1.5 rounded-lg border w-full max-w-[240px] ${bgTone} flex items-start gap-2 leading-snug shadow-sm hover:scale-[1.01] transition-transform`}>
+                  <span className="font-bold shrink-0 mt-0.5">{icon}</span>
+                  <span className="font-medium text-left">{h.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

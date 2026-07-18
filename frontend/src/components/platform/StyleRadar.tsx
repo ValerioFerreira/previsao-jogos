@@ -4,6 +4,7 @@ import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Responsi
 import { RecentMatch } from "@/lib/api";
 import { teamPt } from "@/lib/teamNames";
 import InfoTooltip from "@/components/platform/InfoTooltip";
+import { getRelevantMatches } from "@/lib/teamInsights";
 
 function avg(ms: RecentMatch[], f: (m: RecentMatch) => number): number {
   const v = ms.map(f).filter((x) => Number.isFinite(x));
@@ -70,31 +71,66 @@ function VertexTooltip({ active, payload, home, away }: any) {
   );
 }
 
-export default function StyleRadar({ home, away, homeMatches, awayMatches }: {
+export default function StyleRadar({ home, away, homeMatches, awayMatches, targetCompetition }: {
   home: string; away: string; homeMatches: RecentMatch[]; awayMatches: RecentMatch[];
+  targetCompetition?: string;
 }) {
   if ((homeMatches?.length ?? 0) === 0 && (awayMatches?.length ?? 0) === 0) return null;
-  const ph = profile(homeMatches || []); const pa = profile(awayMatches || []);
+  
+  const homeMatches10 = React.useMemo(() => getRelevantMatches(homeMatches || [], targetCompetition, 10), [homeMatches, targetCompetition]);
+  const awayMatches10 = React.useMemo(() => getRelevantMatches(awayMatches || [], targetCompetition, 10), [awayMatches, targetCompetition]);
+
+  const ph = profile(homeMatches10); const pa = profile(awayMatches10);
   const data = Object.keys(ph).map((k) => ({ metric: k, [home]: Math.round((ph as any)[k]), [away]: Math.round((pa as any)[k]) }));
   return (
-    <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex flex-col">
-      <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
-        Radar de Estilo
-        <InfoTooltip text="Perfil comparativo (0–100) das duas seleções nos jogos recentes. Passe o mouse sobre cada vértice para ver o que o indicador mede. Quanto mais para fora, mais forte naquele quesito." />
-      </h3>
-      <p className="text-xs text-muted-foreground mb-1">Passe o mouse nos vértices para detalhes</p>
-      <div className="flex-1 min-h-[260px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadarChart data={data} outerRadius="68%">
-            <PolarGrid stroke="hsl(var(--border))" opacity={0.5} />
-            <PolarAngleAxis dataKey="metric" tick={<AngleTick />} />
-            <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }} angle={90} />
-            <Radar name={teamPt(home)} dataKey={home} stroke="#10b981" fill="#10b981" fillOpacity={0.3} dot={{ r: 3, fill: "#10b981", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
-            <Radar name={teamPt(away)} dataKey={away} stroke="#f97316" fill="#f97316" fillOpacity={0.25} dot={{ r: 3, fill: "#f97316", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
-            <Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: "11px" }} />
-            <RTooltip content={<VertexTooltip home={home} away={away} />} />
-          </RadarChart>
-        </ResponsiveContainer>
+    <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex flex-col justify-between">
+      <div>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
+          Radar de Estilo
+          <InfoTooltip text="Perfil comparativo (0–100) das duas seleções nos jogos recentes. Passe o mouse sobre cada vértice para ver o que o indicador mede. Quanto mais para fora, mais forte naquele quesito." />
+        </h3>
+        <p className="text-xs text-muted-foreground mb-1">Passe o mouse nos vértices para detalhes</p>
+        <div className="flex-1 min-h-[260px] relative">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart data={data} outerRadius="50%" margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+              <PolarGrid stroke="hsl(var(--border))" opacity={0.5} />
+              <PolarAngleAxis dataKey="metric" tick={<AngleTick />} />
+              <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }} angle={90} />
+              <Radar name={teamPt(home)} dataKey={home} stroke="#10b981" fill="#10b981" fillOpacity={0.3} dot={{ r: 3, fill: "#10b981", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
+              <Radar name={teamPt(away)} dataKey={away} stroke="#f97316" fill="#f97316" fillOpacity={0.25} dot={{ r: 3, fill: "#f97316", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
+              <Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: "11px" }} />
+              <RTooltip content={<VertexTooltip home={home} away={away} />} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      
+      {/* Legenda dos Vértices */}
+      <div className="mt-auto pt-4 border-t border-border/30 text-[10px] text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-2 leading-relaxed">
+        <div>
+          <span className="font-semibold text-foreground/90 block sm:inline">Ataque:</span>
+          <span className="sm:ml-1">Média de gols marcados</span>
+        </div>
+        <div>
+          <span className="font-semibold text-foreground/90 block sm:inline">Solidez Defensiva:</span>
+          <span className="sm:ml-1">Eficiência (menos sofridos)</span>
+        </div>
+        <div>
+          <span className="font-semibold text-foreground/90 block sm:inline">Finalização:</span>
+          <span className="sm:ml-1">Média de chutes no gol</span>
+        </div>
+        <div>
+          <span className="font-semibold text-foreground/90 block sm:inline">Disciplina:</span>
+          <span className="sm:ml-1">Inverso de cartões recebidos</span>
+        </div>
+        <div>
+          <span className="font-semibold text-foreground/90 block sm:inline">Volume Ofensivo:</span>
+          <span className="sm:ml-1">Total de finalizações criadas</span>
+        </div>
+        <div>
+          <span className="font-semibold text-foreground/90 block sm:inline">Pressão:</span>
+          <span className="sm:ml-1">Média de escanteios cobrados</span>
+        </div>
       </div>
     </div>
   );

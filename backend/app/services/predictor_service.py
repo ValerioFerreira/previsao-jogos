@@ -409,11 +409,10 @@ def get_system_status() -> dict[str, str]:
 
 
 def get_recent_matches(team_name: str) -> dict[str, Any]:
-    """Consulta PostgreSQL e extrai as últimas 10 partidas reais da equipe.
+    """Consulta PostgreSQL e extrai as últimas 60 partidas reais da equipe.
 
-    10 (e não 5) para dar sinal suficiente aos cálculos de momentum/tendência da
-    página de Estatísticas (metade recente x metade anterior da janela). A UI que só
-    quer os últimos 5 jogos (ex.: DestaquesRecentes) já faz `.slice(0, 5)` no cliente.
+    60 (e não 10) para dar sinal suficiente aos cálculos de momentum/tendência da
+    página de Estatísticas (comparando os 10 mais recentes com os 50 anteriores).
     """
     from app.db.connection import engine
     from sqlalchemy import text as _text
@@ -421,7 +420,7 @@ def get_recent_matches(team_name: str) -> dict[str, Any]:
         # Só as colunas usadas + parametrizado (sem f-string).
         query = _text("SELECT date, opponent, competition, is_home, goals_scored, goals_conceded, "
                       "sb_shots, sb_shots_on_target, sb_corners, sb_cards, sb_offsides, sb_fouls, "
-                      "sb_possession, sb_passes FROM matches WHERE team = :team ORDER BY date DESC LIMIT 10")
+                      "sb_possession, sb_passes FROM matches WHERE team = :team ORDER BY date DESC LIMIT 60")
         df_recent = pd.read_sql(query, con=engine, params={"team": team_name})
 
         total_df = pd.read_sql(_text("SELECT COUNT(*) as count FROM matches WHERE team = :team"),
@@ -877,6 +876,15 @@ def get_competition_benchmark(tournament: str) -> dict[str, Any]:
         "n_teams": int(len(per)),
         "scope": scope,
     }
+    
+    team_stats = {}
+    for team, row in per.iterrows():
+        team_stats[team] = {
+            "attack": round(float(row["atk"]), 3),
+            "defense": round(float(row["dff"]), 3)
+        }
+    out["team_stats"] = team_stats
+    
     _COMP_BENCH_MEMO[key] = out
     return out
 

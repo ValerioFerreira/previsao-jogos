@@ -112,18 +112,89 @@ export type MomentumResult = { momentum: Momentum; recentAvg: number; olderAvg: 
 // Momentum: compara a metade mais recente da janela de jogos com a metade mais antiga
 // (matches[0] deve ser o jogo mais recente — é como a API já devolve). Precisa de pelo
 // menos 4 jogos para ter duas metades minimamente informativas.
-export function momentumFor(matches: RecentMatch[], pick: (m: RecentMatch) => number): MomentumResult {
-  const ms = matches || [];
-  if (ms.length < 4) {
-    const a = mean(ms.map(pick));
-    return { momentum: "stable", recentAvg: a, olderAvg: a };
+export function getMatchWeight(match: RecentMatch, targetCompetition?: string): number {
+  const comp = (match.competition || "").toLowerCase();
+  const isFriendly = comp.includes("friendly") || comp.includes("amistoso");
+  let weight = isFriendly ? 0.35 : 1.0;
+  
+  if (targetCompetition) {
+    const target = targetCompetition.toLowerCase();
+    if (comp === target) {
+      weight = 1.0;
+    }
   }
-  const half = Math.floor(ms.length / 2);
-  const recent = ms.slice(0, half).map(pick);
-  const older = ms.slice(half).map(pick);
-  const ra = mean(recent), oa = mean(older);
+  return weight;
+}
+
+export function getRelevantMatches(matches: RecentMatch[], targetCompetition?: string, count: number = 10): RecentMatch[] {
+  const ms = matches || [];
+  if (ms.length <= count) return ms;
+
+  const scored = ms.map((m, index) => {
+    const recencyScore = 1.0 / (1.0 + 0.05 * index);
+    const comp = (m.competition || "").toLowerCase();
+    const isFriendly = comp.includes("friendly") || comp.includes("amistoso");
+    
+    let compMultiplier = 1.0;
+    if (targetCompetition) {
+      const target = targetCompetition.toLowerCase();
+      if (comp === target) {
+        compMultiplier = 2.0;
+      } else if (isFriendly) {
+        compMultiplier = 0.45;
+      }
+    } else {
+      if (isFriendly) {
+        compMultiplier = 0.45;
+      }
+    }
+    
+    return {
+      match: m,
+      score: recencyScore * compMultiplier
+    };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  const selected = scored.slice(0, count).map((x) => x.match);
+  return selected.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+export function momentumFor(
+  matches: RecentMatch[],
+  pick: (m: RecentMatch) => number,
+  targetCompetition?: string
+): MomentumResult {
+  const ms = matches || [];
+  const recentCount = Math.min(10, ms.length);
+  if (recentCount === 0) {
+    return { momentum: "stable", recentAvg: 0, olderAvg: 0 };
+  }
+
+  const recentMatches = ms.slice(0, recentCount);
+  const olderMatches = ms.slice(recentCount, Math.min(60, ms.length));
+
+  const getWeightedAverage = (subMatches: RecentMatch[]) => {
+    if (subMatches.length === 0) return 0;
+    let sumVal = 0;
+    let sumWeight = 0;
+    for (const m of subMatches) {
+      const w = getMatchWeight(m, targetCompetition);
+      sumVal += pick(m) * w;
+      sumWeight += w;
+    }
+    return sumWeight > 0 ? sumVal / sumWeight : 0;
+  };
+
+  const ra = getWeightedAverage(recentMatches);
+  let oa = ra;
+  if (olderMatches.length > 0) {
+    oa = getWeightedAverage(olderMatches);
+  }
+
   const diff = ra - oa;
-  const threshold = Math.max(0.2, Math.abs(oa) * 0.15);
+  const threshold = Math.max(0.15, Math.abs(oa) * 0.1);
   const momentum: Momentum = diff > threshold ? "up" : diff < -threshold ? "down" : "stable";
   return { momentum, recentAvg: ra, olderAvg: oa };
 }

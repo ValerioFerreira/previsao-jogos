@@ -3,7 +3,7 @@ import React, { useMemo } from "react";
 import { Sparkles } from "lucide-react";
 import type { RecentMatch, GoalTimingResponse } from "@/lib/api";
 import { teamPt } from "@/lib/teamNames";
-import { summarize, momentumFor, consistencyStars } from "@/lib/teamInsights";
+import { summarize, momentumFor, consistencyStars, getRelevantMatches } from "@/lib/teamInsights";
 import InfoTooltip from "@/components/platform/InfoTooltip";
 
 function timingPeak(data: GoalTimingResponse | null, key: "scored" | "conceded"): string | null {
@@ -17,25 +17,28 @@ function buildInsights(
   home: string, away: string,
   homeMs: RecentMatch[], awayMs: RecentMatch[],
   homeTiming: GoalTimingResponse | null, awayTiming: GoalTimingResponse | null,
+  targetCompetition?: string,
 ): string[] {
-  const hs = summarize(homeMs), as = summarize(awayMs);
+  const homeMs10 = getRelevantMatches(homeMs, targetCompetition, 10);
+  const awayMs10 = getRelevantMatches(awayMs, targetCompetition, 10);
+  const hs = summarize(homeMs10), as = summarize(awayMs10);
   const out: { text: string; prio: number }[] = [];
   const hName = teamPt(home), aName = teamPt(away);
 
   // Momento defensivo/ofensivo recente (V/D nos últimos jogos considerando gols sofridos).
-  const hDefMom = momentumFor(homeMs, (m) => m.goals_conceded);
-  const aDefMom = momentumFor(awayMs, (m) => m.goals_conceded);
+  const hDefMom = momentumFor(homeMs, (m) => m.goals_conceded, targetCompetition);
+  const aDefMom = momentumFor(awayMs, (m) => m.goals_conceded, targetCompetition);
   if (hDefMom.momentum === "down" && hs.n >= 4) {
-    out.push({ text: `${hName} chega em melhor momento defensivo, sofrendo em média ${hDefMom.recentAvg.toFixed(1)} gol/jogo nos jogos mais recentes (ante ${hDefMom.olderAvg.toFixed(1)} antes).`, prio: 5 });
+    out.push({ text: `${hName} chega em melhor momento defensivo, sofrendo em média ${hDefMom.recentAvg.toFixed(1)} gol/jogo nos últimos 10 jogos (comparado a ${hDefMom.olderAvg.toFixed(1)} nos anteriores).`, prio: 5 });
   }
   if (aDefMom.momentum === "down" && as.n >= 4) {
-    out.push({ text: `${aName} também melhorou defensivamente: ${aDefMom.recentAvg.toFixed(1)} sofrido/jogo recentemente, contra ${aDefMom.olderAvg.toFixed(1)} antes.`, prio: 4 });
+    out.push({ text: `${aName} também melhorou defensivamente: ${aDefMom.recentAvg.toFixed(1)} sofrido/jogo recentemente nos últimos 10 jogos, contra ${aDefMom.olderAvg.toFixed(1)} nos anteriores.`, prio: 4 });
   }
   if (aDefMom.momentum === "up" && as.n >= 4) {
-    out.push({ text: `${aName} vem sofrendo mais gols recentemente (${aDefMom.recentAvg.toFixed(1)}/jogo, ante ${aDefMom.olderAvg.toFixed(1)}) — momento defensivo em queda.`, prio: 4 });
+    out.push({ text: `${aName} vem sofrendo mais gols recentemente (${aDefMom.recentAvg.toFixed(1)}/jogo nos últimos 10 jogos, ante ${aDefMom.olderAvg.toFixed(1)} nos anteriores) — momento defensivo em queda.`, prio: 4 });
   }
   if (hDefMom.momentum === "up" && hs.n >= 4) {
-    out.push({ text: `${hName} vem sofrendo mais gols recentemente (${hDefMom.recentAvg.toFixed(1)}/jogo, ante ${hDefMom.olderAvg.toFixed(1)}) — momento defensivo em queda.`, prio: 4 });
+    out.push({ text: `${hName} vem sofrendo mais gols recentemente (${hDefMom.recentAvg.toFixed(1)}/jogo nos últimos 10 jogos, ante ${hDefMom.olderAvg.toFixed(1)} nos anteriores) — momento defensivo em queda.`, prio: 4 });
   }
 
   // Ataque mais "explosivo" (maior desvio-padrão de gols marcados) x mais consistente.
@@ -77,13 +80,14 @@ function buildInsights(
   return out.sort((a, b) => b.prio - a.prio).slice(0, 5).map((x) => x.text);
 }
 
-export default function AutoInsights({ home, away, homeMatches, awayMatches, homeTiming, awayTiming }: {
+export default function AutoInsights({ home, away, homeMatches, awayMatches, homeTiming, awayTiming, targetCompetition }: {
   home: string; away: string; homeMatches: RecentMatch[]; awayMatches: RecentMatch[];
   homeTiming: GoalTimingResponse | null; awayTiming: GoalTimingResponse | null;
+  targetCompetition?: string;
 }) {
   const insights = useMemo(
-    () => buildInsights(home, away, homeMatches || [], awayMatches || [], homeTiming, awayTiming),
-    [home, away, homeMatches, awayMatches, homeTiming, awayTiming],
+    () => buildInsights(home, away, homeMatches || [], awayMatches || [], homeTiming, awayTiming, targetCompetition),
+    [home, away, homeMatches, awayMatches, homeTiming, awayTiming, targetCompetition],
   );
   if (insights.length === 0) return null;
   return (

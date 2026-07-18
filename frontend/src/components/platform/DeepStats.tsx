@@ -5,7 +5,7 @@ import type { RecentMatch, TeamHistoryResponse, CompetitionBenchmarkResponse } f
 import { teamPt } from "@/lib/teamNames";
 import {
   summarize, consistencyStars, unpredictabilityIndex, percentileFromNormal,
-  momentumFor, splitHomeAway, TeamStatSummary, Momentum,
+  momentumFor, splitHomeAway, TeamStatSummary, Momentum, getRelevantMatches,
 } from "@/lib/teamInsights";
 import InfoTooltip from "@/components/platform/InfoTooltip";
 
@@ -139,7 +139,7 @@ function MomentumIcon({ momentum, goodIsUp }: { momentum: Momentum; goodIsUp: bo
   return <Icon className={`w-3.5 h-3.5 ${color}`} />;
 }
 
-function MomentumPanel({ team, matches, accent }: { team: string; matches: RecentMatch[]; accent: string }) {
+function MomentumPanel({ team, matches, accent, targetCompetition }: { team: string; matches: RecentMatch[]; accent: string; targetCompetition?: string }) {
   const rows = [
     { label: "Ataque", pick: (m: RecentMatch) => m.goals_scored, goodIsUp: true },
     { label: "Defesa (sofridos)", pick: (m: RecentMatch) => m.goals_conceded, goodIsUp: false },
@@ -151,7 +151,7 @@ function MomentumPanel({ team, matches, accent }: { team: string; matches: Recen
       <p className="text-xs font-semibold mb-2" style={{ color: accent }}>{teamPt(team)}</p>
       <div className="space-y-1.5">
         {rows.map((r) => {
-          const m = momentumFor(matches, r.pick);
+          const m = momentumFor(matches, r.pick, targetCompetition);
           return (
             <div key={r.label} className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground">{r.label}</span>
@@ -186,38 +186,42 @@ function HomeAwaySplit({ team, matches, accent }: { team: string; matches: Recen
   );
 }
 
-export default function DeepStats({ home, away, homeMatches, awayMatches, homeHistory, awayHistory, benchmark }: {
+export default function DeepStats({ home, away, homeMatches, awayMatches, homeHistory, awayHistory, benchmark, targetCompetition }: {
   home: string; away: string; homeMatches: RecentMatch[]; awayMatches: RecentMatch[];
   homeHistory: TeamHistoryResponse | null; awayHistory: TeamHistoryResponse | null;
-  benchmark: CompetitionBenchmarkResponse | null;
+  benchmark: CompetitionBenchmarkResponse | null; targetCompetition?: string;
 }) {
-  const hs = useMemo(() => summarize(homeMatches || []), [homeMatches]);
-  const as = useMemo(() => summarize(awayMatches || []), [awayMatches]);
-  if (hs.n === 0 && as.n === 0) return null;
+  const homeMatches10 = useMemo(() => getRelevantMatches(homeMatches || [], targetCompetition, 10), [homeMatches, targetCompetition]);
+  const awayMatches10 = useMemo(() => getRelevantMatches(awayMatches || [], targetCompetition, 10), [awayMatches, targetCompetition]);
 
-  const showPercentiles = !!benchmark && benchmark.scope === "competition" && benchmark.n_teams >= 5;
+  const hs = useMemo(() => summarize(homeMatches10), [homeMatches10]);
+  const as = useMemo(() => summarize(awayMatches10), [awayMatches10]);
+  if (hs.n === 0 && as.n === 0) return null;
 
   return (
     <div className="space-y-4">
-      {showPercentiles && homeHistory && awayHistory && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-card border border-border/50 rounded-xl p-5">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-            <Gauge className="w-4 h-4 text-cyan-500" />
-            Percentis na Competição
-            <InfoTooltip text={`Posição de cada equipe entre as ${benchmark!.n_teams} seleções da competição, aproximada por distribuição normal a partir da média/desvio de ataque e defesa da competição. Quanto maior o percentil de ataque, mais a equipe marca; quanto maior o de defesa, menos sofre.`} />
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <PercentileChip label={`Ataque ${teamPt(home)}`} pct={percentileFromNormal(homeHistory.attack_avg, benchmark!.attack_mean, benchmark!.attack_std)} />
-            <PercentileChip label={`Defesa ${teamPt(home)}`} pct={100 - percentileFromNormal(homeHistory.defense_avg, benchmark!.defense_mean, benchmark!.defense_std)} />
-            <PercentileChip label={`Ataque ${teamPt(away)}`} pct={percentileFromNormal(awayHistory.attack_avg, benchmark!.attack_mean, benchmark!.attack_std)} />
-            <PercentileChip label={`Defesa ${teamPt(away)}`} pct={100 - percentileFromNormal(awayHistory.defense_avg, benchmark!.defense_mean, benchmark!.defense_std)} />
+          <h3 className="text-sm font-semibold mb-3">Comparação Completa</h3>
+          <ComparisonTable home={home} away={away} hs={hs} as={as} />
+        </div>
+
+        <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col justify-between">
+          <div>
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+              Momentum
+              <InfoTooltip text="Compara a média ponderada dos últimos 10 jogos com os anteriores (limitado a 50), reduzindo o peso de amistosos. Seta verde = melhorando; vermelha = piorando." />
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-4">
+              <MomentumPanel team={home} matches={homeMatches} accent="#10b981" targetCompetition={targetCompetition} />
+              <MomentumPanel team={away} matches={awayMatches} accent="#f97316" targetCompetition={targetCompetition} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-3 border-t border-border/30">
+            <HomeAwaySplit team={home} matches={homeMatches} accent="#10b981" />
+            <HomeAwaySplit team={away} matches={awayMatches} accent="#f97316" />
           </div>
         </div>
-      )}
-
-      <div className="bg-card border border-border/50 rounded-xl p-5">
-        <h3 className="text-sm font-semibold mb-3">Comparação Completa</h3>
-        <ComparisonTable home={home} away={away} hs={hs} as={as} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -241,21 +245,6 @@ export default function DeepStats({ home, away, homeMatches, awayMatches, homeHi
             <ConsistencyPanel team={home} s={hs} accent="#10b981" />
             <ConsistencyPanel team={away} s={as} accent="#f97316" />
           </div>
-        </div>
-      </div>
-
-      <div className="bg-card border border-border/50 rounded-xl p-5">
-        <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-          Momentum
-          <InfoTooltip text="Compara a metade mais recente da janela de jogos com a metade anterior. Seta verde = melhorando naquele indicador; vermelha = piorando; traço = estável. Para gols sofridos e cartões, 'melhorar' significa reduzir." />
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-4">
-          <MomentumPanel team={home} matches={homeMatches} accent="#10b981" />
-          <MomentumPanel team={away} matches={awayMatches} accent="#f97316" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-3 border-t border-border/30">
-          <HomeAwaySplit team={home} matches={homeMatches} accent="#10b981" />
-          <HomeAwaySplit team={away} matches={awayMatches} accent="#f97316" />
         </div>
       </div>
     </div>
