@@ -5,7 +5,8 @@
 
 Plataforma de **previsão probabilística de partidas** — **produção: seleções E clubes**
 (mercados de clube lançados em 2026-07-18, mesmo menu de mercados de seleção, ver §14 do
-doc-mestre; coleta de clube em 60 competições, artefato hoje cobre as 13 já processadas).
+doc-mestre; coleta de clube em 60 competições, artefato hoje cobre 46 já processadas — retreino
+2026-07-18, ver §15).
 Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/frontend`**
 (Next.js, deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 
@@ -19,7 +20,9 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   nota fiscal sob demanda, 2026-07-13; §12.9 = código p/ Mercado Pago real + nota fiscal automática
   via NFE.io, 2026-07-16 — falta só o runbook do dono)**, **§13 pesquisa de clubes (branch `clubs`,
   2026-07-15 — arquitetura atual venceu tudo, sem exceção de push)**, **§14 mercados de clubes em
-  produção (2026-07-18 — `scope="selecao"|"clube"` ponta a ponta, gaps documentados)**.
+  produção (2026-07-18 — `scope="selecao"|"clube"` ponta a ponta, gaps documentados)**, **§15
+  partida agendada de clube + Elo histórico real + retreino 60 ligas (2026-07-18, mesmo dia —
+  fecha os gaps da §14)**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa
@@ -72,7 +75,9 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   `prefetch_wc.cmd` (Task Scheduler `\PrevisaoJogos\`). **Checar cota/validade da assinatura antes
   de coleta grande:** ver `ARCHITECTURE.md §7.2`.
 - **Modelos:** `build_scorer_model.py`, `build_shots_prop_model.py` (leem o espelho local).
-- **Agregados:** `precompute_aggregates.py` (roda após os rebuilds no cron).
+- **Agregados:** `precompute_aggregates.py` (roda após os rebuilds no cron). `build_elo_history.py`
+  (novo, §15 do doc-mestre — deriva `elo_history.csv` de cada `model_artifacts{,_clubes}/` a
+  partir do `home_elo_pre`/`away_elo_pre` já presente no dataset de treino; sem custo de API).
 - **Experimentos/testes (gate §6):** `exp6..15_*.py`, `test_player_cards.py`, `test_player_fouls.py`,
   `promotion_validation.py`, etc. **Resultados registrados em `DOCUMENTACAO_CENTRAL.md` §8/§9.**
 - **Pesquisa de clubes (`clubs_*.py` + `/backend/research_clubs/`):** protocolo único, ratings da
@@ -112,7 +117,8 @@ teste de UI autenticado.
 - **Promoção de modelo** exige o **gate §6** (CV temporal, reduzir log-loss sem piorar ECE, consistente).
   Pesquisa em branch (`clubs` ou nova) **não dá push para `main`** a menos que bata a produção real
   sob o gate — é a exceção documentada em §13.
-- **Coleta:** exaurir a cota diária (75k) com propósito; seleções saturaram, clubes em 26 competições.
+- **Coleta:** exaurir a cota diária (75k) com propósito; seleções saturaram, clubes em 60
+  competições coletadas (46 já no artefato treinado, ver §15 do doc-mestre).
   **Checar a validade da assinatura da API-Football** (`GET /status` → `subscription.end`) antes de
   planejar coleta de vários dias — ela tem prazo, não é indefinida.
 - **Neon:** não reintroduzir varredura de blobs (`SELECT raw FROM match_detail_cache`) em runtime — use

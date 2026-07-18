@@ -10,6 +10,24 @@
 
 ---
 
+## 0. Sessão (2026-07-18), parte 2 — partidas agendadas de clube + Elo histórico real + retreino 60 ligas
+
+Fecha as 3 pendências deixadas pela sessão anterior (abaixo): `club_odds_registry` populada
+(103 partidas, priorizando Brasileirão A/B → Copa do Brasil → Champions → Premier → La Liga →
+resto por volume), artefato de clube retreinado (**13 → 46 competições**, 2.192 times, 174.697
+jogos — das 60 coletadas, 14 ainda não têm dado suficiente), e o gráfico "Evolução de Elo" (que
+estava efetivamente morto, sempre no fallback fixo 1500) agora usa histórico real (já existia
+como feature de treino, só nunca tinha sido exposto — 7 anos seleção / 3 anos clube, mensal).
+`MatchPickerModal` redesenhado (escopo → data vazia por padrão → grid de competições com logo →
+partidas em ordem cronológica) e botão "Escolher partida agendada" centralizado. Achado e
+corrigido de quebra um bug sério e pré-existente (não introduzido nesta sessão): `/estatisticas`
+nunca propagava `scope="clube"` pras 9 chamadas de API que dependem dele, deixando a página
+inteira em branco pra qualquer confronto de clube. Auditoria do Neon (pendência 3 da sessão
+anterior) continua não feita — ainda não houve pedido explícito do dono pra isso. Detalhe
+completo em `DOCUMENTACAO_CENTRAL.md` §15.
+
+---
+
 ## 0. Sessão (2026-07-18) — merge `clubs`→`main` + lançamento dos mercados de clubes
 
 - **Merge:** `main` local estava atrasada (`origin/main` 23 commits à frente, sem sobreposição
@@ -26,11 +44,11 @@
   na Análise Independente e CTA funcional no banner. Detalhe completo, incluindo os cortes de
   escopo desta entrega (props de jogador, histórico/benchmark de clube, seletor de partida
   agendada de clube) em `DOCUMENTACAO_CENTRAL.md` §14.
-- **Pendências para a próxima sessão:** (1) rodar `collect_club_odds_forward.py` pra popular
-  `club_odds_registry` e habilitar o seletor de "Partida Agendada" pra clubes; (2) reprocessar
-  `build_clubs_dataset.py` com a coleta de 60 competições (hoje o artefato usa só as 13 que já
-  tinham `has_advanced_stats` suficiente) e re-rodar `build_clubs_production_artifacts.py`; (3)
-  auditoria de economia do Neon (pedida pelo dono, ainda não feita — ver nota abaixo).
+- **Pendências para a próxima sessão:** ~~(1) rodar `collect_club_odds_forward.py`~~ e
+  ~~(2) reprocessar `build_clubs_dataset.py`/`build_clubs_production_artifacts.py` com a coleta
+  de 60 competições~~ — **feitas na sessão seguinte** (2026-07-18, parte 2, ver acima). (3)
+  auditoria de economia do Neon (pedida pelo dono, ainda não feita — ver nota abaixo) —
+  **continua pendente**.
 - **Nota (Neon):** dono pediu auditoria pra ver se dá pra tirar mais coisa do Neon e deixar só
   local (treino/dados já são locais; só o que a UI consome deveria ficar lá). Ainda não auditado
   nesta sessão — ficou pra depois do lançamento dos mercados de clubes, por pedido explícito do

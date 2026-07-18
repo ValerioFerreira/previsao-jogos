@@ -28,9 +28,7 @@ import DeepStats from '@/components/platform/DeepStats';
 import type { RecentMatch, GoalTimingResponse, InjuriesResponse, ScorersResponse, PmfPreviewResponse, CompetitionBenchmarkResponse } from '@/lib/api';
 
 export default function Estatisticas() {
-  const [teams, setTeams] = React.useState<string[]>([]);
-  
-  const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, neutralField, analysis } = usePrediction();
+  const { homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, neutralField, analysis, scope } = usePrediction();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   
@@ -65,7 +63,6 @@ export default function Estatisticas() {
   };
 
   React.useEffect(() => {
-    api.teams().then(res => setTeams(res.teams)).catch(console.error);
     Promise.all([api.teamIds("selecao"), api.teamIds("clube")])
       .then(([sel, clu]) => setTeamIds({ ...sel, ...clu })).catch(() => {});
     const sp = new URLSearchParams(window.location.search);
@@ -95,14 +92,14 @@ export default function Estatisticas() {
     if (bothSelected) {
       setLoading(true);
       Promise.all([
-        api.teamHistory(homeTeamId).catch(() => null),
-        api.teamHistory(awayTeamId).catch(() => null),
-        api.h2h(homeTeamId, awayTeamId).catch(() => null),
-        api.recentMatches(homeTeamId).catch(() => null),
-        api.recentMatches(awayTeamId).catch(() => null),
-        api.goalTiming(homeTeamId).catch(() => null),
-        api.goalTiming(awayTeamId).catch(() => null),
-        api.competitionBenchmark(competition || 'Copa do Mundo').catch(() => null),
+        api.teamHistory(homeTeamId, scope).catch(() => null),
+        api.teamHistory(awayTeamId, scope).catch(() => null),
+        api.h2h(homeTeamId, awayTeamId, scope).catch(() => null),
+        api.recentMatches(homeTeamId, scope).catch(() => null),
+        api.recentMatches(awayTeamId, scope).catch(() => null),
+        api.goalTiming(homeTeamId, scope).catch(() => null),
+        api.goalTiming(awayTeamId, scope).catch(() => null),
+        api.competitionBenchmark(competition || 'Copa do Mundo', scope).catch(() => null),
       ]).then(([hHist, aHist, h2hData, hRec, aRec, hTim, aTim, bench]) => {
         setHomeHistory(hHist);
         setAwayHistory(aHist);
@@ -118,7 +115,7 @@ export default function Estatisticas() {
         setLoading(false);
       });
     }
-  }, [homeTeamId, awayTeamId, bothSelected, competition]);
+  }, [homeTeamId, awayTeamId, bothSelected, competition, scope]);
 
   // Desfalques só no modo Partida Futura (consulta à API com cache diário — evita
   // gastar cota em análises independentes).
@@ -127,11 +124,11 @@ export default function Estatisticas() {
       setHomeInjuries(null); setAwayInjuries(null); setScorers(null); setPmf(null);
       return;
     }
-    api.injuries(homeTeamId).then(setHomeInjuries).catch(() => setHomeInjuries(null));
-    api.injuries(awayTeamId).then(setAwayInjuries).catch(() => setAwayInjuries(null));
-    api.scorers(homeTeamId, awayTeamId).then(setScorers).catch(() => setScorers(null));
-    api.pmfPreview(homeTeamId, awayTeamId, !!neutralField, competition || 'Copa do Mundo').then(setPmf).catch(() => setPmf(null));
-  }, [homeTeamId, awayTeamId, bothSelected, pickerMode, neutralField, competition]);
+    api.injuries(homeTeamId, scope).then(setHomeInjuries).catch(() => setHomeInjuries(null));
+    api.injuries(awayTeamId, scope).then(setAwayInjuries).catch(() => setAwayInjuries(null));
+    api.scorers(homeTeamId, awayTeamId, scope).then(setScorers).catch(() => setScorers(null));
+    api.pmfPreview(homeTeamId, awayTeamId, !!neutralField, competition || 'Copa do Mundo', scope).then(setPmf).catch(() => setPmf(null));
+  }, [homeTeamId, awayTeamId, bothSelected, pickerMode, neutralField, competition, scope]);
 
   // Tendência de gols marcados nos últimos jogos, alinhada por "jogos atrás" (J-N),
   // já que cada seleção tem datas próprias. Compara ataque recente das duas.

@@ -243,7 +243,7 @@ def main():
             "goals": len(df), "result": len(df), "btts": len(df), "over25": len(df),
             "shots": len(adv), "corners": len(corners_df), "cards": len(cards_df),
         },
-        "source": "api-football (clubes, 13 competições -- ver DOCUMENTACAO_CENTRAL.md §13/§14)",
+        "source": f"api-football (clubes, {len(tournament_weights)} competições -- ver DOCUMENTACAO_CENTRAL.md §13/§14)",
     }
 
     # ---- 5. Salvar tudo ----

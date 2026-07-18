@@ -30,6 +30,7 @@ export function MatchModePicker({
   const {
     homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId,
     competition, setCompetition, neutralField, setNeutralField,
+    scope, setScope,
   } = usePrediction();
   const [mode, setModeState] = useState<Mode>('independente');
   const setMode = (m: Mode) => { setModeState(m); onModeChange?.(m); };
@@ -48,16 +49,32 @@ export function MatchModePicker({
     Promise.all([api.teamIds("selecao"), api.teamIds("clube")])
       .then(([sel, clu]) => setTeamIds({ ...sel, ...clu })).catch(() => {});
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
-    api.teams().then(r => { setTeams(r.teams); setTournaments(r.tournaments); }).catch(() => {});
     if (onSelectPast) api.pastFixtures().then(r => setPast(r.fixtures)).catch(() => {});
   }, [onSelectPast]);
 
+  React.useEffect(() => {
+    api.teams(scope).then(r => { setTeams(r.teams); setTournaments(r.tournaments); }).catch(() => {});
+  }, [scope]);
+
+  const changeScope = (s: 'selecao' | 'clube') => {
+    if (s === scope) return;
+    setScope(s);
+    setHomeTeamId('');
+    setAwayTeamId('');
+  };
+
   const pickFuture = (fx: PickerFixture) => {
+    setScope(fx.scope || 'selecao');
     setHomeTeamId(fx.home);
     setAwayTeamId(fx.away);
     if (fx.tournament) setCompetition(fx.tournament);
     setNeutralField(!!fx.neutral);
     onSelectFuture?.(fx);
+  };
+
+  const pickPast = (fx: PickerFixture) => {
+    setScope(fx.scope || 'selecao');
+    onSelectPast?.(fx);
   };
 
   const changeReferee = (r: string) => { setReferee(r); onRefereeChange?.(r); };
@@ -97,6 +114,17 @@ export function MatchModePicker({
       )}
 
       {mode === 'independente' && (
+        <>
+        <div className="inline-flex p-1 mb-4 rounded-lg bg-muted text-xs font-medium">
+          <button onClick={() => changeScope('selecao')}
+            className={`px-3 py-1.5 rounded-md transition-colors ${scope === 'selecao' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            Seleções
+          </button>
+          <button onClick={() => changeScope('clube')}
+            className={`px-3 py-1.5 rounded-md transition-colors ${scope === 'clube' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            Clubes
+          </button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
@@ -128,11 +156,12 @@ export function MatchModePicker({
             </div>
           </div>
         </div>
+        </>
       )}
 
-      <MatchPickerModal open={futureOpen} onOpenChange={setFutureOpen} fixtures={upcoming} teamIds={teamIds} onSelect={pickFuture} title="Selecionar Partida Agendada" />
+      <MatchPickerModal open={futureOpen} onOpenChange={setFutureOpen} fixtures={upcoming} teamIds={teamIds} onSelect={pickFuture} title="Selecionar Partida Agendada" defaultScope={scope} />
       {onSelectPast && (
-        <MatchPickerModal open={pastOpen} onOpenChange={setPastOpen} fixtures={past} teamIds={teamIds} onSelect={onSelectPast} title="Selecionar Partida Passada" dateDefault="none" />
+        <MatchPickerModal open={pastOpen} onOpenChange={setPastOpen} fixtures={past} teamIds={teamIds} onSelect={pickPast} title="Selecionar Partida Passada" dateDefault="none" defaultScope={scope} />
       )}
     </div>
   );

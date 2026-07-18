@@ -832,3 +832,93 @@ time (nomes limpos, sem `#id`) → H2H real (Flamengo x Palmeiras, 35 confrontos
 seções sem dado de clube degradam com "sem jogos recentes" em vez de erro. `tsc --noEmit` limpo.
 Não foi possível validar visualmente o card de mercados pós-geração (login da conta demo
 retornou 401 — credencial desatualizada no ambiente local, não relacionado a esta mudança).
+
+## 15. Partidas agendadas de clube + Elo histórico real + retreino 60 ligas (2026-07-18)
+
+Fecha os cortes de escopo deixados em aberto pela §14: `club_odds_registry` populada, artefato
+de clube retreinado com a coleta expandida, gráfico de Elo com histórico real (não mais o
+fallback fixo 1500), e um bug sério (não relacionado a esta rodada, pré-existente desde a §14)
+achado e corrigido na página `/estatisticas`.
+
+### 15.1 Retreino do artefato de clube (13 → 46 competições)
+
+`build_clubs_dataset.py` + `build_clubs_production_artifacts.py` re-executados sobre o cache já
+expandido (backfill das 34 ligas de expansão da §13, concluído antes desta sessão). Resultado:
+**174.697 jogos, 2.192 times, 46 competições** entraram no treino (das 60 coletadas — as 14
+restantes ainda não tinham jogos suficientes mesmo após o backfill, ficam para um próximo
+re-run). Mesma arquitetura/hiperparâmetros da §13/§14, zero mudança de lógica — só mais dado.
+String `source` do `meta.json` era hardcoded "13 competições"; virou `f"...{len(tournament_weights)}
+competições..."` em `build_clubs_production_artifacts.py`, e o artefato já gerado foi corrigido
+via patch pontual (sem re-treinar, só editando o campo).
+
+### 15.2 Elo histórico real (backend + frontend, os dois escopos)
+
+O gráfico "Evolução de Elo" em `/estatisticas` estava efetivamente morto: a tabela `matches` do
+Neon nunca teve colunas de Elo, e o fallback do backend caía sempre no valor fixo 1500 rotulado
+"Atual" (bug de nome de chave, não investigado até agora). Não precisou recalcular nada — o Elo
+já existe linha-a-linha em `international_features_enriched_apifootball.csv` (seleção) e
+`data/built/club_features_enriched.parquet` (clube), usado como feature de treino
+(`home_elo_pre`/`away_elo_pre`), só nunca tinha sido exposto pra API de histórico.
+
+Novo `backend/scripts/build_elo_history.py`: derrete home/away em long format, resample mensal
+(último valor do mês), grava `elo_history.csv` em cada `model_artifacts{,_clubes}/` (colunas
+`team, date, elo`). `predictor_service.py::get_team_history()` reescrito: lê o CSV do escopo
+certo (memoizado em módulo), filtra por janela de **7 anos (seleção) / 3 anos (clube)**, devolve
+`elo_history` no formato que o frontend já esperava (schema inalterado). Frontend: eixo X do
+gráfico (`estatisticas/page.tsx`) trocado de 1 ponto/ano pra granularidade mensal com
+`tickFormatter` (`MM/AA`).
+
+### 15.3 club_odds_registry populada + priorização
+
+`collect_club_odds_forward.py` reestruturado em duas fases (padrão já usado do lado seleção):
+**Fase 1 (descoberta)** — 1 requisição/dia da janela, varre todos os campeonatos treinados e
+monta a lista de candidatos; **Fase 2 (odds)** — 1 requisição/fixture, candidatos ordenados por
+prioridade editorial (`PRIORITY_LEAGUES`: Brasileirão A, Brasileirão B, Copa do Brasil, Champions
+League, Premier League, La Liga — depois o resto por volume de jogos em aberto), com
+`--quota-buffer` parando o loop antes de estourar a cota. Rodado com `--days 14
+--quota-buffer 100`: **103 partidas de clube** sincronizadas na tabela (cota final 611/75.000,
+faltando ~4h30 pra assinatura da API-Football expirar em 2026-07-19).
+
+**Bug de dado encontrado e corrigido na mesma rodada:** o coletor gravava o nome cru do time
+retornado pela API-Football, ignorando a desambiguação por colisão (`"Nome (Liga)"`) que
+`build_clubs_production_artifacts.py` já aplica no treino — resultado: partidas de times
+colididos (ex. "Athletic Club", que existe em duas ligas) ficavam com nome que o preditor não
+reconhecia, escudo e H2H quebrados na UI. Corrigido com `_canonical_name(raw_name, team_id)`:
+resolve o nome pelo `team_id` contra o `team_ids` do `meta.json` treinado (fonte da verdade),
+com fallback pro nome cru só se o `team_id` não estiver no artefato.
+
+### 15.4 MatchPickerModal redesenhado
+
+Reescrito na ordem pedida: escopo (Seleções/Clubes) + data (vazia por padrão, mostrando todas as
+competições em aberto) na mesma linha → busca única (competição OU equipe) → grid de
+competições com logo, ordenadas por `PRIORITY_LEAGUES` e depois por volume de jogos → lista de
+partidas da competição escolhida, ordenada cronologicamente (mais próxima primeiro). Botão
+"Escolher partida agendada" centralizado no card (`page.tsx`/`MatchModePicker.tsx`).
+
+### 15.5 Bug pré-existente achado nesta verificação: `/estatisticas` não era scope-aware
+
+Não fazia parte do escopo original da sessão, mas bloqueava a verificação do Elo de clube: a
+página `/estatisticas` (usada tanto pela Análise quanto pelas Estatísticas) nunca propagava
+`scope` para as 9 chamadas de API que dependem dele (`teamHistory` ×2, `h2h`, `recentMatches`
+×2, `goalTiming` ×2, `competitionBenchmark`, `injuries` ×2, `scorers`, `pmfPreview`) — todas
+caíam no default `"selecao"` mesmo com um confronto de clube selecionado, gerando 404 em cascata
+e a página inteira ficava em branco (`homeHistory`/`awayHistory` nulos bloqueiam o
+`bothSelected && !loading && homeHistory && awayHistory` que guarda toda a seção de resultado).
+Além disso `MatchModePicker.tsx` (o seletor usado só por `/estatisticas`, distinto da
+implementação própria do `page.tsx`) não tinha toggle de escopo no modo "Análise Independente" e
+buscava a lista de times sempre em `scope=selecao`. Corrigido: `scope`/`setScope` do
+`PredictionContext` propagados nas duas pontas, toggle Seleções/Clubes adicionado ao
+`MatchModePicker`, e a escolha de partida futura/passada agora atualiza `scope` a partir do
+`fx.scope` da partida escolhida (mesmo padrão que `page.tsx` já usava). Verificado no browser:
+página `/estatisticas` completa (H2H, radar, Elo, quadrantes, escanteios, cartões) renderizando
+para um confronto de clube (Atletico Goianiense x Athletic Club) numa aba nova e limpa, sem
+erros de console além de um warning pré-existente não relacionado (`<script>` tag).
+
+### 15.6 Verificação
+
+Backend: `Predictor(art_dir="model_artifacts_clubes")` carrega (2.192 times, 46 competições em
+`tournament_weights`); `get_upcoming_fixtures()` retorna itens `scope="clube"` com `league_id`
+em ambos os branches; `get_team_history(..., scope="clube")` retorna Elo real (ex.: Athletic
+Club, 17 pontos mensais 2024-02→2026-07). Frontend: `tsc --noEmit` limpo nos dois momentos
+(antes e depois do fix do §15.5); fluxo completo testado no browser (modal → grid de
+competições → seleção de partida → confronto carregado → `/estatisticas` completo).
