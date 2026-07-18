@@ -70,7 +70,7 @@ const compRank = (label: string) => {
 
 export function MatchPickerModal({
   open, onOpenChange, fixtures, teamIds, onSelect, title = 'Selecionar Partida', defaultScope = 'selecao',
-  dateDefault = 'none',
+  dateDefault = 'none', allCompetitions,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -82,6 +82,9 @@ export function MatchPickerModal({
   /** 'today' pré-seleciona a data atual; 'none' (padrão) deixa sem filtro de data,
    * mostrando todas as competições/partidas em aberto. */
   dateDefault?: 'today' | 'none';
+  /** Catálogo completo de competições treinadas (ambos escopos) -- quando informado,
+   * TODA competição aparece no grid, mesmo sem jogo agendado (com badge e desabilitada). */
+  allCompetitions?: { selecao: string[]; clube: string[] };
 }) {
   const [scope, setScope] = useState<'selecao' | 'clube'>(defaultScope);
   const [dateFilter, setDateFilter] = useState(dateDefault === 'today' ? todayISO() : '');
@@ -104,20 +107,32 @@ export function MatchPickerModal({
   );
 
   // Uma linha por competição: label PT + um league_id representativo (p/ logo).
+  // Também inclui competições SEM jogo agendado no filtro atual (via `allCompetitions`,
+  // o catálogo completo de treino) -- essas entram com `fixtures: []` e o grid as
+  // renderiza desabilitadas, com o badge "Sem jogos agendados".
   const competitions = useMemo(() => {
     const map = new Map<string, { label: string; leagueId: number | null; fixtures: PickerFixture[] }>();
+    (allCompetitions?.[scope] || []).forEach(raw => {
+      const label = competitionPt(raw);
+      if (!label) return;
+      if (!map.has(label)) map.set(label, { label, leagueId: null, fixtures: [] });
+    });
     dateFiltered.forEach(f => {
       const label = competitionPt(f.league_name || f.tournament);
       if (!label) return;
       if (!map.has(label)) map.set(label, { label, leagueId: f.league_id ?? null, fixtures: [] });
-      map.get(label)!.fixtures.push(f);
+      const entry = map.get(label)!;
+      if (entry.leagueId == null && f.league_id != null) entry.leagueId = f.league_id;
+      entry.fixtures.push(f);
     });
     return Array.from(map.values()).sort((a, b) => {
       const ra = compRank(a.label), rb = compRank(b.label);
       if (ra !== rb) return ra - rb;
+      if (a.fixtures.length === 0 && b.fixtures.length > 0) return 1;
+      if (b.fixtures.length === 0 && a.fixtures.length > 0) return -1;
       return b.fixtures.length - a.fixtures.length || a.label.localeCompare(b.label);
     });
-  }, [dateFiltered]);
+  }, [dateFiltered, allCompetitions, scope]);
 
   const q = query.trim().toLowerCase();
   const matchesTeamQuery = (f: PickerFixture) =>
@@ -181,14 +196,26 @@ export function MatchPickerModal({
             )}
             {compsShown.map(c => {
               const logo = leagueLogoUrl(c.leagueId);
+              const empty = c.fixtures.length === 0;
               return (
-                <button key={c.label} onClick={() => setComp(c.label)}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60 transition-colors">
+                <button key={c.label} onClick={() => { if (!empty) setComp(c.label); }}
+                  disabled={empty}
+                  aria-disabled={empty}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors ${
+                    empty
+                      ? 'border-border/30 bg-muted/10 opacity-50 cursor-not-allowed'
+                      : 'border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60'
+                  }`}>
                   {logo && (
                     <img src={logo} alt="" className="w-8 h-8 object-contain" loading="lazy"
                       onError={onImgError} />
                   )}
                   <span className="text-[11px] font-medium text-center leading-snug">{c.label}</span>
+                  {empty && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground leading-tight">
+                      Sem jogos agendados
+                    </span>
+                  )}
                 </button>
               );
             })}

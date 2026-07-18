@@ -439,7 +439,11 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onO
 export default function Previsoes() {
   const [teams, setTeams] = React.useState<string[]>([]);
   const [tournaments, setTournaments] = React.useState<string[]>([]);
-  
+  // Catálogo completo de competições dos DOIS escopos -- alimenta o grid do
+  // MatchPickerModal (que tem seu próprio toggle de escopo interno), pra listar TODA
+  // competição treinada mesmo sem jogo agendado nela.
+  const [allCompetitions, setAllCompetitions] = React.useState<{ selecao: string[]; clube: string[] }>({ selecao: [], clube: [] });
+
   const router = useRouter();
   const {
     homeTeamId, setHomeTeamId, awayTeamId, setAwayTeamId, competition, setCompetition, neutralField, setNeutralField,
@@ -566,6 +570,12 @@ export default function Previsoes() {
     }).catch(console.error);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope]);
+
+  React.useEffect(() => {
+    Promise.all([api.teams('selecao'), api.teams('clube')])
+      .then(([sel, clu]) => setAllCompetitions({ selecao: sel.tournaments, clube: clu.tournaments }))
+      .catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     if (homeTeamId) {
@@ -740,6 +750,7 @@ export default function Previsoes() {
         onSelect={(fx) => selectFutureFixture(fx.fixture_id)}
         title="Selecionar Partida Agendada"
         defaultScope={scope}
+        allCompetitions={allCompetitions}
       />
 
       <AnimatePresence>

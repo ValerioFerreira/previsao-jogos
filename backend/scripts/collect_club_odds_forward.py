@@ -151,7 +151,13 @@ def sync_registry_to_db(registry: dict) -> None:
         print(f"[AVISO] Falha ao sincronizar club_odds_registry no Neon: {exc}")
 
 
-def collect(days: int, dry_run: bool, quota_buffer: int = 50) -> dict:
+def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: int = 16) -> dict:
+    """`days` = até onde ENUMERAMOS jogos (o quanto der -- descoberta é barata, 1
+    request/dia cobre TODAS as ligas de uma vez). `odds_window_days` = até onde
+    TENTAMOS odds (a api-football só publica 1-14 dias antes; tentar além disso é
+    cota jogada fora). Todo jogo descoberto entra no registry (visível no seletor
+    "Partida Agendada") independente de ter odds ou não -- odds não é mais gate de
+    visibilidade, só enriquecimento oportunista pro backtest de valor."""
     key = load_key()
     registry = load_registry()
     today = datetime.now(timezone.utc).date()
@@ -178,21 +184,34 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50) -> dict:
             away_name = _canonical_name(teams.get("away", {}).get("name"), teams.get("away", {}).get("id"))
             candidates.append((
                 fx.get("id"), home_name, away_name,
-                TARGET_LEAGUES[lid], lid, fx.get("date"), status,
+                TARGET_LEAGUES[lid], lid, fx.get("date"), status, offset,
             ))
         if remaining is not None and int(remaining) <= quota_buffer:
             print(f"[AVISO] cota perto do limite ({remaining} restantes) -- parando a descoberta em {day}")
             stopped_early = True
             break
 
-    # Fase 2 (odds): 1 request/partida, em ordem de prioridade -- Brasileirão A/B, Copa
+    # Registra TODOS os candidatos já aqui (visíveis no seletor mesmo sem odds).
+    seen_fixtures = [(c[0], c[1], c[2], c[3], c[5]) for c in candidates]
+    if not dry_run:
+        for fixture_id, home, away, league_name, lid, date, status, offset in candidates:
+            prev = registry.get(str(fixture_id), {})
+            registry[str(fixture_id)] = {
+                **prev,
+                "home": home, "away": away, "league_id": lid,
+                "league_name": league_name, "fixture_date": date,
+                "n_snapshots": prev.get("n_snapshots", 0),
+            }
+
+    # Fase 2 (odds): 1 request/partida, só dentro de `odds_window_days` (fora disso a
+    # api-football sempre volta vazio), em ordem de prioridade -- Brasileirão A/B, Copa
     # do Brasil, Champions, Premier, La Liga primeiro; resto por ordem de LEAGUES se
     # sobrar cota (ver PRIORITY_LEAGUES).
-    candidates.sort(key=lambda c: _priority_rank(c[3]))
-    seen_fixtures = [(c[0], c[1], c[2], c[3], c[5]) for c in candidates]
+    odds_candidates = [c for c in candidates if c[7] <= odds_window_days]
+    odds_candidates.sort(key=lambda c: _priority_rank(c[3]))
     odds_collected = 0
 
-    for fixture_id, home, away, league_name, lid, date, status in candidates:
+    for fixture_id, home, away, league_name, lid, date, status, offset in odds_candidates:
         if remaining is not None and int(remaining) <= quota_buffer:
             print(f"[AVISO] cota perto do limite ({remaining} restantes) -- parando antes de {league_name}")
             stopped_early = True
@@ -216,12 +235,8 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50) -> dict:
             SNAP_DIR.mkdir(parents=True, exist_ok=True)
             with (SNAP_DIR / f"{fixture_id}.jsonl").open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(snapshot, ensure_ascii=False) + "\n")
-            registry[str(fixture_id)] = {
-                "home": home, "away": away, "league_id": lid,
-                "league_name": league_name, "fixture_date": date,
-                "last_collected": snapshot["collected_at"],
-                "n_snapshots": registry.get(str(fixture_id), {}).get("n_snapshots", 0) + 1,
-            }
+            registry[str(fixture_id)]["last_collected"] = snapshot["collected_at"]
+            registry[str(fixture_id)]["n_snapshots"] = registry[str(fixture_id)].get("n_snapshots", 0) + 1
         time.sleep(0.2)
 
     if not dry_run and seen_fixtures:
@@ -236,12 +251,13 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50) -> dict:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--days", type=int, default=10)
+    ap.add_argument("--days", type=int, default=270, help="janela de dias a frente p/ ENUMERAR jogos (descoberta é barata)")
+    ap.add_argument("--odds-window-days", type=int, default=16, help="janela de dias a frente p/ TENTAR odds (api-football só publica 1-14 dias antes)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--quota-buffer", type=int, default=50,
                      help="Para a coleta quando a cota restante do dia chegar nesse valor (proteção contra 429).")
     a = ap.parse_args()
-    summary = collect(a.days, a.dry_run, a.quota_buffer)
+    summary = collect(a.days, a.dry_run, a.quota_buffer, a.odds_window_days)
     print(f"\nJanela: {summary['dias']} dias | jogos de CLUBES vistos: {summary['jogos_vistos']} "
           f"| com odds: {summary['odds_coletadas']} | cota restante: {summary['cota_restante']}"
           f"{' | PAROU CEDO POR COTA' if summary['parou_por_cota'] else ''}")

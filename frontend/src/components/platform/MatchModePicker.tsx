@@ -38,6 +38,10 @@ export function MatchModePicker({
   const [referees, setReferees] = useState<string[]>([]);
   const [teams, setTeams] = useState<string[]>([]);
   const [tournaments, setTournaments] = useState<string[]>([]);
+  // Catálogo completo de competições dos DOIS escopos -- alimenta o grid do modal
+  // (que tem seu próprio toggle de escopo interno, independente deste aqui), pra
+  // conseguir listar TODA competição treinada mesmo sem jogo agendado nela.
+  const [allCompetitions, setAllCompetitions] = useState<{ selecao: string[]; clube: string[] }>({ selecao: [], clube: [] });
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
   const [past, setPast] = useState<UpcomingFixture[]>([]);
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
@@ -50,6 +54,9 @@ export function MatchModePicker({
       .then(([sel, clu]) => setTeamIds({ ...sel, ...clu })).catch(() => {});
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
     if (onSelectPast) api.pastFixtures().then(r => setPast(r.fixtures)).catch(() => {});
+    Promise.all([api.teams("selecao"), api.teams("clube")])
+      .then(([sel, clu]) => setAllCompetitions({ selecao: sel.tournaments, clube: clu.tournaments }))
+      .catch(() => {});
   }, [onSelectPast]);
 
   React.useEffect(() => {
@@ -159,7 +166,7 @@ export function MatchModePicker({
         </>
       )}
 
-      <MatchPickerModal open={futureOpen} onOpenChange={setFutureOpen} fixtures={upcoming} teamIds={teamIds} onSelect={pickFuture} title="Selecionar Partida Agendada" defaultScope={scope} />
+      <MatchPickerModal open={futureOpen} onOpenChange={setFutureOpen} fixtures={upcoming} teamIds={teamIds} onSelect={pickFuture} title="Selecionar Partida Agendada" defaultScope={scope} allCompetitions={allCompetitions} />
       {onSelectPast && (
         <MatchPickerModal open={pastOpen} onOpenChange={setPastOpen} fixtures={past} teamIds={teamIds} onSelect={pickPast} title="Selecionar Partida Passada" dateDefault="none" defaultScope={scope} />
       )}
