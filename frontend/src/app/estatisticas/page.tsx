@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Label } from '@/components/ui/label';
-import { BarChart3, TrendingUp, Target, Activity } from 'lucide-react';
+import { BarChart3, TrendingUp, Target, Activity, Gauge } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 import { api, TeamHistoryResponse, H2HResponse, MatchDetail as MatchDetailT } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
@@ -170,6 +170,32 @@ export default function Estatisticas() {
     };
   }, [homeHistory, awayHistory, benchmark]);
 
+  const teamRankings = useMemo(() => {
+    const showRanking = !!benchmark && benchmark.scope === 'competition' && !!benchmark.team_stats && benchmark.n_teams >= 3;
+    let homeAtkRank = "-";
+    let homeDefRank = "-";
+    let awayAtkRank = "-";
+    let awayDefRank = "-";
+
+    if (showRanking && benchmark?.team_stats) {
+      const stats = benchmark.team_stats;
+      const teams = Object.keys(stats);
+      const sortedByAtk = [...teams].sort((a, b) => (stats[b].attack || 0) - (stats[a].attack || 0));
+      const sortedByDef = [...teams].sort((a, b) => (stats[a].defense || 0) - (stats[b].defense || 0));
+      
+      const hIdxAtk = sortedByAtk.indexOf(homeTeamId);
+      const hIdxDef = sortedByDef.indexOf(homeTeamId);
+      const aIdxAtk = sortedByAtk.indexOf(awayTeamId);
+      const aIdxDef = sortedByDef.indexOf(awayTeamId);
+      
+      if (hIdxAtk !== -1) homeAtkRank = `${hIdxAtk + 1}º`;
+      if (hIdxDef !== -1) homeDefRank = `${hIdxDef + 1}º`;
+      if (aIdxAtk !== -1) awayAtkRank = `${aIdxAtk + 1}º`;
+      if (aIdxDef !== -1) awayDefRank = `${aIdxDef + 1}º`;
+    }
+    return { showRanking, homeAtkRank, homeDefRank, awayAtkRank, awayDefRank };
+  }, [benchmark, homeTeamId, awayTeamId]);
+
   const eloHistoryData = useMemo(() => {
     if (!homeHistory?.elo_history || !awayHistory?.elo_history) return [];
     try {
@@ -268,29 +294,80 @@ export default function Estatisticas() {
           transition={{ duration: 0.4 }}
           className="space-y-6"
         >
-          {/* Insights automáticos — resumo do que os números abaixo significam */}
-          <AutoInsights home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} homeTiming={homeTiming} awayTiming={awayTiming} />
-
-          {/* Confronto direto — primeiro card */}
-          <H2HCard h2hData={h2h?.metrics} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
-
-          {/* Compatibilidade de estilos + matchup ataque x defesa */}
-          <StyleMatchup home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
-
-          {/* Destaques Recentes (2/3) + Radar de Estilo (1/3) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-            <div className="lg:col-span-2">
-              <DestaquesRecentes home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} teamIds={teamIds} />
+          {/* SEÇÃO TOPO: Confronto direto + Radar de Estilo */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+            <div className="lg:col-span-7">
+              <H2HCard h2hData={h2h?.metrics} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
             </div>
-            <div className="lg:col-span-1">
-              <StyleRadar home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
+            <div className="lg:col-span-5">
+              <StyleRadar home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} targetCompetition={competition} />
             </div>
           </div>
 
+          {/* SEÇÃO INTERMEDIÁRIA: Confronto de Estilos + Posição na Competição + Principais Conclusões */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+            <div className="lg:col-span-4">
+              <StyleMatchup home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} targetCompetition={competition} />
+            </div>
+            <div className="lg:col-span-3">
+              {teamRankings.showRanking ? (
+                <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                      <Gauge className="w-4 h-4 text-cyan-500" />
+                      Posição na Competição
+                      <InfoTooltip text={`Ranking das seleções entre as ${benchmark!.n_teams} equipes da competição, baseado nas médias reais de gols marcados (Ataque) e sofridos (Defesa).`} />
+                    </h3>
+                    
+                    <div className="space-y-3 mt-2">
+                      <div>
+                        <p className="text-[11px] font-semibold text-emerald-400 mb-1">{teamPt(homeTeamId)}</p>
+                        <div className="grid grid-cols-2 gap-2 text-center">
+                          <div className="bg-muted/40 rounded-lg p-2 border border-border/10">
+                            <p className="text-[10px] text-muted-foreground leading-none">Ataque</p>
+                            <p className="text-base font-bold font-mono text-emerald-400 mt-1">{teamRankings.homeAtkRank} / {benchmark!.n_teams}</p>
+                          </div>
+                          <div className="bg-muted/40 rounded-lg p-2 border border-border/10">
+                            <p className="text-[10px] text-muted-foreground leading-none">Defesa</p>
+                            <p className="text-base font-bold font-mono text-emerald-400 mt-1">{teamRankings.homeDefRank} / {benchmark!.n_teams}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <p className="text-[11px] font-semibold text-orange-400 mb-1">{teamPt(awayTeamId)}</p>
+                        <div className="grid grid-cols-2 gap-2 text-center">
+                          <div className="bg-muted/40 rounded-lg p-2 border border-border/10">
+                            <p className="text-[10px] text-muted-foreground leading-none">Ataque</p>
+                            <p className="text-base font-bold font-mono text-orange-400 mt-1">{teamRankings.awayAtkRank} / {benchmark!.n_teams}</p>
+                          </div>
+                          <div className="bg-muted/40 rounded-lg p-2 border border-border/10">
+                            <p className="text-[10px] text-muted-foreground leading-none">Defesa</p>
+                            <p className="text-base font-bold font-mono text-orange-400 mt-1">{teamRankings.awayDefRank} / {benchmark!.n_teams}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex flex-col justify-center items-center text-center text-xs text-muted-foreground">
+                  <Gauge className="w-6 h-6 text-muted-foreground/40 mb-2" />
+                  Ranking indisponível para esta competição.
+                </div>
+              )}
+            </div>
+            <div className="lg:col-span-5">
+              <AutoInsights home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} homeTiming={homeTiming} awayTiming={awayTiming} targetCompetition={competition} />
+            </div>
+          </div>
+
+          {/* SEÇÃO INFERIOR: DestaquesRecentes, Minutagem e DeepStats */}
+          <DestaquesRecentes home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} teamIds={teamIds} />
+
           <GoalTiming home={homeTeamId} homeData={homeTiming} away={awayTeamId} awayData={awayTiming} />
 
-          {/* Percentis, comparação completa, BTTS detalhado, consistência, imprevisibilidade e momentum */}
-          <DeepStats home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} homeHistory={homeHistory} awayHistory={awayHistory} benchmark={benchmark} />
+          <DeepStats home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} homeHistory={homeHistory} awayHistory={awayHistory} benchmark={benchmark} targetCompetition={competition} />
 
           {/* Central Pré-Jogo (só Partida Futura) */}
           {pickerMode === 'futura' && (
@@ -331,7 +408,7 @@ export default function Estatisticas() {
           </div>
 
           {/* Evolução de Elo */}
-          {eloHistoryData.length > 0 && (
+          {eloHistoryData.length > 1 && (
             <div className="bg-card border border-border/50 rounded-xl p-5">
               <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
                 <Activity className="w-4 h-4 text-cyan-500" />

@@ -95,7 +95,7 @@ def settle_bet(db: Session, bet: Bet, result: MatchResult) -> SettlementOutcome:
         tx = post_transaction(
             db, wallet=wallet, tx_type=CreditTxType.consumption, amount=Decimal("0"),
             reserved_delta=Decimal("-1"), idempotency_key=f"bet-settle:{bet.id}",
-            reference_type="bet", reference_id=bet.id, description="Aposta vencedora — crédito consumido",
+            reference_type="bet", reference_id=bet.id, description="Seleção validada — crédito consumido",
         )
         bet.status = BetStatus.credit_consumed
         analysis = db.get(Analysis, bet.analysis_id)
@@ -106,8 +106,8 @@ def settle_bet(db: Session, bet: Bet, result: MatchResult) -> SettlementOutcome:
             db, wallet=wallet, tx_type=CreditTxType.reservation_release, amount=Decimal("1"),
             reserved_delta=Decimal("-1"), idempotency_key=f"bet-settle:{bet.id}",
             reference_type="bet", reference_id=bet.id,
-            description="Aposta não vencedora — crédito estornado" if outcome == SettlementOutcome.lost
-            else "Aposta anulada — crédito estornado",
+            description="Seleção não validada — crédito estornado" if outcome == SettlementOutcome.lost
+            else "Seleção anulada — crédito estornado",
         )
         bet.status = BetStatus.credit_refunded
 

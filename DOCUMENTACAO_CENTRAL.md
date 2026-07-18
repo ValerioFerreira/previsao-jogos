@@ -383,7 +383,7 @@ Re-treino do DC após validar uma feature: `scripts/retrain_dc_pace.py` (cirúrg
 ## 12. Camada de Usuários / Monetização (2026-07)
 
 Além do motor de previsão, o produto ganhou uma **camada completa de usuários, créditos,
-apostas promocionais e administração**, construída na branch `feat/monetizacao` (mergeada na
+seleções promocionais e administração**, construída na branch `feat/monetizacao` (mergeada na
 `main`). O motor de previsão e seus modelos **não mudaram** (só ganharam a calibração O/U já
 descrita e a odd mínima 1.00 na exibição).
 
@@ -393,8 +393,8 @@ Backend **modular por domínio** (`backend/app/domains/*`), ORM 2.0 + **Alembic*
 monetização de conversão, §12.7). Fluxo completo:
 ```
 cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome/reserva 1 crédito)
-   →  "Monte sua Aposta" (odd ≤2,00, auto ~2,00, imutável)  →  liquidação pós-jogo
-      (vence: consome o crédito · perde/anula: estorna)  —  Painel Admin gerindo tudo
+   →  "Monte sua Seleção" (odd ≤2,00, auto ~2,00, imutável)  →  processamento resultado
+      (validada: consome o crédito · não validada/anulada: estorna)  —  Painel Admin gerindo tudo
 ```
 - **Auth:** argon2, JWT de acesso + refresh rotativo, **OTP por e-mail real (ZeptoMail/Zoho)**,
   CPF (dígitos verificadores) + telefone, rate limiting, lockout, auditoria.
@@ -405,17 +405,17 @@ cadastro→OTP→senha→login  →  compra de créditos  →  análise (consome
   checkout, independentes entre si.
 - **Análise:** grava **snapshot imutável** + versão do algoritmo/dados; independente consome 1
   crédito, partida futura reserva 1.
-- **Aposta ("Monte sua Aposta"):** combina mercados da análise (O/U em colunas Acima/Abaixo),
+- **Seleção ("Monte sua Seleção"):** combina mercados da análise (O/U em colunas Acima/Abaixo),
   odd combinada **≤ 2,00**, **auto-seleção ~2,00** se o usuário não escolher, imutável.
 - **Liquidação:** worker `scripts/settle_bets.py` / `POST /api/cron/settle-bets` — pós-jogo via
-  API-Football, consome (venceu) ou estorna (perdeu/indeterminável) — promoção "Só Paga se Acertar".
+  API-Football, consome (validada) ou estorna (não validada/indeterminável) — promoção "Só Paga se Acertar".
 - **Admin (backend + UI):** usuários (bloquear, creditar), financeiro, promoções, **cupons,
   pacotes, afiliados, banners, configurações, suporte** (§12.7), documentos legais versionados,
   **auditoria completa**.
 - **Afiliados, campanhas, analytics, notificações, suporte** (§12.7): domínios novos da
   monetização de conversão.
 - **Frontend:** página única **Análise** (`/`) com config → gerar (crédito) → previsão completa →
-  **Construção da Aposta** (Monte sua Aposta + Explorador de Linha + Value Betting/De-Vig);
+  **Construção da Seleção** (Monte sua Seleção + Explorador de Linha + Value Betting/De-Vig);
   `/carteira` (redesenhada, §12.7), `/perfil`, `/admin`, `/afiliado` (portal), `/documentos/[type]`,
   **`/como-funciona`** (doc interativo). Persistência da análise no `PredictionContext` (não some
   ao navegar). Auth no `AuthContext`.
@@ -457,7 +457,7 @@ Envio de OTP: implementado (commit `e517740`), verificado contra um ZeptoMail si
 por e-mail. Recebimento de e-mail: **não implementado**, decisão pendente (caixa no Zoho Mail é
 configuração; leitura programática exigiria IMAP ou Zoho Mail API com OAuth2).
 
-### 12.5 Sessão 2026-07-08 (parte 2) — UX da Análise + regras de crédito/aposta
+### 12.5 Sessão 2026-07-08 (parte 2) — UX da Análise + regras de crédito/seleção
 Produção agora em **`apostainfo.com.br`**; cadastro por e-mail (ZeptoMail) **funcional**.
 
 - **Bônus de boas-vindas:** toda conta nova nasce com **8 créditos grátis** — lançamento `bonus`
@@ -466,7 +466,7 @@ Produção agora em **`apostainfo.com.br`**; cadastro por e-mail (ZeptoMail) **f
 - **Persistência da análise (bug corrigido):** o `PredictionContext` agora persiste em
   `localStorage` (`apostai:prediction:v1`) — a análise sobrevive a **reload cheio**, não só à
   navegação client-side. Antes um F5/remontagem zerava a análise e forçava gasto de outro crédito.
-- **Aposta — seleções interdependentes bloqueadas:** `bets/markets.py::base_market()` +
+- **Seleção — palpites interdependentes bloqueados:** `bets/markets.py::base_market()` +
   `resolve_selections`/`auto_select` recusam duas seleções do **mesmo mercado-base** (ex.: Menos
   de 1,5 + Menos de 2,5 gols; duas linhas de escanteios/cartões), como as casas. Guarda no backend
   (autoritativa) + no `BetBuilder` (um por mercado-base no toggle).
@@ -476,7 +476,7 @@ Produção agora em **`apostainfo.com.br`**; cadastro por e-mail (ZeptoMail) **f
   (título sempre visível); **"Jogador a Marcar" movido para dentro dos secundários**; cards de
   mercado com **só o nome da seleção, centralizado**; **Handicaps** com texto explicativo novo +
   cabeçalhos de coluna; **"Configuração do Confronto" recolhe** ao escolher a partida, com
-  "Alterar Equipes" no cabeçalho flutuante; **FUNÇÕES AVANÇADAS acima do MONTE SUA APOSTA**;
+  "Alterar Equipes" no cabeçalho flutuante; **FUNÇÕES AVANÇADAS acima do MONTE SUA SELEÇÃO**;
   **últimos 5 jogos em linhas** num bloco (Resumo do Confronto Direto à esquerda, equipes
   empilhadas à direita, mesma largura/altura).
 

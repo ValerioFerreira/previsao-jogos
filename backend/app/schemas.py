@@ -151,6 +151,7 @@ class CompetitionBenchmarkResponse(BaseModel):
     defense_std: float
     n_teams: int
     scope: str
+    team_stats: dict[str, dict[str, float]] | None = None
 
 
 class PmfPreviewResponse(BaseModel):

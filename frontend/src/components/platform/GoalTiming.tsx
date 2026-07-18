@@ -33,6 +33,8 @@ function heatColor(pct: number, maxPct: number, rgb: string): string {
 function MinuteHeatmap({ home, away, homeData, awayData }: {
   home: string; away: string; homeData: GoalTimingResponse | null; awayData: GoalTimingResponse | null;
 }) {
+  const [hoveredCol, setHoveredCol] = React.useState<string | null>(null);
+  
   const hRows = homeData ? build(homeData) : [];
   const aRows = awayData ? build(awayData) : [];
   const labels = (hRows.length ? hRows : aRows).map((r) => r.label);
@@ -40,7 +42,6 @@ function MinuteHeatmap({ home, away, homeData, awayData }: {
   const maxScored = Math.max(5, ...hRows.map((r) => r.scoredPct), ...aRows.map((r) => r.scoredPct));
   const maxConceded = Math.max(5, ...hRows.map((r) => -r.concededPct), ...aRows.map((r) => -r.concededPct));
 
-  // Coincidência: bloco onde o ataque de uma equipe e a fragilidade defensiva da outra mais se sobrepõem.
   const coincidence = (scorerRows: Row[], concederRows: Row[]) => {
     let best = { label: labels[0], score: -1 };
     for (const label of labels) {
@@ -51,21 +52,26 @@ function MinuteHeatmap({ home, away, homeData, awayData }: {
     }
     return best;
   };
-  const hIntoA = coincidence(hRows, aRows); // home marca x away sofre
-  const aIntoH = coincidence(aRows, hRows); // away marca x home sofre
+  const hIntoA = coincidence(hRows, aRows);
+  const aIntoH = coincidence(aRows, hRows);
 
   const Line = ({ team, rows, accent, metric }: { team: string; rows: Row[]; accent: string; metric: "scoredPct" | "concededPct" }) => (
-    <div className="flex items-center gap-1">
-      <span className="w-24 shrink-0 text-[10px] text-muted-foreground truncate">{teamPt(team)} {metric === "scoredPct" ? "marca" : "sofre"}</span>
-      <div className="flex-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))` }}>
+    <div className="flex items-center gap-1 hover:bg-muted/10 p-0.5 rounded transition-colors group/row">
+      <span className="w-24 shrink-0 text-[10px] text-muted-foreground truncate group-hover/row:text-foreground transition-colors">{teamPt(team)} {metric === "scoredPct" ? "marca" : "sofre"}</span>
+      <div className="flex-1 grid gap-1 relative" style={{ gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))` }}>
         {labels.map((label) => {
           const row = rows.find((r) => r.label === label);
           const raw = metric === "scoredPct" ? (row?.scoredPct ?? 0) : -(row?.concededPct ?? 0);
           const max = metric === "scoredPct" ? maxScored : maxConceded;
           const rgb = metric === "scoredPct" ? accent : "239, 68, 68";
+          const isColHovered = hoveredCol === label;
           return (
             <div key={label} title={`${label}′ · ${raw.toFixed(0)}%`}
-              className="h-6 rounded flex items-center justify-center text-[9px] font-mono"
+              onMouseEnter={() => setHoveredCol(label)}
+              onMouseLeave={() => setHoveredCol(null)}
+              className={`h-7 rounded flex items-center justify-center text-[10px] font-mono relative z-0 transition-all duration-150 cursor-pointer ${
+                isColHovered ? "scale-110 z-10 shadow-md brightness-110 border border-white/20" : ""
+              }`}
               style={{ backgroundColor: heatColor(raw, max, rgb) }}>
               {raw > 0 ? `${raw.toFixed(0)}` : ""}
             </div>
@@ -84,13 +90,21 @@ function MinuteHeatmap({ home, away, homeData, awayData }: {
         <Line team={away} rows={aRows} accent="249, 115, 22" metric="scoredPct" />
         <Line team={away} rows={aRows} accent="249, 115, 22" metric="concededPct" />
       </div>
-      <div className="flex items-center gap-1 mb-2">
+      <div className="flex items-center gap-1 mb-3">
         <span className="w-24 shrink-0" />
         <div className="flex-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))` }}>
-          {labels.map((l) => <span key={l} className="text-[8px] text-center text-muted-foreground">{l}′</span>)}
+          {labels.map((l) => (
+            <span key={l}
+              className={`text-[11px] font-semibold text-center transition-all duration-150 ${
+                hoveredCol === l ? "text-foreground font-bold scale-110" : "text-muted-foreground/80"
+              }`}
+            >
+              {l}′
+            </span>
+          ))}
         </div>
       </div>
-      <div className="space-y-1 text-[11px] text-muted-foreground">
+      <div className="space-y-1 text-[11px] text-muted-foreground text-center mt-4 bg-muted/20 p-3 rounded-lg border border-border/10">
         <p>🔥 <b className="text-foreground">{teamPt(home)}</b> marca mais e <b className="text-foreground">{teamPt(away)}</b> sofre mais em <b className="text-foreground">{hIntoA.label}′</b> → maior tendência de gol de {teamPt(home)} nesse trecho.</p>
         <p>🔥 <b className="text-foreground">{teamPt(away)}</b> marca mais e <b className="text-foreground">{teamPt(home)}</b> sofre mais em <b className="text-foreground">{aIntoH.label}′</b> → maior tendência de gol de {teamPt(away)} nesse trecho.</p>
       </div>
