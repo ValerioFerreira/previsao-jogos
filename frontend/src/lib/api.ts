@@ -424,11 +424,17 @@ export type UpcomingFixture = {
   neutral: boolean;
   date: string;
   league_name: string;
+  league_id?: number | null;
   scope: Scope;
 };
 
 // URL do logo da seleção (api-football media; não conta cota).
 export function teamLogoUrl(teamId?: number): string | null {
   return teamId ? `https://media.api-sports.io/football/teams/${teamId}.png` : null;
+}
+
+// URL do logo da competição (api-football media; não conta cota).
+export function leagueLogoUrl(leagueId?: number | null): string | null {
+  return leagueId ? `https://media.api-sports.io/football/leagues/${leagueId}.png` : null;
 }
 

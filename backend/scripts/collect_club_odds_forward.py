@@ -44,7 +44,25 @@ from scripts.prefetch_clubs import LEAGUES  # noqa: E402
 ODDS_DIR = ROOT / "data" / "odds"
 SNAP_DIR = ODDS_DIR / "club_snapshots"
 REGISTRY = ODDS_DIR / "club_registry.json"
-TARGET_LEAGUES = {lid: name for lid, name in LEAGUES}
+
+
+def _trained_target_leagues() -> dict[int, str]:
+    """Restringe a coleta às ligas que o artefato de clube TREINADO conhece
+    (`tournament_weights` do meta.json) -- mesmo padrão de
+    collect_odds_forward.py::target_league_ids() pro lado seleção (só ligas
+    que o modelo sabe prever). Evita listar partida de time fora do roster."""
+    meta_path = ROOT / "model_artifacts_clubes" / "meta.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        trained = set(meta.get("tournament_weights", {}).keys())
+    except Exception:
+        trained = set()
+    if not trained:
+        return {lid: name for lid, name in LEAGUES}
+    return {lid: name for lid, name in LEAGUES if name in trained}
+
+
+TARGET_LEAGUES = _trained_target_leagues()
 
 
 def api_get(path: str, key: str, **params):

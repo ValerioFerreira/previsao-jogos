@@ -199,16 +199,17 @@ export default function Estatisticas() {
   const eloHistoryData = useMemo(() => {
     if (!homeHistory?.elo_history || !awayHistory?.elo_history) return [];
     try {
-      const years = Array.from(new Set([
+      // "date" no formato mensal "AAAA-MM" (scripts/build_elo_history.py).
+      const months = Array.from(new Set([
         ...homeHistory.elo_history.map(e => e.date),
         ...awayHistory.elo_history.map(e => e.date)
       ])).sort();
-      
-      return years.map(y => {
-        const hPoint = homeHistory.elo_history.find(e => e.date === y);
-        const aPoint = awayHistory.elo_history.find(e => e.date === y);
+
+      return months.map(m => {
+        const hPoint = homeHistory.elo_history.find(e => e.date === m);
+        const aPoint = awayHistory.elo_history.find(e => e.date === m);
         return {
-          year: y,
+          month: m,
           [homeTeamId]: hPoint ? hPoint.elo : null,
           [awayTeamId]: aPoint ? aPoint.elo : null
         };
@@ -218,6 +219,12 @@ export default function Estatisticas() {
       return [];
     }
   }, [homeHistory, awayHistory, homeTeamId, awayTeamId]);
+
+  // "AAAA-MM" -> "MM/AA" p/ eixo do gráfico de Elo.
+  const fmtEloMonth = (m: string) => {
+    const [y, mo] = (m || '').split('-');
+    return y && mo ? `${mo}/${y.slice(2)}` : m;
+  };
 
   // Modo "detalhe de partida": acionado ao clicar num jogo recente (Previsões).
   if (matchParams) {
@@ -415,12 +422,12 @@ export default function Estatisticas() {
                 Evolução de Elo
                 <InfoTooltip text="Rating Elo histórico de cada seleção. Mostra se o time vem melhorando ou piorando de patamar ao longo do tempo, independentemente da forma recente (vitórias/derrotas) mostrada nos Destaques Recentes." />
               </h3>
-              <p className="text-xs text-muted-foreground mb-4">Rating Elo ao longo do tempo</p>
+              <p className="text-xs text-muted-foreground mb-4">Rating Elo mensal ao longo do tempo</p>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={eloHistoryData} margin={{ top: 5, right: 20, bottom: 24, left: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <XAxis dataKey="month" tickFormatter={fmtEloMonth} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
                     <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                       label={{ value: 'Elo', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                     <RTooltip

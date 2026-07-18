@@ -375,6 +375,7 @@ def get_upcoming_fixtures() -> list[dict[str, Any]]:
             "neutral": bool(info.get("neutral", False)),
             "date": date,
             "league_name": info.get("league_name", ""),
+            "league_id": info.get("league_id"),
             "scope": "selecao",
         })
 
@@ -392,6 +393,7 @@ def get_upcoming_fixtures() -> list[dict[str, Any]]:
             "neutral": False,  # jogo de clube: mando real, salvo raras finais neutras (fora de escopo hoje)
             "date": date,
             "league_name": tournament,
+            "league_id": info.get("league_id"),
             "scope": "clube",
         })
 
@@ -528,11 +530,42 @@ def get_recent_matches(team_name: str, scope: str = "selecao") -> dict[str, Any]
     return {"matches": matches, "total_matches": total_matches}
 
 
+_ELO_HISTORY_MEMO: dict[str, pd.DataFrame] = {}
+_ELO_WINDOW_YEARS = {"selecao": 7, "clube": 3}
+
+
+def _load_elo_history(scope: str) -> pd.DataFrame:
+    """CSV pré-computado (scripts/build_elo_history.py) com Elo mensal por time,
+    a partir de home_elo_pre/away_elo_pre já calculados no dataset de treino --
+    nunca escaneia o Neon em runtime. Memoizado em processo (arquivo pequeno)."""
+    if scope in _ELO_HISTORY_MEMO:
+        return _ELO_HISTORY_MEMO[scope]
+    path = (ARTIFACT_DIR_CLUBES if scope == "clube" else ARTIFACT_DIR) / "elo_history.csv"
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        print(f"[AVISO] elo_history.csv ({scope}): {e}")
+        df = pd.DataFrame(columns=["team", "date", "elo"])
+    _ELO_HISTORY_MEMO[scope] = df
+    return df
+
+
 def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     """Extrai histórico do time para os gráficos da página de Estatísticas.
-    Escopo 'clube': mesmo gap da `matches` que get_recent_matches -- vazio por ora."""
+    Escopo 'clube': mesmo gap da `matches` que get_recent_matches -- estatísticas
+    reais (attack_avg/corners_freq/etc) seguem vazias por ora, mas o Elo histórico
+    já é servido (fonte independente, vem do dataset de treino de clubes)."""
+    elo_df = _load_elo_history(scope)
+    team_elo = elo_df[elo_df["team"] == team_name]
+    years = _ELO_WINDOW_YEARS.get(scope, 7)
+    cutoff = (datetime.datetime.now() - datetime.timedelta(days=365 * years)).strftime("%Y-%m")
+    elo_history = [
+        {"date": r["date"], "elo": float(r["elo"])}
+        for _, r in team_elo[team_elo["date"] >= cutoff].iterrows()
+    ]
+
     if scope == "clube":
-        return {"team": team_name, "elo_history": [], "attack_avg": 0.0,
+        return {"team": team_name, "elo_history": elo_history, "attack_avg": 0.0,
                 "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
     from app.db.connection import engine
     from sqlalchemy import text as _text
@@ -543,32 +576,12 @@ def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
         df_team = pd.read_sql(query, con=engine, params={"team": team_name})
     except Exception as e:
         print(f"[ERRO DB] {e}")
-        return {"team": team_name, "elo_history": [], "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
+        return {"team": team_name, "elo_history": elo_history, "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
 
     if df_team.empty:
-        return {"team": team_name, "elo_history": [], "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
-    
-    # 1. Histórico de Elo Rating (pegando um ponto por ano para simplificar ou todos)
-    elo_history = []
-    # Pegamos o Elo pre_match
-    # Como pode haver muitos jogos, agrupamos por ano para plotar a evolução temporal anual
-    df_team['year'] = pd.to_datetime(df_team['date']).dt.year
-    # matches.parquet pode não ter Elo pré-jogo; só monta a série se a coluna existir.
-    elo_col = next((c for c in ("pre_match_elo", "elo_pre", "elo_rating") if c in df_team.columns), None)
-    if elo_col:
-        elo_yearly = df_team.groupby('year')[elo_col].last().reset_index()
-        for _, row in elo_yearly.iterrows():
-            if pd.notna(row[elo_col]):
-                elo_history.append({"date": str(row['year']), "elo": float(row[elo_col])})
-    
-    # Se nao houver elo pre-match disponivel
-    if not elo_history:
-        predictor = get_predictor()
-        current_elo = predictor.team_defaults(team_name).get("elo_rating", 1500)
-        elo_history.append({"date": "Atual", "elo": float(current_elo)})
+        return {"team": team_name, "elo_history": elo_history, "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
 
-    # 1b. Tendência de gols nas últimas 10 partidas (marcados vs sofridos) — dado real,
-    # substitui a antiga série de Elo (matches.parquet não tem Elo histórico).
+    # Tendência de gols nas últimas 10 partidas (marcados vs sofridos).
     goal_trend = []
     for _, row in df_team.tail(10).iterrows():
         goal_trend.append({

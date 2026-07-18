@@ -1,10 +1,10 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { AlertTriangle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { teamLogoUrl } from '@/lib/api';
+import { teamLogoUrl, leagueLogoUrl } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 
@@ -34,6 +34,7 @@ export type PickerFixture = {
   tournament?: string;
   neutral?: boolean;
   league_name?: string;
+  league_id?: number | null;
   scope?: 'selecao' | 'clube';
 };
 
@@ -44,13 +45,20 @@ function fmtDateTime(iso: string): string {
   return `${p(d.getHours())}:${p(d.getMinutes())} ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+function todayISO(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 const Flag = ({ name, ids }: { name: string; ids: Record<string, number> }) => {
   const url = teamLogoUrl(ids[name]);
   return url ? <img src={url} alt="" className="w-5 h-5 object-contain shrink-0" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : null;
 };
 
 export function MatchPickerModal({
-  open, onOpenChange, fixtures, teamIds, onSelect, title = 'Selecionar Partida',
+  open, onOpenChange, fixtures, teamIds, onSelect, title = 'Selecionar Partida', defaultScope = 'selecao',
+  dateDefault = 'today',
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -58,35 +66,66 @@ export function MatchPickerModal({
   teamIds: Record<string, number>;
   onSelect: (fx: PickerFixture) => void;
   title?: string;
+  defaultScope?: 'selecao' | 'clube';
+  /** 'today' pré-seleciona a data atual (partidas futuras); 'none' deixa sem filtro
+   * de data (partidas passadas, onde "hoje" nunca bateria com nada). */
+  dateDefault?: 'today' | 'none';
 }) {
-  const [comp, setComp] = useState<string>('');     // competição selecionada (label PT)
-  const [compQuery, setCompQuery] = useState('');
-  const [teamQuery, setTeamQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [scope, setScope] = useState<'selecao' | 'clube'>(defaultScope);
+  const [dateFilter, setDateFilter] = useState(dateDefault === 'today' ? todayISO() : '');
+  const [query, setQuery] = useState('');
+  const [comp, setComp] = useState<string>('');
 
+  // Reabrir o modal reaplica o escopo atual da tela e reseta a competição escolhida.
+  useEffect(() => {
+    if (open) { setScope(defaultScope); setComp(''); setDateFilter(dateDefault === 'today' ? todayISO() : ''); }
+  }, [open, defaultScope, dateDefault]);
+
+  const scopedFixtures = useMemo(
+    () => fixtures.filter(f => (f.scope || 'selecao') === scope),
+    [fixtures, scope]
+  );
+
+  const dateFiltered = useMemo(
+    () => scopedFixtures.filter(f => !dateFilter || (f.date || '').slice(0, 10) === dateFilter),
+    [scopedFixtures, dateFilter]
+  );
+
+  // Uma linha por competição: label PT + um league_id representativo (p/ logo).
   const competitions = useMemo(() => {
-    const set = new Map<string, string>();  // label PT -> label PT
-    fixtures.forEach(f => {
-      const lbl = competitionPt(f.league_name || f.tournament);
-      if (lbl) set.set(lbl, lbl);
+    const map = new Map<string, { label: string; leagueId: number | null; fixtures: PickerFixture[] }>();
+    dateFiltered.forEach(f => {
+      const label = competitionPt(f.league_name || f.tournament);
+      if (!label) return;
+      if (!map.has(label)) map.set(label, { label, leagueId: f.league_id ?? null, fixtures: [] });
+      map.get(label)!.fixtures.push(f);
     });
-    return Array.from(set.keys()).sort();
-  }, [fixtures]);
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [dateFiltered]);
 
-  const filtered = useMemo(() => {
-    return fixtures.filter(f => {
-      const lbl = competitionPt(f.league_name || f.tournament);
-      if (comp && lbl !== comp) return false;
-      if (teamQuery) {
-        const q = teamQuery.toLowerCase();
-        if (!teamPt(f.home).toLowerCase().includes(q) && !teamPt(f.away).toLowerCase().includes(q)) return false;
-      }
-      if (dateFilter && (f.date || '').slice(0, 10) !== dateFilter) return false;
-      return true;
-    });
-  }, [fixtures, comp, teamQuery, dateFilter]);
+  const q = query.trim().toLowerCase();
+  const matchesTeamQuery = (f: PickerFixture) =>
+    teamPt(f.home).toLowerCase().includes(q) || teamPt(f.away).toLowerCase().includes(q);
 
-  const compShown = competitions.filter(c => c.toLowerCase().includes(compQuery.toLowerCase()));
+  // Busca única: por nome de competição OU por clube/seleção com jogo agendado nela.
+  const compsShown = useMemo(() => {
+    if (!q) return competitions;
+    return competitions.filter(c => c.label.toLowerCase().includes(q) || c.fixtures.some(matchesTeamQuery));
+  }, [competitions, q]);
+
+  // Se o filtro atual não deixa mais a competição escolhida visível, volta pra grade.
+  useEffect(() => {
+    if (comp && !compsShown.some(c => c.label === comp)) setComp('');
+  }, [compsShown, comp]);
+
+  const selectedMatches = useMemo(() => {
+    if (!comp) return [];
+    const group = competitions.find(c => c.label === comp);
+    if (!group) return [];
+    if (!q) return group.fixtures;
+    // Se a busca bateu no nome da competição, mantém todas; senão, restringe pelo time buscado.
+    return group.label.toLowerCase().includes(q) ? group.fixtures : group.fixtures.filter(matchesTeamQuery);
+  }, [comp, competitions, q]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -95,58 +134,85 @@ export function MatchPickerModal({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        {/* Menu superior de competições + busca */}
-        <div className="border-b border-border/40 pb-3">
-          <Input value={compQuery} onChange={e => setCompQuery(e.target.value)} placeholder="Filtrar competição..." className="h-9 mb-2 max-w-xs" />
-          <div className="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto py-1">
-            <button onClick={() => setComp('')}
-              className={`px-3.5 py-2 sm:px-2.5 sm:py-1 rounded-md text-xs sm:text-[11px] border transition-colors flex items-center justify-center min-h-[36px] sm:min-h-0 ${comp === '' ? 'bg-primary/10 border-primary/40 text-foreground' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}>
-              Todas
+        {/* Escopo (Seleções Nacionais / Clubes) + data, na mesma linha */}
+        <div className="flex items-center justify-between gap-2 flex-wrap border-b border-border/40 pb-3">
+          <div className="inline-flex p-1 rounded-lg bg-muted text-xs font-medium">
+            <button onClick={() => setScope('selecao')}
+              className={`px-3 py-1.5 rounded-md transition-colors ${scope === 'selecao' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              Seleções Nacionais
             </button>
-            {compShown.map(c => (
-              <button key={c} onClick={() => setComp(c)}
-                className={`px-3.5 py-2 sm:px-2.5 sm:py-1 rounded-md text-xs sm:text-[11px] border transition-colors flex items-center justify-center min-h-[36px] sm:min-h-0 ${comp === c ? 'bg-primary/10 border-primary/40 text-foreground' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}>
-                {c}
-              </button>
-            ))}
+            <button onClick={() => setScope('clube')}
+              className={`px-3 py-1.5 rounded-md transition-colors ${scope === 'clube' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              Clubes
+            </button>
           </div>
+          <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="h-9 w-auto" />
         </div>
 
-        {/* Filtros de equipe e data */}
-        <div className="flex gap-2 flex-wrap items-center">
-          <Input value={teamQuery} onChange={e => setTeamQuery(e.target.value)} placeholder="Filtrar por equipe..." className="h-9 w-full sm:max-w-xs" />
-          <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="h-9 w-full sm:max-w-[160px]" />
+        {/* Busca única de competição ou equipe */}
+        <div>
+          <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar competição ou equipe" className="h-9" />
         </div>
 
-        {/* Cards de partidas */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto pr-1">
-          {filtered.length === 0 && <p className="text-xs text-muted-foreground italic col-span-full py-6 text-center">Nenhuma partida encontrada com os filtros.</p>}
-          {filtered.length > 80 && <p className="text-[10px] text-muted-foreground col-span-full">Mostrando 80 de {filtered.length} — refine os filtros para ver outras.</p>}
-          {filtered.slice(0, 80).map(f => (
-            <button key={f.fixture_id}
-              onClick={() => { onSelect(f); onOpenChange(false); }}
-              className="text-left p-3 rounded-lg border border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60 transition-colors">
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <Flag name={f.home} ids={teamIds} />
-                  <span className="text-xs font-medium truncate">{teamPt(f.home)}</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground shrink-0">x</span>
-                <div className="flex items-center gap-1.5 min-w-0 justify-end">
-                  <span className="text-xs font-medium truncate">{teamPt(f.away)}</span>
-                  <Flag name={f.away} ids={teamIds} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span className="truncate">{competitionPt(f.league_name || f.tournament)}</span>
-                <span className="flex items-center gap-1 shrink-0">
-                  {isOldMatch(f.date) && <OldMatchBadge />}
-                  <span className="font-mono">{fmtDateTime(f.date)}</span>
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
+        {!comp ? (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 overflow-y-auto pr-1 content-start">
+            {compsShown.length === 0 && (
+              <p className="text-xs text-muted-foreground italic col-span-full py-6 text-center">
+                Nenhuma competição com partida agendada para esse filtro.
+              </p>
+            )}
+            {compsShown.map(c => {
+              const logo = leagueLogoUrl(c.leagueId);
+              return (
+                <button key={c.label} onClick={() => setComp(c.label)}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60 transition-colors">
+                  {logo && (
+                    <img src={logo} alt="" className="w-8 h-8 object-contain" loading="lazy"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  )}
+                  <span className="text-[11px] font-medium text-center leading-snug">{c.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <button onClick={() => setComp('')} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                ← Voltar às competições
+              </button>
+              <span className="text-xs font-medium">{comp}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto pr-1">
+              {selectedMatches.length === 0 && <p className="text-xs text-muted-foreground italic col-span-full py-6 text-center">Nenhuma partida encontrada com os filtros.</p>}
+              {selectedMatches.length > 80 && <p className="text-[10px] text-muted-foreground col-span-full">Mostrando 80 de {selectedMatches.length} — refine os filtros para ver outras.</p>}
+              {selectedMatches.slice(0, 80).map(f => (
+                <button key={f.fixture_id}
+                  onClick={() => { onSelect(f); onOpenChange(false); }}
+                  className="text-left p-3 rounded-lg border border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60 transition-colors">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Flag name={f.home} ids={teamIds} />
+                      <span className="text-xs font-medium truncate">{teamPt(f.home)}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0">x</span>
+                    <div className="flex items-center gap-1.5 min-w-0 justify-end">
+                      <span className="text-xs font-medium truncate">{teamPt(f.away)}</span>
+                      <Flag name={f.away} ids={teamIds} />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span className="truncate">{competitionPt(f.league_name || f.tournament)}</span>
+                    <span className="flex items-center gap-1 shrink-0">
+                      {isOldMatch(f.date) && <OldMatchBadge />}
+                      <span className="font-mono">{fmtDateTime(f.date)}</span>
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

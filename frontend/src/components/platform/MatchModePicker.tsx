@@ -131,7 +131,7 @@ export function MatchModePicker({
 
       <MatchPickerModal open={futureOpen} onOpenChange={setFutureOpen} fixtures={upcoming} teamIds={teamIds} onSelect={pickFuture} title="Selecionar Partida Agendada" />
       {onSelectPast && (
-        <MatchPickerModal open={pastOpen} onOpenChange={setPastOpen} fixtures={past} teamIds={teamIds} onSelect={onSelectPast} title="Selecionar Partida Passada" />
+        <MatchPickerModal open={pastOpen} onOpenChange={setPastOpen} fixtures={past} teamIds={teamIds} onSelect={onSelectPast} title="Selecionar Partida Passada" dateDefault="none" />
       )}
     </div>
   );

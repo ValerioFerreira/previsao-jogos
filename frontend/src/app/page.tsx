@@ -677,7 +677,7 @@ export default function Previsoes() {
         )}
 
         {mode === 'futura' && (
-          <div className="mb-2">
+          <div className="mb-2 flex flex-col items-center text-center">
             <button onClick={() => !loadingUpcoming && setModalOpen(true)} disabled={loadingUpcoming}
               className="px-4 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-foreground hover:bg-cyan-500/20 transition-colors disabled:opacity-60 inline-flex items-center gap-2">
               {loadingUpcoming && <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />}
@@ -736,6 +736,7 @@ export default function Previsoes() {
         teamIds={teamIds}
         onSelect={(fx) => selectFutureFixture(fx.fixture_id)}
         title="Selecionar Partida Agendada"
+        defaultScope={scope}
       />
 
       <AnimatePresence>
