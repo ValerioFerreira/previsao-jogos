@@ -23,6 +23,81 @@ function peak(rows: Row[], key: "scored" | "conceded"): string {
   return best.label;
 }
 
+// Cor de célula do heatmap: intensidade proporcional ao valor (0–100%), sempre no mesmo tom.
+function heatColor(pct: number, maxPct: number, rgb: string): string {
+  const alpha = Math.max(0.08, Math.min(0.9, pct / Math.max(maxPct, 1)));
+  return `rgba(${rgb}, ${alpha})`;
+}
+
+// Heatmap dos minutos: uma linha por (equipe, marca/sofre), coluna por faixa de 15'.
+function MinuteHeatmap({ home, away, homeData, awayData }: {
+  home: string; away: string; homeData: GoalTimingResponse | null; awayData: GoalTimingResponse | null;
+}) {
+  const hRows = homeData ? build(homeData) : [];
+  const aRows = awayData ? build(awayData) : [];
+  const labels = (hRows.length ? hRows : aRows).map((r) => r.label);
+  if (labels.length === 0) return null;
+  const maxScored = Math.max(5, ...hRows.map((r) => r.scoredPct), ...aRows.map((r) => r.scoredPct));
+  const maxConceded = Math.max(5, ...hRows.map((r) => -r.concededPct), ...aRows.map((r) => -r.concededPct));
+
+  // Coincidência: bloco onde o ataque de uma equipe e a fragilidade defensiva da outra mais se sobrepõem.
+  const coincidence = (scorerRows: Row[], concederRows: Row[]) => {
+    let best = { label: labels[0], score: -1 };
+    for (const label of labels) {
+      const s = scorerRows.find((r) => r.label === label)?.scoredPct ?? 0;
+      const c = -(concederRows.find((r) => r.label === label)?.concededPct ?? 0);
+      const score = Math.min(s, c);
+      if (score > best.score) best = { label, score };
+    }
+    return best;
+  };
+  const hIntoA = coincidence(hRows, aRows); // home marca x away sofre
+  const aIntoH = coincidence(aRows, hRows); // away marca x home sofre
+
+  const Line = ({ team, rows, accent, metric }: { team: string; rows: Row[]; accent: string; metric: "scoredPct" | "concededPct" }) => (
+    <div className="flex items-center gap-1">
+      <span className="w-24 shrink-0 text-[10px] text-muted-foreground truncate">{teamPt(team)} {metric === "scoredPct" ? "marca" : "sofre"}</span>
+      <div className="flex-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))` }}>
+        {labels.map((label) => {
+          const row = rows.find((r) => r.label === label);
+          const raw = metric === "scoredPct" ? (row?.scoredPct ?? 0) : -(row?.concededPct ?? 0);
+          const max = metric === "scoredPct" ? maxScored : maxConceded;
+          const rgb = metric === "scoredPct" ? accent : "239, 68, 68";
+          return (
+            <div key={label} title={`${label}′ · ${raw.toFixed(0)}%`}
+              className="h-6 rounded flex items-center justify-center text-[9px] font-mono"
+              style={{ backgroundColor: heatColor(raw, max, rgb) }}>
+              {raw > 0 ? `${raw.toFixed(0)}` : ""}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border/30">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Heatmap dos Minutos</p>
+      <div className="space-y-1.5 mb-2">
+        <Line team={home} rows={hRows} accent="16, 185, 129" metric="scoredPct" />
+        <Line team={home} rows={hRows} accent="16, 185, 129" metric="concededPct" />
+        <Line team={away} rows={aRows} accent="249, 115, 22" metric="scoredPct" />
+        <Line team={away} rows={aRows} accent="249, 115, 22" metric="concededPct" />
+      </div>
+      <div className="flex items-center gap-1 mb-2">
+        <span className="w-24 shrink-0" />
+        <div className="flex-1 grid gap-1" style={{ gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))` }}>
+          {labels.map((l) => <span key={l} className="text-[8px] text-center text-muted-foreground">{l}′</span>)}
+        </div>
+      </div>
+      <div className="space-y-1 text-[11px] text-muted-foreground">
+        <p>🔥 <b className="text-foreground">{teamPt(home)}</b> marca mais e <b className="text-foreground">{teamPt(away)}</b> sofre mais em <b className="text-foreground">{hIntoA.label}′</b> → maior tendência de gol de {teamPt(home)} nesse trecho.</p>
+        <p>🔥 <b className="text-foreground">{teamPt(away)}</b> marca mais e <b className="text-foreground">{teamPt(home)}</b> sofre mais em <b className="text-foreground">{aIntoH.label}′</b> → maior tendência de gol de {teamPt(away)} nesse trecho.</p>
+      </div>
+    </div>
+  );
+}
+
 function TeamTiming({ team, data, accent }: { team: string; data: GoalTimingResponse; accent: string }) {
   const rows = build(data);
   const maxAbs = Math.max(5, ...rows.map((r) => Math.max(r.scoredPct, -r.concededPct)));
@@ -83,6 +158,7 @@ export default function GoalTiming({ home, homeData, away, awayData }: {
         {hasH && <TeamTiming team={home} data={homeData!} accent="#10b981" />}
         {hasA && <TeamTiming team={away} data={awayData!} accent="#f97316" />}
       </div>
+      {hasH && hasA && <MinuteHeatmap home={home} away={away} homeData={homeData} awayData={awayData} />}
     </div>
   );
 }

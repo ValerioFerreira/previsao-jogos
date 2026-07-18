@@ -88,11 +88,12 @@ function CountdownUnit({ value, label, big = false }: { value: number; label: st
   );
 }
 
-const CLUB_MARKETS_BG_URL = "https://png.pngtree.com/thumb_back/fh260/background/20230705/pngtree-intense-football-game-at-the-stadium-3d-rendering-of-competing-players-image_3821105.jpg";
-
 // Anúncio no topo da Análise — mercados de clubes chegando, com contagem regressiva.
 // Dispensável (fica escondido em localStorage) para não incomodar quem já viu.
-const NEWS_BANNER_KEY = "apostai:news_banner_v3_dismissed";
+// v4: versão bumped e fundo deixou de depender de imagem externa hotlinked (pngtree bloqueia
+// requisições sem contexto de navegador com uma página HTML de verificação — em vez de servir a
+// imagem, o que fazia a seção inteira sumir em alguns celulares/redes). Fundo agora é 100% CSS.
+const NEWS_BANNER_KEY = "apostai:news_banner_v4_dismissed";
 function ClubMarketsBanner() {
   const [dismissed, setDismissed] = useState(true);
   const countdown = useCountdown(CLUBS_LAUNCH_ISO);
@@ -109,13 +110,19 @@ function ClubMarketsBanner() {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-2xl shadow-xl shadow-cyan-900/20"
+      className="relative overflow-hidden rounded-2xl shadow-xl shadow-cyan-900/20 bg-slate-950"
     >
-      {/* imagem de fundo, com fade se misturando ao background da página */}
+      {/* fundo decorativo em CSS puro (sem imagem externa) — brilhos + linhas de campo */}
       <div
         aria-hidden
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${CLUB_MARKETS_BG_URL})` }}
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 15% 20%, rgba(16,185,129,0.35), transparent 45%),' +
+            'radial-gradient(circle at 85% 15%, rgba(34,211,238,0.35), transparent 45%),' +
+            'radial-gradient(circle at 50% 100%, rgba(16,185,129,0.2), transparent 55%),' +
+            'repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 64px)',
+        }}
       />
       <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-slate-950/75 via-slate-950/60 to-background" />
       <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-background/50 via-transparent to-background/50" />

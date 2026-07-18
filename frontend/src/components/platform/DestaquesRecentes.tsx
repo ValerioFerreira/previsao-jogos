@@ -70,12 +70,17 @@ function TeamPanel({ team, matches, teamIds, accent }: { team: string; matches: 
       <div className="space-y-1 mb-3 flex flex-col items-center">
         {ms.map((m, i) => {
           const r = res(m);
+          const icons = [
+            m.goals_scored >= 3 ? "⚽" : null,
+            m.goals_conceded === 0 ? "🥅" : null,
+          ].filter(Boolean).join("");
           return (
             <div key={i} className="group relative flex items-center justify-center gap-2 text-xs w-full max-w-[220px]">
               <span className={`w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0 ${PILL[r]}`}>{r}</span>
               <span className="text-muted-foreground text-[10px] shrink-0">{m.is_home ? "vs" : "@"}</span>
-              <span className="truncate max-w-[100px]">{teamPt(m.opponent)}</span>
+              <span className="truncate max-w-[90px]">{teamPt(m.opponent)}</span>
               <span className="font-mono font-semibold shrink-0">{m.goals_scored}–{m.goals_conceded}</span>
+              {icons && <span className="text-[10px] shrink-0" title={m.goals_scored >= 3 && m.goals_conceded === 0 ? "Goleada e sem sofrer gol" : m.goals_scored >= 3 ? "3 ou mais gols marcados" : "Sem sofrer gol"}>{icons}</span>}
               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 hidden group-hover:block z-30 w-max max-w-[190px]">
                 <div className="rounded-lg border border-border/60 bg-popover shadow-xl p-2 text-[10px] text-muted-foreground">
                   {fmtBR(m.date)}{m.competition ? ` · ${competitionPt(m.competition)}` : ""}{m.is_home ? " · mandante" : " · visitante"}

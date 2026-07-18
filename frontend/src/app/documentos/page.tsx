@@ -85,18 +85,25 @@ export default function DocumentosPage() {
               const body = bodies[d.type];
               return (
                 <div key={d.id} className="border-b border-border/30 last:border-b-0">
-                  <button
-                    onClick={() => toggle(d.type)}
-                    className="w-full flex items-center justify-between py-2.5 text-sm text-left hover:text-primary transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                      {d.title} <span className="text-xs text-muted-foreground">v{d.version}</span>
-                    </span>
-                    {isPending
-                      ? <CheckCircle2 className="w-3.5 h-3.5 text-amber-500" />
-                      : <span className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Aceito</span>}
-                  </button>
+                  <div className="w-full flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <button
+                      onClick={() => toggle(d.type)}
+                      className="flex items-center gap-2 min-w-0 text-left hover:text-primary transition-colors"
+                    >
+                      <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                      <span className="truncate">{d.title}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">v{d.version}</span>
+                    </button>
+                    <div className="shrink-0">
+                      {isPending ? (
+                        <Button size="sm" variant="outline" disabled={busyId === d.id} onClick={() => accept(d.id)}>
+                          {busyId === d.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Assinar"}
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Aceito</span>
+                      )}
+                    </div>
+                  </div>
                   {isOpen && (
                     <div className="pb-4 pl-5">
                       {loadingBody === d.type ? (
@@ -107,9 +114,9 @@ export default function DocumentosPage() {
                           <div className="not-prose border-t border-border/50 mt-4 pt-3 flex items-center justify-between gap-3 flex-wrap">
                             {isPending ? (
                               <>
-                                <p className="text-xs text-muted-foreground">Ao clicar em "Aceitar", você confirma que leu e concorda com este documento.</p>
+                                <p className="text-xs text-muted-foreground">Ao clicar em "Assinar", você confirma que leu e concorda com este documento.</p>
                                 <Button size="sm" disabled={busyId === d.id} onClick={() => accept(d.id)}>
-                                  {busyId === d.id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Aceitar"}
+                                  {busyId === d.id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Assinar"}
                                 </Button>
                               </>
                             ) : (

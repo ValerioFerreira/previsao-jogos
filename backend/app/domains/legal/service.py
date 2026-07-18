@@ -18,16 +18,17 @@ from app.domains.enums import LegalDocumentType
 from app.domains.legal import schemas
 from app.domains.legal.models import LegalDocument, UserDocumentAcceptance
 
-# Conteúdo inicial (v1) — BASE SÓLIDA PARA REVISÃO JURÍDICA/CONTÁBIL. Os campos entre
-# colchetes (razão social, CNPJ, endereço, foro) dependem do enquadramento tributário e
-# do registro da empresa e devem ser preenchidos antes da publicação definitiva.
+# Conteúdo inicial (v1) — BASE SÓLIDA PARA REVISÃO JURÍDICA/CONTÁBIL. Razão social, CNPJ,
+# endereço e e-mail de suporte já preenchidos (SaferCode Softwares). Após alterar o texto
+# aqui, rode `python -m scripts.republish_legal_docs` para publicar nova versão vigente
+# (isso força novo aceite de todos os usuários).
 _DEFAULTS: dict[LegalDocumentType, tuple[str, str]] = {
     LegalDocumentType.terms: (
         "Termos de Uso",
         "# Termos de Uso\n\n"
-        "Última atualização: [DATA]. Estes Termos de Uso regem o acesso e uso da plataforma "
-        "ApostaInfo (apostainfo.com.br), operada por [RAZÃO SOCIAL], CNPJ [CNPJ], com sede em "
-        "[ENDEREÇO] (\"ApostaInfo\", \"nós\"). Ao criar uma conta ou usar o site, você (\"usuário\") "
+        "Última atualização: 18/07/2026. Estes Termos de Uso regem o acesso e uso da plataforma "
+        "ApostaInfo (apostainfo.com.br), operada por SaferCode Softwares, CNPJ 66.097.260/0001-35, com sede em "
+        "Rua Profa. Ângela Pinto, 97, Torre, Recife-PE (\"ApostaInfo\", \"nós\"). Ao criar uma conta ou usar o site, você (\"usuário\") "
         "concorda integralmente com estes termos.\n\n"
         "**Aviso importante:** a ApostaInfo é exclusivamente uma plataforma de análise estatística "
         "baseada em Inteligência Artificial. A contratação do serviço remunera apenas a geração "
@@ -100,12 +101,12 @@ _DEFAULTS: dict[LegalDocumentType, tuple[str, str]] = {
         "9.1 Este contrato é regido pelas leis brasileiras, observado o foro do domicílio do "
         "consumidor nos termos do Código de Defesa do Consumidor.\n\n"
         "## 10. Contato\n\n"
-        "Dúvidas, suporte ou solicitações: [E-MAIL DE SUPORTE].",
+        "Dúvidas, suporte ou solicitações: contato@safercode.com.br.",
     ),
     LegalDocumentType.privacy: (
         "Política de Privacidade",
         "# Política de Privacidade\n\n"
-        "Última atualização: [DATA]. Esta Política descreve como [RAZÃO SOCIAL] (CNPJ [CNPJ]) "
+        "Última atualização: 18/07/2026. Esta Política descreve como SaferCode Softwares (CNPJ 66.097.260/0001-35) "
         "coleta, usa, armazena e protege os dados pessoais dos usuários da ApostaInfo, em "
         "conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 — LGPD).\n\n"
         "## 1. Dados que coletamos\n\n"

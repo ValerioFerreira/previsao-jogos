@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Label } from '@/components/ui/label';
-import { BarChart3, TrendingUp, Target } from 'lucide-react';
+import { BarChart3, TrendingUp, Target, Activity } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 import { api, TeamHistoryResponse, H2HResponse, MatchDetail as MatchDetailT } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
@@ -22,6 +22,9 @@ import FatorArbitro from '@/components/platform/FatorArbitro';
 import BoletimDesfalques from '@/components/platform/BoletimDesfalques';
 import KeyPlayerMatchup from '@/components/platform/KeyPlayerMatchup';
 import PmfPreview from '@/components/platform/PmfPreview';
+import AutoInsights from '@/components/platform/AutoInsights';
+import StyleMatchup from '@/components/platform/StyleMatchup';
+import DeepStats from '@/components/platform/DeepStats';
 import type { RecentMatch, GoalTimingResponse, InjuriesResponse, ScorersResponse, PmfPreviewResponse, CompetitionBenchmarkResponse } from '@/lib/api';
 
 export default function Estatisticas() {
@@ -265,8 +268,14 @@ export default function Estatisticas() {
           transition={{ duration: 0.4 }}
           className="space-y-6"
         >
+          {/* Insights automáticos — resumo do que os números abaixo significam */}
+          <AutoInsights home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} homeTiming={homeTiming} awayTiming={awayTiming} />
+
           {/* Confronto direto — primeiro card */}
           <H2HCard h2hData={h2h?.metrics} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
+
+          {/* Compatibilidade de estilos + matchup ataque x defesa */}
+          <StyleMatchup home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} />
 
           {/* Destaques Recentes (2/3) + Radar de Estilo (1/3) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
@@ -279,6 +288,9 @@ export default function Estatisticas() {
           </div>
 
           <GoalTiming home={homeTeamId} homeData={homeTiming} away={awayTeamId} awayData={awayTiming} />
+
+          {/* Percentis, comparação completa, BTTS detalhado, consistência, imprevisibilidade e momentum */}
+          <DeepStats home={homeTeamId} away={awayTeamId} homeMatches={homeRecent} awayMatches={awayRecent} homeHistory={homeHistory} awayHistory={awayHistory} benchmark={benchmark} />
 
           {/* Central Pré-Jogo (só Partida Futura) */}
           {pickerMode === 'futura' && (
@@ -317,6 +329,35 @@ export default function Estatisticas() {
               </ResponsiveContainer>
             </div>
           </div>
+
+          {/* Evolução de Elo */}
+          {eloHistoryData.length > 0 && (
+            <div className="bg-card border border-border/50 rounded-xl p-5">
+              <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-cyan-500" />
+                Evolução de Elo
+                <InfoTooltip text="Rating Elo histórico de cada seleção. Mostra se o time vem melhorando ou piorando de patamar ao longo do tempo, independentemente da forma recente (vitórias/derrotas) mostrada nos Destaques Recentes." />
+              </h3>
+              <p className="text-xs text-muted-foreground mb-4">Rating Elo ao longo do tempo</p>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={eloHistoryData} margin={{ top: 5, right: 20, bottom: 24, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                      label={{ value: 'Elo', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
+                    <RTooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
+                      labelStyle={{ color: 'hsl(var(--foreground))' }}
+                    />
+                    <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />
+                    <Line type="monotone" dataKey={homeTeamId} name={teamPt(homeTeamId)} stroke="#10b981" strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#f97316" strokeWidth={2} dot={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
 
           {/* Scatter Plot */}
           <div className="bg-card border border-border/50 rounded-xl p-5">
