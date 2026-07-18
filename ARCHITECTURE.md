@@ -301,3 +301,85 @@ retry imediato após o provedor voltar.
 Uma caixa `contato@seudominio.com` no Zoho Mail é **configuração, não código**. Fazer o *sistema*
 ler a caixa (abrir ticket a partir de uma resposta, por exemplo) exigiria IMAP ou a Zoho Mail API
 com OAuth2 + refresh token — trabalho separado, ainda sem decisão.
+
+---
+
+## 7. Ambiente de pesquisa/desenvolvimento reproduzível (qualquer máquina)
+
+Checklist para um agente (ou pessoa) partindo do zero numa máquina nova conseguir rodar o
+predictor de produção **e** os experimentos de pesquisa (`backend/research_clubs/`,
+`backend/scripts/clubs_*.py`, `backend/scripts/*.py` de validação). Ordem: clonar → venv →
+segredos → dados.
+
+### 7.1 Python / venv
+- **Python 3.12** (testado com 3.12.0). Venv **não é portável entre máquinas** — o
+  `pyvenv.cfg` guarda o path absoluto de origem; se copiar a pasta `.venv` de outra máquina,
+  repare com `py -3.12 -m venv .venv` no destino (preserva `site-packages`, só corrige o
+  `pyvenv.cfg`) em vez de recriar do zero.
+- Instalar: `cd backend && pip install -r requirements.txt`. O arquivo tem duas seções:
+  1. **Produção** (`app/`, `predictor.py`) — sempre necessária.
+  2. **Pesquisa de modelos** (`research_clubs/`, `scripts/clubs_*.py`) — CatBoost, LightGBM,
+     XGBoost, `tabulate`. **Não** inclui `torch`: o índice CPU-only do PyTorch é específico de
+     plataforma (`--index-url https://download.pytorch.org/whl/cpu`), então instale à parte
+     só se for rodar `scripts/clubs_deep_tabular.py`:
+     `pip install torch --index-url https://download.pytorch.org/whl/cpu` (Linux/Mac: omitir o
+     índice para pegar a build certa da plataforma, ou usar o mesmo se não houver GPU).
+- Verificar instalação: `python -c "import catboost, lightgbm, xgboost, torch"` (torch é opcional).
+
+### 7.2 Segredos (`backend/.env`, nunca commitado)
+Copiar de `backend/.env.example` e preencher:
+- `DATABASE_URL` — string de conexão do Neon (Postgres serverless). Sem ela, **nenhum** dado de
+  produção nem os datasets de treino ficam acessíveis (tudo lê do Neon ou dos espelhos locais
+  derivados dele).
+- `APIFOOTBALL_KEY` (e/ou `API_FOOTBALL_KEY`, ambos aceitos) — chave da API-Football. Só é
+  necessária para **coleta** (`scripts/prefetch_*.py`, `scripts/mirror_club_cache.py`,
+  `scripts/collect_*.py`) e para checar cota (`GET /status`). Treino/validação/promoção com dados
+  já coletados **não precisam dela**.
+  - **Checar cota em tempo real** (1 chamada, barata): `python -c "from app.services.fixture_fetch
+    import _get; print(_get('/status'))"` — retorna `requests.current`/`limit_day` e a data de
+    expiração da assinatura (`subscription.end`). **Sempre conferir isso antes de planejar uma
+    coleta grande** — a cota reseta diariamente e a assinatura tem prazo (verificado expirando em
+    2026-07-19 nesta sessão; pode ter mudado, checar de novo).
+
+### 7.3 Dados — o que é versionado vs. o que precisa ser (re)gerado
+`backend/data/` inteiro é **gitignored**. Numa máquina nova, nada em `data/` existe. Ordem de
+regeneração (cada passo é resumível/idempotente — pode interromper e retomar):
+
+| Artefato | Como gerar | Custo |
+|---|---|---|
+| `data/raw_cache.sqlite` (seleções) | espelho, ver `app/services/raw_cache.py::mirror_from_neon()` | leitura única do Neon (~44 MB) |
+| `data/club_raw_cache.sqlite` (clubes, **1,5 GB**) | `scripts/mirror_club_cache.py --max 60000 --margin 1000 --workers 6 --rps 6` | ~2,5h a 360 req/min, consome cota da API (não do Neon — desenhado assim de propósito, ver §3.1) |
+| `data/built/club_*.parquet` (fixtures/matches/lineups/features) | `scripts/build_clubs_lineups.py` depois `scripts/build_clubs_dataset.py` | minutos, CPU-only, lê só do espelho local acima |
+| `international_features_enriched_apifootball.csv` (seleções) | `build_final_dataset.py` | minutos, lê cache local + martj42 (auto-baixado) |
+| `model_artifacts/*.joblib` (produção) | já estão no repo (não gitignored) — não precisa retreinar p/ rodar o predictor | — |
+
+**Se só quer rodar o predictor de produção:** só precisa de `model_artifacts/` (já no repo) +
+`DATABASE_URL`. **Se quer rodar/estender a pesquisa de clubes:** precisa do espelho local de
+clubes — ou copiar `data/club_raw_cache.sqlite` de uma máquina que já o tem (mais rápido), ou
+rodar `mirror_club_cache.py` do zero (mais lento, gasta cota).
+
+### 7.4 Rodando experimentos longos em background (Windows)
+Os scripts de pesquisa (`scripts/clubs_*.py`) são desenhados para rodar por horas — **sempre
+resumíveis por CSV incremental** (verificam o que já está salvo em `data/reports/` e pulam).
+Padrão usado nesta sessão: `Start-Process` do PowerShell com `-WindowStyle Hidden` e saída
+redirecionada, para o processo sobreviver ao fim da sessão do agente:
+```powershell
+Start-Process -FilePath ".venv\Scripts\python.exe" -ArgumentList "scripts\NOME.py" `
+  -WorkingDirectory "<repo>\backend" -RedirectStandardOutput "data\state\NOME.log" `
+  -RedirectStandardError "data\state\NOME.err.log" -WindowStyle Hidden -PassThru
+```
+**Cuidado com reboot:** um reinício da máquina (Windows Update, política automática) mata todos
+os processos em background sem aviso. Depois de um reboot, **o Windows recicla PIDs** — um PID
+"vivo" pode ser um processo completamente diferente. Antes de assumir que um job continua rodando,
+confirme a identidade: `Get-CimInstance Win32_Process -Filter "ProcessId=<pid>"` (campo
+`CommandLine`) e compare `CreationDate` com `(Get-CimInstance Win32_OperatingSystem)
+.LastBootUpTime`. Se o reboot aconteceu depois do lançamento do job, relance-o — os scripts
+resumíveis retomam do checkpoint sem perder trabalho.
+
+### 7.5 Coleta diária automática (Windows Task Scheduler, `\PrevisaoJogos\`)
+Ver `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` para o estado corrente de cada tarefa. Resumo: 4 tarefas
+(`PrefetchWorldCup` 06:30, `CollectResolved` 05:00, `CollectPlayerForm` 00:01, `CollectOdds` a
+cada ~3h) rodando os `.cmd` em `backend/scripts/*.cmd`, cada um chamando o `.venv\Scripts\python.exe`
+local. Numa máquina nova, recriar as tarefas aponta os `.cmd` para o novo path do repo (os `.cmd`
+resolvem o próprio diretório via `%~dp0`, então só o Task Scheduler precisa ser reconfigurado, não
+os scripts).

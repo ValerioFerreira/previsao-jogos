@@ -30,7 +30,7 @@ def _get_throttled(path, **params):
     time.sleep(0.15)
     return result
 
-# (league_id, nome) na ordem de prioridade: Brasil -> Europa.
+# (league_id, nome) na ordem de prioridade: Brasil -> Europa -> [expansão 2026-07-15].
 LEAGUES = [
     (71, "Brasileirao Serie A"),
     (72, "Brasileirao Serie B"),
@@ -45,6 +45,64 @@ LEAGUES = [
     (848, "Conference League"),
     (13, "Copa Libertadores"),
     (11, "Copa Sul-Americana"),
+    # --- Expansão 2026-07-15: assinatura API-Football expira 2026-07-19 -- usar a cota
+    # restante p/ diversificar geografia/estilo da pesquisa de clubes (branch `clubs`).
+    # IDs confirmados via /leagues; box-score (stats) só cobre 2021+ nestas ligas.
+    (88, "Eredivisie"),
+    (94, "Primeira Liga"),
+    (144, "Jupiler Pro League"),
+    (179, "Premiership (Escocia)"),
+    (203, "Super Lig"),
+    (128, "Liga Profesional Argentina"),
+    (262, "Liga MX"),
+    (253, "Major League Soccer"),
+    (307, "Pro League (Arabia Saudita)"),
+    (40, "Championship (Inglaterra)"),
+    (17, "AFC Champions League Elite"),
+    (12, "CAF Champions League"),
+    (16, "CONCACAF Champions League"),
+    # --- Expansão 2026-07-18: assinatura expira 2026-07-19T01:21 UTC (última janela) --
+    # IDs confirmados agora via /leagues (nomes/anos/cobertura de stats). Ordem = fama/
+    # relevância editorial, para que se a cota acabar no meio, as ligas mais valiosas já
+    # tenham sido cobertas primeiro.
+    # Tier 1 -- grandes ligas asiáticas + 2as divisões dos "big five" europeus.
+    (98, "J1 League (Japao)"),
+    (169, "Chinese Super League"),
+    (79, "2. Bundesliga (Alemanha)"),
+    (141, "Segunda Division (Espanha)"),
+    (62, "Ligue 2 (Franca)"),
+    (136, "Serie B (Italia)"),
+    (235, "Premier League (Russia)"),
+    (292, "K League 1 (Coreia do Sul)"),
+    # Tier 2 -- ligas europeias tradicionais de primeira divisao.
+    (333, "Premier League (Ucrania)"),
+    (207, "Super League (Suica)"),
+    (218, "Bundesliga (Austria)"),
+    (119, "Superliga (Dinamarca)"),
+    (197, "Super League 1 (Grecia)"),
+    (106, "Ekstraklasa (Polonia)"),
+    (210, "HNL (Croacia)"),
+    (103, "Eliteserien (Noruega)"),
+    (113, "Allsvenskan (Suecia)"),
+    (345, "Czech Liga (Chequia)"),
+    # Tier 3 -- ligas sul-americanas de tradicao ainda nao cobertas.
+    (268, "Primera Division Apertura (Uruguai)"),
+    (270, "Primera Division Clausura (Uruguai)"),
+    (239, "Primera A (Colombia)"),
+    (265, "Primera Division (Chile)"),
+    (242, "Liga Pro (Equador)"),
+    (281, "Primera Division (Peru)"),
+    (250, "Division Profesional Apertura (Paraguai)"),
+    (252, "Division Profesional Clausura (Paraguai)"),
+    (299, "Primera Division (Venezuela)"),
+    (344, "Primera Division (Bolivia)"),
+    # Tier 4 -- outras ligas notaveis.
+    (188, "A-League (Australia)"),
+    (233, "Premier League (Egito)"),
+    (288, "Premier Soccer League (Africa do Sul)"),
+    (383, "Ligat Ha'al (Israel)"),
+    (305, "Stars League (Catar)"),
+    (301, "Pro League (Emirados Arabes)"),
 ]
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"
@@ -75,6 +133,27 @@ def put(fixture_id, league_id, season, raw):
             f"INSERT INTO {TABLE} (key, fixture_id, league_id, season, raw, cached_at) "
             "VALUES (:k,:f,:l,:s,:r, now()) ON CONFLICT (key) DO UPDATE SET raw=EXCLUDED.raw, cached_at=now()"
         ), {"k": key, "f": fixture_id, "l": league_id, "s": season, "r": json.dumps(raw, ensure_ascii=False)})
+    _local_put(key, fixture_id, league_id, season, raw)
+
+
+def _local_put(key, fixture_id, league_id, season, raw):
+    """Espelho local de clubes (data/club_raw_cache.sqlite) — os jobs pesados leem
+    do disco em vez de puxar blobs do Neon (ARCHITECTURE.md §3.1). Silencioso em falha."""
+    try:
+        import sqlite3
+        path = Path(__file__).resolve().parents[1] / "data" / "club_raw_cache.sqlite"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(path))
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS raw (key TEXT PRIMARY KEY, fixture_id INTEGER, "
+            "league_id INTEGER, season INTEGER, raw TEXT)")
+        conn.execute(
+            "INSERT OR REPLACE INTO raw(key, fixture_id, league_id, season, raw) VALUES (?,?,?,?,?)",
+            (key, fixture_id, league_id, season, json.dumps(raw, ensure_ascii=False)))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 def main():

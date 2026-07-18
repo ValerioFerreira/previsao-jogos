@@ -20,6 +20,11 @@ REM 2) Selecoes: so falta pegar jogos novos reais (~poucas dezenas/dia); usa o q
 echo ----- prefetch Selecoes %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\prefetch_wc_data.py" --all-nations --max 74000 --margin 300 --floor 2010 >> "data\state\prefetch_wc.log" 2>&1
 
+REM 2.5) Odds futuras de CLUBES (novo 2026-07-15, preenche a lacuna do backtest de valor --
+REM ver PESQUISA_CLUBES.md Fase 8). Janela curta e barata, roda depois da coleta grande.
+echo ----- odds de clubes %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
+".venv\Scripts\python.exe" "scripts\collect_club_odds_forward.py" --days 10 >> "data\state\prefetch_wc.log" 2>&1
+
 REM 3) Reconstroi os modelos de jogador (goleador + finalizacoes) com os dados de SELECOES.
 echo ----- rebuild scorer model %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\build_scorer_model.py" >> "data\state\prefetch_wc.log" 2>&1

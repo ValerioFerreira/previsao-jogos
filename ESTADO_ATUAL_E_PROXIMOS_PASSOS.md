@@ -1,10 +1,12 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
-> está e o que fazer a seguir. Última atualização: **2026-07-16**.
+> está e o que fazer a seguir. Última atualização: **2026-07-18** (merge da branch `clubs` na `main`).
 > Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
-> não repetir**, **§12 = monetização**), `ARCHITECTURE.md` (infra — **§3.1 Neon, §5 monetização, §6
-> e-mail**), `docs/ARQUITETURA_MONETIZACAO.md`.
+> não repetir**, **§12 = monetização**, **§13 = pesquisa de clubes**), `ARCHITECTURE.md` (infra —
+> **§3.1 Neon, §5 monetização, §6 e-mail, §7 ambiente de pesquisa reproduzível**),
+> `docs/ARQUITETURA_MONETIZACAO.md`, `backend/docs/PESQUISA_CLUBES.md` (diário completo),
+> `backend/docs/RELATORIO_FINAL_PESQUISA_CLUBES.md` (números consolidados).
 
 ---
 
@@ -157,7 +159,43 @@ emitir NFS-e automática via **NFE.io** (decisão do dono; dados fiscais já pro
 
 ---
 
-## −1. Sessão (2026-07-14) — coleta de clubes travava havia 1 semana (causa raiz + fix)
+## −1. Sessão (2026-07-15) — pesquisa de modelos para clubes (branch `clubs`, 9 fases) + expansão de coleta
+
+**O que foi feito:** com a coleta de clubes saturada (54.072 jogos, 13 competições, 2010→2026),
+executada a diretriz completa de pesquisa (ver [[diretriz]] no CLAUDE code / memória do agente):
+duas linhas paralelas comparando a arquitetura ATUAL de produção (DC-NB) retreinada em clubes
+(Linha A) contra uma pesquisa aberta sem viés das decisões históricas (Linha B — pi/Berrar/GAP
+ratings, GBMs, Dixon-Coles clássico, Poisson bivariado, state-space score-driven, ensemble, MLP).
+**9 fases**, tudo sob o protocolo único (5 folds temporais + RPS, novo) na branch `clubs`.
+
+**Resultado principal: a arquitetura de produção venceu TUDO.** DC-NB retreinado em clubes bateu
+os 7 candidatos B da Fase 1 (inclusive o SOTA da literatura, CatBoost+pi-ratings — RPS 0,1925 nos
+challenges), a bateria avançada da Fase 6 (sweep extensivo de hiperparâmetros, state-space
+Koopman-Lit-like, ensemble, MLP) e o tuning de hiperparâmetros (Fase 2.5) confirmou que a config
+de produção (100 árvores, prof.3, lr=0.05) já é literalmente a melhor entre 18 testadas.
+**Nenhuma transferência de clubes→seleções bateu a produção real** (zero-shot piora, pooled é
+empate estatístico) — **sem exceção de push**, tudo fica documentado na branch `clubs`.
+**Achado que abre porta:** blend DC+HistGBM no BTTS passou a valer com mais dados (não testado
+em seleções ainda). Detalhes completos: `backend/docs/RELATORIO_FINAL_PESQUISA_CLUBES.md`.
+
+**Descoberta operacional crítica:** a assinatura API-Football "Ultra" **expira em
+2026-07-19T01:21 UTC** (poucos dias após esta sessão). Cota diária (75k) verificada em tempo real
+via `/status`. Decisão tomada com autorização do usuário: **12 novas competições** adicionadas a
+`backend/scripts/prefetch_clubs.py::LEAGUES` (Eredivisie, Primeira Liga, Jupiler Pro League,
+Premiership escocês, Süper Lig, Liga Profesional Argentina, Liga MX, MLS, Pro League saudita,
+Championship inglês, AFC Champions League Elite, CAF Champions League, CONCACAF Champions
+League) para consumir a cota restante nos dias antes do vencimento — o cron diário
+(`prefetch_wc.cmd`, 06:30) já pega esse backlog automaticamente. Também criado
+`collect_club_odds_forward.py` (preenche a lacuna de odds de clubes, zero antes desta sessão).
+
+**Reboot inesperado da máquina** (~12:48, provável Windows Update) matou os jobs em background
+no meio da execução — recuperado por serem resumíveis por design (CSV incremental). **Lição para
+sessões futuras:** Windows recicla PIDs após reboot — sempre conferir `CreationDate`/
+`LastBootUpTime` antes de assumir que um PID "vivo" é o processo esperado.
+
+---
+
+## −2. Sessão (2026-07-14) — coleta de clubes travava havia 1 semana (causa raiz + fix)
 
 **Sintoma:** desde 07/07, o cron diário (`prefetch_wc.cmd`) nunca chegava nas etapas de
 rebuild/precompute/`prefetch_clubs.py` — só a etapa de seleções rodava. `club_match_detail_cache`
@@ -194,7 +232,7 @@ dela terminar (verificar config "Do not start a new instance" / limite de duraç
 
 ---
 
-## −1. Sessão (2026-07-13) — merge da `monetization` na `main` + nota fiscal sob demanda
+## −3. Sessão (2026-07-13) — merge da `monetization` na `main` + nota fiscal sob demanda
 
 - **Merge da branch `monetization` → `main`, com push.** A branch estava exatamente 3 commits à
   frente da `main` (mesmo merge-base) — fast-forward puro, sem conflitos. Os commits `13a6954`
@@ -219,7 +257,7 @@ dela terminar (verificar config "Do not start a new instance" / limite de duraç
 
 ---
 
-## −2. Sessão (2026-07-11) — Monetização completa (7 fases), branch `monetization` (já mergeada — ver §−1)
+## −4. Sessão (2026-07-11) — Monetização completa (7 fases), branch `monetization` (já mergeada — ver §−3)
 
 Implementadas as 7 fases do plano de monetização de conversão, todas testadas ponta a ponta contra
 o Neon real (não é código não-testado). Branch **`monetization`** (a partir da `main`), commits
@@ -256,7 +294,7 @@ completos em `DOCUMENTACAO_CENTRAL.md` §12.7.
 
 ---
 
-## −3. Sessão anterior (2026-07-09) — props de finalizações, cópula, Série A
+## −4. Sessão (2026-07-09) — props de finalizações, cópula, Série A
 
 Detalhes em `DOCUMENTACAO_CENTRAL.md` §12.6. Tudo na `main`.
 
