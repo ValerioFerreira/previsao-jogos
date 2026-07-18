@@ -51,7 +51,7 @@ def _load_reserved_analysis(db: Session, user: User, analysis_id: str) -> Analys
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Análise não encontrada.")
     if a.type != AnalysisType.future_match:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            detail="Apostas só em análises de partida futura.")
+                            detail="Seleções só em análises de partida futura.")
     return a
 
 
@@ -90,13 +90,13 @@ def create_bet(db: Session, user: User, analysis_id: str, market_keys: list[str]
     # uma aposta por análise
     existing = db.execute(select(Bet).where(Bet.analysis_id == a.id)).scalar_one_or_none()
     if existing is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Esta análise já possui uma aposta.")
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Esta análise já possui uma seleção.")
 
     cands = _candidates(a)
     auto = not market_keys
     sels = markets.auto_select(cands, CAP) if auto else markets.resolve_selections(cands, market_keys)
     if not sels:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Nenhum mercado disponível para apostar.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Nenhum mercado disponível para seleção.")
     codd = markets.combined_odd(sels)
     if codd > CAP + 1e-9:
         raise HTTPException(
@@ -151,8 +151,8 @@ def get_bet(db: Session, user: User, bet_id: str) -> schemas.BetResponse:
     try:
         bid = uuid.UUID(bet_id)
     except ValueError:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Aposta não encontrada.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Seleção não encontrada.")
     b = db.get(Bet, bid)
     if b is None or b.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Aposta não encontrada.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Seleção não encontrada.")
     return _to_response(db, b)

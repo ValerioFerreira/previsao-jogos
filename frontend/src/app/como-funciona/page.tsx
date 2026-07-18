@@ -46,17 +46,17 @@ function ParcerIAHighlight() {
 
         <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
           Ao analisar uma <b className="text-foreground">partida oficial agendada</b>, você reserva <b className="text-foreground">1 crédito</b> e
-          monta uma aposta combinando os palpites da própria análise (odd máxima de <b className="text-foreground">2,00</b>).
+          monta uma seleção combinando os palpites da própria análise (odd máxima de <b className="text-foreground">2,00</b>).
           O sistema acompanha a partida para ver o resultado:
         </p>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><CheckCircle2 className="w-4 h-4" /> Se sua aposta bater</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><CheckCircle2 className="w-4 h-4" /> Se sua seleção for validada</p>
             <p className="text-xs text-muted-foreground mt-1">O crédito é consumido — pô, a gente ajudou né! 😅</p>
           </div>
           <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-cyan-300"><RotateCcw className="w-4 h-4" /> Se sua aposta não bater</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-cyan-300"><RotateCcw className="w-4 h-4" /> Se sua seleção não for validada</p>
             <p className="text-xs text-muted-foreground mt-1">Não fique triste, seu crédito é estornado e você pode fazer uma nova análise. A gente torce pra que dê mais sorte! 🍀🤞</p>
           </div>
         </div>
@@ -94,7 +94,7 @@ const TOC: { group: string; icon: React.ReactNode; items: { id: string; title: s
       { id: "partida-futura", title: "Análise de Partida Futura" },
       { id: "creditos", title: "Créditos" },
       { id: "promocao", title: 'Promoção "ParcerIA"' },
-      { id: "monte-sua-aposta", title: "Monte sua Aposta" },
+      { id: "monte-sua-selecao", title: "Monte sua Seleção" },
     ],
   },
   {
@@ -212,7 +212,7 @@ export default function ComoFunciona() {
             <li>análise de valor esperado (Value Betting);</li>
             <li>diversas ferramentas para interpretar melhor o confronto.</li>
           </ul>
-          <p>Quando a partida for oficial e ainda não tiver acontecido, você também poderá participar da promoção &quot;ParcerIA&quot;, montando sua própria aposta dentro da plataforma.</p>
+          <p>Quando a partida for oficial e ainda não tiver acontecido, você também poderá participar da promoção &quot;ParcerIA&quot;, montando sua própria seleção dentro da plataforma.</p>
         </Section>
 
         <Section id="analise-independente" title="Análise Independente">
@@ -231,7 +231,7 @@ export default function ComoFunciona() {
           <p>Aqui você analisa uma partida oficial que já está marcada e ainda será disputada.</p>
           <p>O funcionamento é um pouco diferente.</p>
           <p>Ao gerar a análise, o sistema não consome imediatamente o crédito. Ele apenas o reserva até que a partida termine.</p>
-          <p>Enquanto isso, você pode utilizar todos os recursos da análise e ainda montar sua aposta para participar da promoção &quot;ParcerIA&quot;.</p>
+          <p>Enquanto isso, você pode utilizar todos os recursos da análise e ainda montar sua seleção para participar da promoção &quot;ParcerIA&quot;.</p>
           <p>Depois do encerramento da partida, o sistema verifica automaticamente o resultado e decide se o crédito será consumido ou devolvido à sua carteira.</p>
         </Section>
 
@@ -251,18 +251,18 @@ export default function ComoFunciona() {
         <Section id="promocao" title='Promoção "ParcerIA"'>
           <p>Essa promoção foi criada para tornar o uso da plataforma ainda mais interessante.</p>
           <p>Ao gerar uma análise para uma partida oficial futura, o sistema apenas reserva um crédito.</p>
-          <p>Depois disso, você monta uma aposta utilizando os mercados disponíveis na própria plataforma.</p>
+          <p>Depois disso, você monta uma seleção utilizando os mercados disponíveis na própria plataforma.</p>
           <p>Quando a partida termina:</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li>se sua aposta estiver correta, o crédito reservado é consumido normalmente;</li>
-            <li>se ela não vencer, ou não puder ser apurada, o crédito retorna integralmente para sua carteira.</li>
+            <li>se sua seleção for validada, o crédito reservado é consumido normalmente;</li>
+            <li>se ela não for validada, ou não puder ser apurada, o crédito retorna integralmente para sua carteira.</li>
           </ul>
-          <p>Na prática, você só utiliza o crédito quando acerta a aposta construída.</p>
+          <p>Na prática, você só utiliza o crédito quando a seleção é validada.</p>
           <p>Essa é uma campanha promocional da ApostaInfo. Ela não representa uma aposta ou jogo de azar, e não envolve pagamento de prêmios em dinheiro.</p>
         </Section>
 
-        <Section id="monte-sua-aposta" title="Monte sua Aposta">
-          <p>Após gerar uma análise para uma partida oficial, você pode montar sua própria aposta utilizando os mercados disponíveis.</p>
+        <Section id="monte-sua-selecao" title="Monte sua Seleção">
+          <p>Após gerar uma análise para uma partida oficial, você pode montar sua própria seleção utilizando os mercados disponíveis.</p>
           <p>Basta escolher as seleções desejadas.</p>
           <p>Nos mercados de linha, como Over/Under, as opções aparecem organizadas em duas colunas:</p>
           <ul className="list-disc pl-5 space-y-1">
@@ -271,8 +271,8 @@ export default function ComoFunciona() {
           </ul>
           <p>À medida que você adiciona mercados, a odd combinada é atualizada automaticamente.</p>
           <p>Para manter o equilíbrio da promoção, a odd total não pode ultrapassar 2,00.</p>
-          <p>Caso você não queira montar manualmente sua aposta, não há problema: a plataforma seleciona automaticamente uma combinação cuja odd fique próxima desse limite.</p>
-          <p>Depois da confirmação, a aposta fica registrada e não poderá mais ser alterada.</p>
+          <p>Caso você não queira montar manualmente sua seleção, não há problema: a plataforma seleciona automaticamente uma combinação cuja odd fique próxima desse limite.</p>
+          <p>Depois da confirmação, a seleção fica registrada e não poderá mais ser alterada.</p>
         </Section>
 
         {/* ---------------- Mercados ---------------- */}

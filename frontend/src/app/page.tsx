@@ -359,56 +359,71 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onO
   teamId: string; form: { matches: RecentMatch[]; total: number }; anomalies: Anomaly[];
   label: string; loading: boolean; teamIds: Record<string, number>; onOpenMatch: (m: RecentMatch) => void;
 }) {
+  const [visibleCount, setVisibleCount] = React.useState(5);
+  const ms = React.useMemo(() => (form.matches || []).slice(0, visibleCount), [form.matches, visibleCount]);
+
   return (
-    <div className="bg-card border border-border/50 rounded-xl p-4 h-full flex flex-col">
-      <div className="flex items-center justify-center gap-2 mb-2">
-        {teamLogoUrl(teamIds[teamId]) && (
-          <img src={teamLogoUrl(teamIds[teamId])!} alt="" className="w-6 h-6 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-        )}
-        <div className="text-center">
-          <span className="text-[9px] uppercase tracking-wide text-muted-foreground block leading-none">{label}</span>
-          <h3 className="text-sm font-semibold leading-tight">{teamPt(teamId)}</h3>
-        </div>
-      </div>
-      {loading ? (
-        <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-xs">
-          <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-emerald-500 rounded-full animate-spin" /> Buscando…
-        </div>
-      ) : (<>
-        <div className="flex items-center justify-between gap-2 mb-1.5">
-          <p className="text-[11px] text-muted-foreground">Últimos {form.matches.length} jogos</p>
-          <DataReliabilityBadge totalMatches={form.total} />
-        </div>
-        <div className="flex gap-2">
-          {/* Seta lateral: topo = mais recente, base = mais antigo */}
-          <div className="flex flex-col items-center text-[8px] uppercase text-muted-foreground shrink-0 py-0.5">
-            <span>Recente</span>
-            <div className="flex-1 w-px bg-border my-1" />
-            <ArrowDown className="w-3 h-3" />
-            <span>Antigo</span>
-          </div>
-          <div className="flex-1 space-y-1.5 min-w-0">
-            {form.matches.map((m, i) => (
-              <RecentMatchRow key={i} match={m} onOpen={() => onOpenMatch(m)} />
-            ))}
-            {form.matches.length === 0 && <p className="text-xs text-muted-foreground italic py-2">Sem jogos recentes.</p>}
-          </div>
-        </div>
-        <div className={`rounded-lg p-2.5 mt-3 ${anomalies.length > 0 ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-muted/50 border border-border/50'}`}>
-          <p className="text-[11px] font-medium mb-1 flex items-center gap-1.5">
-            <Zap className={`w-3 h-3 ${anomalies.length > 0 ? 'text-amber-400' : 'text-muted-foreground'}`} /> Radar de Anomalias
-          </p>
-          {anomalies.length > 0 ? (
-            <ul className="space-y-0.5">
-              {anomalies.map((a, i) => (
-                <li key={i} className="text-[11px] text-amber-500/80 flex items-start gap-1"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /><span>{a.message}</span></li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[11px] text-muted-foreground italic">Nenhum desvio estatístico recente.</p>
+    <div className="bg-card border border-border/50 rounded-xl p-4 h-full flex flex-col justify-between">
+      <div>
+        <div className="flex items-center justify-center gap-2 mb-2">
+          {teamLogoUrl(teamIds[teamId]) && (
+            <img src={teamLogoUrl(teamIds[teamId])!} alt="" className="w-6 h-6 object-contain" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           )}
+          <div className="text-center">
+            <span className="text-[9px] uppercase tracking-wide text-muted-foreground block leading-none">{label}</span>
+            <h3 className="text-sm font-semibold leading-tight">{teamPt(teamId)}</h3>
+          </div>
         </div>
-      </>)}
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-xs">
+            <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-emerald-500 rounded-full animate-spin" /> Buscando…
+          </div>
+        ) : (<>
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <p className="text-[11px] text-muted-foreground">Últimos {form.matches.length} jogos</p>
+            <DataReliabilityBadge totalMatches={form.total} />
+          </div>
+          <div className="flex gap-2">
+            {/* Seta lateral: topo = mais recente, base = mais antigo */}
+            <div className="flex flex-col items-center text-[8px] uppercase text-muted-foreground shrink-0 py-0.5">
+              <span>Recente</span>
+              <div className="flex-1 w-px bg-border my-1" />
+              <ArrowDown className="w-3 h-3" />
+              <span>Antigo</span>
+            </div>
+            <div className="flex-1 space-y-1.5 min-w-0">
+              {ms.map((m, i) => (
+                <RecentMatchRow key={i} match={m} onOpen={() => onOpenMatch(m)} />
+              ))}
+              {ms.length === 0 && <p className="text-xs text-muted-foreground italic py-2">Sem jogos recentes.</p>}
+              
+              {form.matches.length > visibleCount && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((c) => c + 5)}
+                  className="mt-2 text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold transition-colors flex items-center justify-center gap-1 mx-auto"
+                >
+                  + Mostrar mais 5 jogos ({form.matches.length - visibleCount} restantes)
+                </button>
+              )}
+            </div>
+          </div>
+          <div className={`rounded-lg p-2.5 mt-3 ${anomalies.length > 0 ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-muted/50 border border-border/50'}`}>
+            <p className="text-[11px] font-medium mb-1 flex items-center gap-1.5">
+              <Zap className={`w-3 h-3 ${anomalies.length > 0 ? 'text-amber-400' : 'text-muted-foreground'}`} /> Radar de Anomalias
+            </p>
+            {anomalies.length > 0 ? (
+              <ul className="space-y-0.5">
+                {anomalies.map((a, i) => (
+                  <li key={i} className="text-[11px] text-amber-500/80 flex items-start gap-1"><AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /><span>{a.message}</span></li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[11px] text-muted-foreground italic">Nenhum desvio estatístico recente.</p>
+            )}
+          </div>
+        </>)}
+      </div>
     </div>
   );
 }
@@ -963,29 +978,29 @@ export default function Previsoes() {
               )}
             </AnimatePresence>
 
-            {/* MONTE SUA APOSTA — oferta "ParcerIA" (Só Paga se Acertar) */}
-            <SectionDivider>MONTE SUA APOSTA</SectionDivider>
+            {/* MONTE SUA SELEÇÃO — oferta "ParcerIA" (Só Paga se Acertar) */}
+            <SectionDivider>MONTE SUA SELEÇÃO</SectionDivider>
             {analysis?.type === 'future_match' ? (
               <div className="max-w-3xl mx-auto mb-2">
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 mb-4 text-sm text-muted-foreground leading-relaxed">
                   <p className="mb-2">
                     <b className="text-foreground">Oferta ParcerIA</b><br />
-                    Você utilizou um crédito de análise e para uma partida agendada (<b className="text-foreground">{teamPt(homeTeamId)} x {teamPt(awayTeamId)}</b> - {fmtMatchDateTime(matchDate)}).
+                    Você utilizou um crédito de análise para uma partida agendada (<b className="text-foreground">{teamPt(homeTeamId)} x {teamPt(awayTeamId)}</b> - {fmtMatchDateTime(matchDate)}).
                   </p>
                   <p className="mb-2">
                     Mas calma, seu crédito ainda não foi gasto, ele só está retido, e você ainda pode recuperá-lo para fazer outra análise.
                   </p>
                   <p className="mb-2">
-                    Como? Selecione uma aposta, simples ou combinada, de odd máxima 2,00, e o sistema irá acompanhar a partida para ver o resultado.
+                    Como? Monte sua seleção escolhendo os palpites desta análise, com odd combinada até 2,00. O sistema irá acompanhar a partida para verificar se ela foi validada.
                   </p>
                   <p className="mb-2">
-                    Se não quiser ter o trabalho de escolher a aposta, não tem problema! Selecione a aposta automaticamente com o botão &quot;Selecionar Automaticamente&quot; e o sistema irá sugerir uma aposta dentro da odd limite para você!
+                    Se não quiser ter o trabalho de escolher os palpites, não tem problema! Gere a seleção automaticamente e o sistema irá sugerir uma combinação dentro do limite de odd para você.
                   </p>
                   <p className="mb-2">
-                    <b className="text-foreground">Se sua aposta bater</b> - O crédito é consumido (pô, a gente ajudou né! 😅)
+                    <b className="text-foreground">Se sua seleção for validada</b> - O crédito é consumido (pô, a gente ajudou né! 😅)
                   </p>
                   <p className="mb-2">
-                    <b className="text-foreground">Se sua aposta não bater</b> - Não fique triste, seu crédito é estornado e você poderá fazer uma nova análise para outro confronto, e a gente torce pra que dê mais sorte! 🍀🤞
+                    <b className="text-foreground">Se sua seleção não foi validada</b> - Não fique triste, seu crédito é estornado e você poderá fazer uma nova análise para outro confronto. Torcemos para que dê mais sorte! 🍀🤞
                   </p>
                   <Link href="/como-funciona#promocao" className="text-primary font-medium inline-flex items-center gap-1">
                     Ver a explicação completa da oferta ParcerIA →

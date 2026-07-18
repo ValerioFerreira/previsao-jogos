@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { teamPt } from "@/lib/teamNames";
 
 const STATUS_LABEL: Record<string, string> = {
-  awaiting_start: "Aguardando início", in_progress: "Em andamento", awaiting_settlement: "Aguardando liquidação",
-  won: "Vencedora", lost: "Não vencedora", credit_consumed: "Crédito consumido", credit_refunded: "Crédito estornado", canceled: "Cancelada",
+  awaiting_start: "Aguardando início", in_progress: "Em andamento", awaiting_settlement: "Processando resultado",
+  won: "Validada", lost: "Não validada", credit_consumed: "Crédito consumido", credit_refunded: "Crédito estornado", canceled: "Cancelada",
 };
 
 // Categoria de mercado (aba) a partir do group de cada opção. `ou` = mercado Over/Under.
@@ -102,13 +102,12 @@ export default function BetBuilder({ analysisId, home, away, isFree, onConfirmed
     } catch (e) { setErr((e as Error).message); } finally { setConfirming(false); }
   }
 
-  // ---- aposta confirmada (imutável) ----
   if (bet) {
     return (
       <div className="bg-card border border-emerald-500/30 rounded-xl p-5">
-        <h3 className="text-lg font-bold flex items-center gap-2 mb-3"><Lock className="w-5 h-5 text-emerald-500" /> Aposta confirmada</h3>
+        <h3 className="text-lg font-bold flex items-center gap-2 mb-3"><Lock className="w-5 h-5 text-emerald-500" /> Seleção confirmada</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Sua aposta é imutável. {bet.auto_selected ? "Foi selecionada automaticamente (odd ~2,00)." : ""} Status:{" "}
+          Sua seleção é imutável. {bet.auto_selected ? "Foi selecionada automaticamente (odd ~2,00)." : ""} Status:{" "}
           <b className="text-foreground">{STATUS_LABEL[bet.status] || bet.status}</b>.
         </p>
         <div className="space-y-1.5 mb-3">
@@ -142,10 +141,9 @@ export default function BetBuilder({ analysisId, home, away, isFree, onConfirmed
 
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5">
-      <h3 className="text-lg font-bold flex items-center gap-2 mb-1"><Layers className="w-5 h-5 text-primary" /> Monte sua Aposta</h3>
+      <h3 className="text-lg font-bold flex items-center gap-2 mb-1"><Layers className="w-5 h-5 text-primary" /> Monte sua Seleção</h3>
       <p className="text-xs text-muted-foreground mb-4">
-        Selecione mercados desta análise para montar sua aposta. A odd combinada não pode passar de <b>{cap.toFixed(2)}</b>.
-        Se você não escolher nada, selecionamos automaticamente uma aposta com odd próxima de {cap.toFixed(2)}.
+        Escolha os mercados desta análise para participar da promoção ParcerIA. A odd combinada não pode ultrapassar 2,00. Se você preferir, podemos montar automaticamente uma combinação com odd próxima desse limite.
       </p>
       {err && <div className="mb-3 text-sm rounded-md bg-red-500/10 text-red-600 p-3">{err}</div>}
 
@@ -193,7 +191,7 @@ export default function BetBuilder({ analysisId, home, away, isFree, onConfirmed
             onClick={regenerateAuto}
             className="w-full flex items-center justify-center gap-1.5 text-xs font-medium rounded-md border border-primary/30 bg-primary/5 hover:bg-primary/10 p-2.5 transition-colors"
           >
-            <Sparkles className="w-3.5 h-3.5 text-primary" /> {showAutoPreview ? "Gerar outra sugestão automática" : "Selecionar Automaticamente"}
+            <Sparkles className="w-3.5 h-3.5 text-primary" /> {showAutoPreview ? "Gerar outra sugestão automática" : "Gerar Seleção Automática"}
           </button>
           {showAutoPreview && autoPreview.length > 0 && (
             <div className="mt-2 text-xs rounded-md bg-primary/5 border border-primary/20 p-3">
@@ -217,18 +215,18 @@ export default function BetBuilder({ analysisId, home, away, isFree, onConfirmed
       {isFree ? (
         <>
           <Button disabled className="w-full">
-            <CheckCircle2 className="w-4 h-4 mr-2" /> Confirmar aposta automática
+            <CheckCircle2 className="w-4 h-4 mr-2" /> Confirmar Seleção Automática
           </Button>
           <p className="text-[11px] text-center text-emerald-600 mt-2 font-medium">
-            Relaxa, esta é sua seleção de aposta grátis diária, não irá reter créditos!
+            💡 Esta é a sua participação diária na promoção ParcerIA. Nenhum crédito será reservado ou consumido nesta seleção gratuita.
           </p>
         </>
       ) : (
         <>
           <Button onClick={confirm} disabled={confirming || exceeds || !valid} className="w-full">
-            {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : (<><CheckCircle2 className="w-4 h-4 mr-2" /> {selected.length === 0 ? "Confirmar aposta automática" : "Confirmar aposta"}</>)}
+            {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : (<><CheckCircle2 className="w-4 h-4 mr-2" /> {selected.length === 0 ? "Confirmar Seleção Automática" : "Confirmar Seleção"}</>)}
           </Button>
-          <p className="text-[11px] text-center text-muted-foreground mt-2">Após confirmar, a aposta não poderá ser editada ou excluída.</p>
+          <p className="text-[11px] text-center text-muted-foreground mt-2">Após confirmar, a seleção não poderá ser editada ou excluída.</p>
         </>
       )}
     </div>

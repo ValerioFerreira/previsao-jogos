@@ -96,7 +96,7 @@ function ValueBetting({ prediction }: { prediction: PredictionResponse }) {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border/50 rounded-xl p-5">
       <h3 className="text-sm font-semibold mb-4 flex items-center gap-1.5">
         <TrendingUp className="w-4 h-4 text-emerald-500" /> Value Betting — Identificação de Assimetrias
-        <InfoTooltip text="Compara a probabilidade do modelo com a odd oferecida pela casa. Se a odd paga mais do que a probabilidade justifica, existe 'valor' (EV positivo). Exemplo: o modelo dá 50% (odd justa 2,00) e a casa oferece 2,20 → é uma aposta com valor a longo prazo. O 'De-Vig' usa a odd do lado oposto para descontar a margem embutida da casa e revelar a probabilidade real que ela enxerga." href="/como-funciona#value-betting" />
+        <InfoTooltip text="Compara a probabilidade do modelo com a odd oferecida pela casa. Se a odd paga mais do que a probabilidade justifica, existe 'valor' (EV positivo). Exemplo: o modelo dá 50% (odd justa 2,00) e a casa oferece 2,20 → é uma seleção com valor a longo prazo. O 'De-Vig' usa a odd do lado oposto para descontar a margem embutida da casa e revelar a probabilidade real que ela enxerga." href="/como-funciona#value-betting" />
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <div>

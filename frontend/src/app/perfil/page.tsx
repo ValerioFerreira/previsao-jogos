@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 import { teamPt } from "@/lib/teamNames";
 
 const BET_STATUS: Record<string, string> = {
-  awaiting_start: "Aguardando início", in_progress: "Em andamento", awaiting_settlement: "Aguardando liquidação",
-  won: "Vencedora", lost: "Não vencedora", credit_consumed: "Crédito consumido", credit_refunded: "Crédito estornado", canceled: "Cancelada",
+  awaiting_start: "Aguardando início", in_progress: "Em andamento", awaiting_settlement: "Processando resultado",
+  won: "Validada", lost: "Não validada", credit_consumed: "Crédito consumido", credit_refunded: "Crédito estornado", canceled: "Cancelada",
 };
 const BET_STATUS_STYLE: Record<string, string> = {
   awaiting_start: "bg-sky-500/10 text-sky-600",
@@ -60,7 +60,7 @@ export default function PerfilPage() {
         <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="dados">Dados</TabsTrigger>
           <TabsTrigger value="analises"><BarChart3 className="w-4 h-4 mr-1" />Análises</TabsTrigger>
-          <TabsTrigger value="apostas"><Ticket className="w-4 h-4 mr-1" />Apostas</TabsTrigger>
+          <TabsTrigger value="apostas"><Ticket className="w-4 h-4 mr-1" />Seleções</TabsTrigger>
           <TabsTrigger value="docs"><FileText className="w-4 h-4 mr-1" />Documentos</TabsTrigger>
         </TabsList>
 
@@ -104,10 +104,10 @@ export default function PerfilPage() {
 
         <TabsContent value="apostas">
           <Card>
-            <CardHeader><CardTitle className="text-lg">Apostas promocionais (ParcerIA)</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Seleções promocionais (ParcerIA)</CardTitle></CardHeader>
             <CardContent className="px-0 sm:px-6">
               {bets.length === 0 ? (
-                <p className="text-sm text-muted-foreground px-6 sm:px-0">Nenhuma aposta ainda.</p>
+                <p className="text-sm text-muted-foreground px-6 sm:px-0">Nenhuma seleção ainda.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
@@ -126,7 +126,7 @@ export default function PerfilPage() {
                           <td className="py-3 px-3 font-medium whitespace-nowrap">
                             {b.home_team && b.away_team
                               ? `${teamPt(b.home_team)} × ${teamPt(b.away_team)}`
-                              : `Aposta #${b.id.slice(0, 8)}`}
+                              : `Seleção #${b.id.slice(0, 8)}`}
                           </td>
                           <td className="py-3 px-3 text-xs text-muted-foreground">
                             {b.selections.map((s) => s.label).join(" + ")}
