@@ -753,3 +753,82 @@ o espelho SQLite local serializado no escritor único (não aceita escrita conco
 tocaram áreas totalmente distintas, merge automático limpo (só conflito nos docs de índice, por
 edição concorrente das mesmas seções). Pesquisa de clubes (§13.1-§13.4) e infra de coleta agora
 vivem na `main`.
+
+## 14. Mercados de Clubes em Produção (2026-07-18)
+
+Mesmo dia do merge (§13.5), na sequência: o site já anunciava publicamente (cronômetro na home)
+o lançamento dos mercados de clubes. Como a pesquisa (§13) já tinha provado que a arquitetura de
+produção (DC-NB + cascata de contagem) é ótima também para clubes, faltava só **empacotar isso
+como artefato servível** e ligar o backend/frontend a um segundo escopo — zero modelo novo.
+
+### 14.1 Artefato de produção
+
+`backend/scripts/build_clubs_production_artifacts.py` (novo) — mesmo padrão de
+`train_and_save_apifootball.py`/`train_dc_apifootball.py` (fit na base INTEIRA, sem holdout,
+hiperparâmetros já confirmados pela pesquisa), reaproveitando 100% das classes de produção
+(`DixonColesNBRegressor`, `ShotsNB`, `CornersNB`, `CardsGP`, `ortho_sinais`) e os helpers já
+validados em `clubs_train_counts.py`. Resultado em `backend/model_artifacts_clubes/`:
+**1.197 times, 54.072 jogos, 13 competições** (as que já tinham `has_advanced_stats` suficiente
+das 60 em coleta — o restante entra num re-run futuro conforme a coleta expandida for
+processada por `build_clubs_dataset.py`). Mercados incluídos: vencedor/empate, BTTS, over/under
+gols, finalizações, finalizações a gol, escanteios, cartões — os mesmos que a pesquisa validou
+para clube. **Fora desta rodada** (não validados para clube, artefato ausente = mercado não
+exposto, mesmo padrão já usado para `offsides_nb`/`ou_calibrators`): mercados por-tempo
+(1º/2º tempo de gols/cartões), impedimentos, props de jogador.
+
+**Duas armadilhas de dado encontradas e corrigidas** (não são bug de modelo, são de nome/id):
+1. `build_clubs_dataset.py` grava cada time internamente como `"Nome#id"` (chave anti-colisão
+   da COLETA entre países/ligas) — isso vazava cru pro artefato/UI. Corrigido: nome exibido é
+   limpo (`"Nome"`), e só os casos de colisão REAL (mesmo nome limpo, `team_id` diferente —
+   3 casos encontrados: Athletic Club, Drita, Santa Cruz) ganham sufixo `"Nome (Liga)"`.
+2. A tabela `team_ids` do Neon (usada pro escudo do time) é preenchida só por
+   `build_referees_and_team_ids.py`, que lê só o cache de seleção — nunca teve dado de clube.
+   Corrigido sem tocar o Neon: `meta.json` de clube agora carrega seu próprio `team_ids`
+   (extraído do `home_team_id`/`away_team_id` já presentes no dataset), e
+   `get_team_ids(scope="clube")` lê dali em vez de consultar o Neon.
+
+### 14.2 Backend — escopo `scope: "selecao" | "clube"`
+
+`predictor.py` já aceitava `art_dir` no `__init__` — nenhuma mudança estrutural, só tornar os 4
+loads por-tempo (`gols_1t/2t`, `cartoes_1t/2t`) opcionais (mesmo padrão de `offsides_nb`), já que
+a pesquisa não validou esses mercados pra clube. `app/services/predictor_service.py` ganhou
+`get_club_predictor()`/`_predictor_for(scope)` e um parâmetro `scope` (default `"selecao"`,
+retrocompatível) em `predict_match`, `get_team_ids`, `get_pmf_preview`, `get_injuries` e nas rotas
+de `app/main.py` (`/predict`, `/teams`, `/team/{nome}`, `/h2h`, `/api/team-ids`,
+`/api/competition-benchmark`, `/api/pmf-preview`, `/api/scorers`, além das 5 rotas team-scoped).
+
+**Achado que quase passou despercebido:** o fluxo real de análise PAGA (`POST /analysis`) não
+passa por `/predict` — tem seu próprio `_generate_snapshot()` em
+`app/domains/analysis/service.py` com sua própria chamada a `get_predictor()`. Corrigido junto
+(schema `AnalysisRequest` ganhou `scope`), senão toda análise de clube comprada teria saído
+errada (dado de seleção) mesmo com o resto do backend correto.
+
+**Cortes de escopo desta entrega (documentados, não esquecidos)** — endpoints cuja fonte de dado
+hoje é exclusiva de seleção degradam para resposta vazia/desabilitada em vez de quebrar quando
+`scope=="clube"`: recentes/histórico de time, goal-timing, benchmark de competição, radar de
+anomalias, props de jogador (goleador/finalizador — modelos treinados só com seleção). A tabela
+`club_odds_registry` (usada por `get_upcoming_fixtures()` pro seletor de "Partida Agendada")
+existe no código (`collect_club_odds_forward.py`) mas nunca foi populada — hoje o seletor de
+partida agendada só lista jogos de seleção; isso não bloqueia o fluxo principal porque o CTA do
+banner de lançamento abre direto a "Análise Independente" (escolha livre de dois clubes), que
+funciona 100%.
+
+### 14.3 Frontend
+
+Toggle "Seleções / Clubes" na Análise Independente (`page.tsx`), `scope` propagado em
+`PredictionContext`/`api.ts`/`monetizationApi.ts`, banner de lançamento (`ClubMarketsBanner`) com
+CTA funcional (`onExplore` → muda pro modo Análise Independente + escopo clube). Seleção de
+"Partida Agendada" já reaproveita o `MatchPickerModal` existente sem mudança estrutural (só o
+tipo `PickerFixture` ganhou `scope`). Tooltips de cards (`H2HCard`, `KeyPlayerMatchup`,
+`GoalTiming`, `StyleRadar`, `DestaquesRecentes`, `BoletimDesfalques`) trocaram "seleção(ões)" por
+"equipe(s)" (texto neutro, funciona pros dois escopos sem precisar de lógica condicional).
+
+### 14.4 Verificação
+
+Smoke test direto (`predict_match(..., scope="clube")` com confronto real do
+`results_slim.csv`) retornou todos os mercados com probabilidades válidas (somam ~100%, sem
+NaN). Fluxo de UI testado no browser: banner → Análise Independente → toggle Clubes → busca de
+time (nomes limpos, sem `#id`) → H2H real (Flamengo x Palmeiras, 35 confrontos diretos) →
+seções sem dado de clube degradam com "sem jogos recentes" em vez de erro. `tsc --noEmit` limpo.
+Não foi possível validar visualmente o card de mercados pós-geração (login da conta demo
+retornou 401 — credencial desatualizada no ambiente local, não relacionado a esta mudança).

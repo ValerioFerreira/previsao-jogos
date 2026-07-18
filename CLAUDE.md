@@ -3,8 +3,9 @@
 > **Mapa de caminhos, não enciclopédia.** Leia este arquivo primeiro para saber ONDE está cada
 > coisa; o conteúdo detalhado (o quê/por quê) vive nos docs abaixo. Mantenha este índice curto.
 
-Plataforma de **previsão probabilística de partidas** (produção: seleções; clubes: coleta em
-60 competições + pesquisa de modelos concluída na branch `clubs`, ver §13 do doc-mestre).
+Plataforma de **previsão probabilística de partidas** — **produção: seleções E clubes**
+(mercados de clube lançados em 2026-07-18, mesmo menu de mercados de seleção, ver §14 do
+doc-mestre; coleta de clube em 60 competições, artefato hoje cobre as 13 já processadas).
 Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/frontend`**
 (Next.js, deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 
@@ -17,7 +18,8 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   completa, gateway MP/cupons/afiliados/analytics/admin, 2026-07-11; §12.8 = merge na `main` +
   nota fiscal sob demanda, 2026-07-13; §12.9 = código p/ Mercado Pago real + nota fiscal automática
   via NFE.io, 2026-07-16 — falta só o runbook do dono)**, **§13 pesquisa de clubes (branch `clubs`,
-  2026-07-15 — arquitetura atual venceu tudo, sem exceção de push)**.
+  2026-07-15 — arquitetura atual venceu tudo, sem exceção de push)**, **§14 mercados de clubes em
+  produção (2026-07-18 — `scope="selecao"|"clube"` ponta a ponta, gaps documentados)**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa
@@ -30,10 +32,19 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
 
 ## 🐍 Backend (`/backend`)
 - `predictor.py` — classe `Predictor` (Dixon-Coles NB + contagens NB/GP em cascata). Lê **artefatos
-  CSV/joblib locais**, não o banco. `app/services/predictor_service.py::get_predictor()` (lru_cache).
-- `app/main.py` — **todas as rotas** (`/predict`, `/h2h`, `/api/*`, domínios montados).
+  CSV/joblib locais**, não o banco. `app/services/predictor_service.py::get_predictor()` (lru_cache)
+  serve seleção; `get_club_predictor()` serve clube (mesma classe, `art_dir` diferente).
+- `app/main.py` — **todas as rotas** (`/predict`, `/h2h`, `/api/*`, domínios montados). Rotas
+  relevantes (predict/teams/team/h2h/team-ids/benchmark/pmf/scorers) aceitam
+  `scope: "selecao"|"clube"` (default `"selecao"`, retrocompatível) — ver §14 do doc-mestre.
 - `app/services/predictor_service.py` — leitores/endpoints de dados (recent/history/goal-timing/
   referee/benchmark/injuries/pmf/scorers). **Agregados lidos de tabelas pequenas** (ver abaixo).
+  `_predictor_for(scope)` escolhe entre `get_predictor()`/`get_club_predictor()`; endpoints sem
+  base de dado de clube ainda (recent/history/benchmark/goal-timing) degradam vazio p/ clube.
+- `scripts/build_clubs_production_artifacts.py` + `model_artifacts_clubes/*.joblib` — artefato de
+  produção de clube (1.197 times/54.072 jogos/13 competições), mesma arquitetura/hiperparâmetros
+  da §13. Nomes de time desambiguados por colisão real (`"Nome (Liga)"`); `team_ids` (p/ escudo)
+  resolvido do próprio `meta.json`, não do Neon (que só tem seleção).
 - `app/services/aggregates.py` + `raw_cache.py` — **otimização do Neon**: precompute de agregados
   (tabelas `*_agg`) + espelho local SQLite do bruto (`data/raw_cache.sqlite`). Ver `ARCHITECTURE.md §3.1`.
 - `app/services/scorer_service.py` + `shots_prop_service.py` — props de jogador (Marcar/Finalizar).
@@ -71,6 +82,8 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
 
 ## ⚛️ Frontend (`/frontend/src`)
 - `app/page.tsx` — **Análise** (config → gerar análise → mercados → Monte sua Aposta / Funções Avançadas).
+  Toggle Seleções/Clubes na Análise Independente (`scope` em `PredictionContext`); banner de
+  lançamento de mercados de clube com CTA (`ClubMarketsBanner`).
 - `app/estatisticas/page.tsx` — Estatísticas (Futura/Passada/Independente; H2H, radar, minutagem, quadrantes).
 - `app/como-funciona/page.tsx` — doc interativo (destaque da oferta **ParcerIA** no topo).
 - `app/{entrar,cadastro,carteira,perfil,admin,afiliado,documentos}` — monetização. `carteira`
@@ -88,7 +101,9 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
 # migrations app_*:  cd backend && python -m alembic upgrade head
 # verificar cadastro (sem rede/banco): cd backend && python -m scripts.verify_signup_flow
 ```
-Conta demo: `demo.apostai@gmail.com` / `Demo1234` (admin, com créditos).
+Conta demo: `demo.apostai@gmail.com` / `Demo1234` (admin, com créditos) — **login retornou 401 em
+2026-07-18** (Neon local), não investigado ainda; confirmar credencial antes de depender dela p/
+teste de UI autenticado.
 
 ## ✅ Regras de ouro
 - **Antes de testar hipótese de modelo:** conferir `DOCUMENTACAO_CENTRAL.md` §9 **e** §13 (pesquisa

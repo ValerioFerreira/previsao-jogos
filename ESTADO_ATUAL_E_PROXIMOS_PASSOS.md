@@ -10,6 +10,32 @@
 
 ---
 
+## 0. Sessão (2026-07-18) — merge `clubs`→`main` + lançamento dos mercados de clubes
+
+- **Merge:** `main` local estava atrasada (`origin/main` 23 commits à frente, sem sobreposição
+  com `clubs`); fast-forward + merge de `clubs` → `main` (commit `a777457`), sem perda de
+  trabalho de nenhum lado. Detalhe em `DOCUMENTACAO_CENTRAL.md` §13.5.
+- **Cronômetro do site:** estava marcando 10h (deadline já estourado) — adiado publicamente em
+  duas etapas (11h, depois 14h) com aviso de delay, decisão do dono do produto de fechar tudo
+  (backend+frontend+verificação) numa única sessão até esse novo prazo.
+- **Mercados de clubes lançados** (mesmo menu de mercados de seleção): artefato de produção
+  (`backend/model_artifacts_clubes/`, 1.197 times/54.072 jogos/13 competições) treinado com a
+  arquitetura já validada pela pesquisa (§13); backend serve dois escopos
+  (`scope="selecao"|"clube"`) end-to-end, incluindo o caminho da análise PAGA (que tinha seu
+  próprio código fora de `/predict` e quase ficou de fora); frontend com toggle Seleções/Clubes
+  na Análise Independente e CTA funcional no banner. Detalhe completo, incluindo os cortes de
+  escopo desta entrega (props de jogador, histórico/benchmark de clube, seletor de partida
+  agendada de clube) em `DOCUMENTACAO_CENTRAL.md` §14.
+- **Pendências para a próxima sessão:** (1) rodar `collect_club_odds_forward.py` pra popular
+  `club_odds_registry` e habilitar o seletor de "Partida Agendada" pra clubes; (2) reprocessar
+  `build_clubs_dataset.py` com a coleta de 60 competições (hoje o artefato usa só as 13 que já
+  tinham `has_advanced_stats` suficiente) e re-rodar `build_clubs_production_artifacts.py`; (3)
+  auditoria de economia do Neon (pedida pelo dono, ainda não feita — ver nota abaixo).
+- **Nota (Neon):** dono pediu auditoria pra ver se dá pra tirar mais coisa do Neon e deixar só
+  local (treino/dados já são locais; só o que a UI consome deveria ficar lá). Ainda não auditado
+  nesta sessão — ficou pra depois do lançamento dos mercados de clubes, por pedido explícito do
+  dono ("depois vemos o consumo do Neon").
+
 ## 0. Sessão (2026-07-16), parte 3 — admin edita documentos legais + banner de novidades
 
 - **Admin → aba "Documentos"** (`frontend/src/app/admin/page.tsx`): edita título/corpo (Markdown)
