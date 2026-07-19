@@ -13,6 +13,63 @@ import { competitionPt } from '@/lib/competitionNames';
 const OLD_MATCH_CUTOFF = '2019-01-01';
 const isOldMatch = (iso?: string) => !!iso && iso.slice(0, 10) < OLD_MATCH_CUTOFF;
 
+const COUNTRY_FLAGS: Record<string, string> = {
+  "Brasil": "🇧🇷", "Competições Internacionais": "🌍", "Inglaterra": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  "Espanha": "🇪🇸", "Itália": "🇮🇹", "Alemanha": "🇩🇪", "França": "🇫🇷",
+  "Holanda": "🇳🇱", "Portugal": "🇵🇹", "México": "🇲🇽", "Estados Unidos": "🇺🇸",
+  "Argentina": "🇦🇷", "Turquia": "🇹🇷", "Bélgica": "🇧🇪", "Suécia": "🇸🇪",
+  "Polônia": "🇵🇱", "Noruega": "🇳🇴", "Croácia": "🇭🇷", "Japão": "🇯🇵",
+  "Coreia do Sul": "🇰🇷", "Equador": "🇪🇨", "Colômbia": "🇨🇴", "Arábia Saudita": "🇸🇦",
+  "Escócia": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "Grécia": "🇬🇷", "Chéquia": "🇨🇿",
+};
+
+function getCountry(compName: string, scope: 'selecao' | 'clube'): string {
+  if (scope === 'selecao') return "Competições Internacionais";
+  const name = compName.toLowerCase();
+  if (name.includes("brasileirao") || name.includes("copa do brasil") || name.includes("brasileirão")) return "Brasil";
+  
+  if (
+    name.includes("champions league") || name.includes("libertadores") || name.includes("sul-americana") || 
+    name.includes("sudamericana") || name.includes("europa league") || name.includes("conference league") || 
+    name.includes("recopa") || name.includes("world cup") || name.includes("copa do mundo") || 
+    name.includes("eurocopa") || name.includes("euro championship") || name.includes("copa america") || 
+    name.includes("copa américa") || name.includes("african cup") || name.includes("copa africana") || 
+    name.includes("asian cup") || name.includes("copa da ásia") || name.includes("nations league") || 
+    name.includes("eliminatórias") || name.includes("amistoso") || name.includes("friendlies") || 
+    name.includes("friendly") || name.includes("olympics") || name.includes("olimpíadas") || 
+    name.includes("asean") || name.includes("cecafa") || name.includes("mundial")
+  ) {
+    return "Competições Internacionais";
+  }
+
+  if (name.includes("premier league") || name.includes("championship") || name.includes("fa cup") || name.includes("league cup")) return "Inglaterra";
+  if (name.includes("la liga") || name.includes("segunda div") || name.includes("copa del rey")) return "Espanha";
+  if (name.includes("serie a italia") || name.includes("serie b") || name.includes("coppa italia") || name.includes("itália")) return "Itália";
+  if (name.includes("bundesliga") || name.includes("dfb pokal")) return "Alemanha";
+  if (name.includes("ligue 1") || name.includes("ligue 2") || name.includes("coupe de france")) return "França";
+  if (name.includes("eredivisie") || name.includes("knvb")) return "Holanda";
+  if (name.includes("primeira liga") || name.includes("taça de portugal")) return "Portugal";
+  if (name.includes("liga mx")) return "México";
+  if (name.includes("major league soccer") || name.includes("mls")) return "Estados Unidos";
+  if (name.includes("argentina") || name.includes("primera división") || name.includes("primera a") || name.includes("liga profesional")) return "Argentina";
+  if (name.includes("süper lig") || name.includes("super lig")) return "Turquia";
+  if (name.includes("jupiler pro league")) return "Bélgica";
+  if (name.includes("allsvenskan")) return "Suécia";
+  if (name.includes("ekstraklasa")) return "Polônia";
+  if (name.includes("eliteserien")) return "Noruega";
+  if (name.includes("hnl")) return "Croácia";
+  if (name.includes("j1 league")) return "Japão";
+  if (name.includes("k league 1")) return "Coreia do Sul";
+  if (name.includes("liga pro")) return "Equador";
+  if (name.includes("pro league") || name.includes("saudi")) return "Arábia Saudita";
+  if (name.includes("premiership")) return "Escócia";
+  if (name.includes("super league 1") || name.includes("grecia")) return "Grécia";
+  if (name.includes("superliga")) return "Sérvia/Dinamarca";
+  if (name.includes("czech liga")) return "Chéquia";
+
+  return "Outras Competições";
+}
+
 const OldMatchBadge = () => (
   <TooltipProvider delayDuration={150}>
     <Tooltip>
@@ -138,11 +195,32 @@ export function MatchPickerModal({
   const matchesTeamQuery = (f: PickerFixture) =>
     teamPt(f.home).toLowerCase().includes(q) || teamPt(f.away).toLowerCase().includes(q);
 
-  // Busca única: por nome de competição OU por clube/seleção com jogo agendado nela.
+  // Busca única: por nome de competição OU por clube/seleção com jogo agendado nela, OU país.
   const compsShown = useMemo(() => {
     if (!q) return competitions;
-    return competitions.filter(c => c.label.toLowerCase().includes(q) || c.fixtures.some(matchesTeamQuery));
-  }, [competitions, q]);
+    return competitions.filter(c => {
+      const country = getCountry(c.label, scope).toLowerCase();
+      return c.label.toLowerCase().includes(q) || country.includes(q) || c.fixtures.some(matchesTeamQuery);
+    });
+  }, [competitions, q, scope]);
+
+  const groupedComps = useMemo(() => {
+    const groups: Record<string, typeof compsShown> = {};
+    compsShown.forEach(c => {
+      const country = getCountry(c.label, scope);
+      if (!groups[country]) groups[country] = [];
+      groups[country].push(c);
+    });
+
+    return Object.entries(groups).map(([country, comps]) => ({
+      country,
+      comps,
+      rank: country === "Brasil" ? 0 : country === "Competições Internacionais" ? 1 : country === "Outras Competições" ? 999 : 2
+    })).sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      return a.country.localeCompare(b.country);
+    });
+  }, [compsShown, scope]);
 
   // Se o filtro atual não deixa mais a competição escolhida visível, volta pra grade.
   useEffect(() => {
@@ -188,37 +266,52 @@ export function MatchPickerModal({
         </div>
 
         {!comp ? (
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 overflow-y-auto pr-1 content-start">
-            {compsShown.length === 0 && (
+          <div className="overflow-y-auto pr-1">
+            {groupedComps.length === 0 && (
               <p className="text-xs text-muted-foreground italic col-span-full py-6 text-center">
                 Nenhuma competição com partida agendada para esse filtro.
               </p>
             )}
-            {compsShown.map(c => {
-              const logo = leagueLogoUrl(c.leagueId);
-              const empty = c.fixtures.length === 0;
-              return (
-                <button key={c.label} onClick={() => { if (!empty) setComp(c.label); }}
-                  disabled={empty}
-                  aria-disabled={empty}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors ${
-                    empty
-                      ? 'border-border/30 bg-muted/10 opacity-50 cursor-not-allowed'
-                      : 'border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60'
-                  }`}>
-                  {logo && (
-                    <img src={logo} alt="" className="w-8 h-8 object-contain" loading="lazy"
-                      onError={onImgError} />
-                  )}
-                  <span className="text-[11px] font-medium text-center leading-snug">{c.label}</span>
-                  {empty && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground leading-tight">
-                      Sem jogos agendados
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+            <div className="space-y-6 pb-2">
+              {groupedComps.map(g => (
+                <div key={g.country}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-foreground tracking-tight flex items-center gap-1.5">
+                      {COUNTRY_FLAGS[g.country] && <span>{COUNTRY_FLAGS[g.country]}</span>}
+                      {g.country}
+                    </h3>
+                    <div className="flex-1 h-px bg-border/40"></div>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                    {g.comps.map(c => {
+                      const logo = leagueLogoUrl(c.leagueId);
+                      const empty = c.fixtures.length === 0;
+                      return (
+                        <button key={c.label} onClick={() => { if (!empty) setComp(c.label); }}
+                          disabled={empty}
+                          aria-disabled={empty}
+                          className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors ${
+                            empty
+                              ? 'border-border/30 bg-muted/10 opacity-50 cursor-not-allowed'
+                              : 'border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60'
+                          }`}>
+                          {logo && (
+                            <img src={logo} alt="" className="w-8 h-8 object-contain" loading="lazy"
+                              onError={onImgError} />
+                          )}
+                          <span className="text-[11px] font-medium text-center leading-snug">{c.label}</span>
+                          {empty && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground leading-tight">
+                              Sem jogos agendados
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <>
