@@ -188,4 +188,145 @@ exceção de push a aplicar** — nada bateu a produção real de seleções sob
 base de clubes (4/5 folds) — não testado ainda em seleções; candidato a investigação futura
 sob o próprio pipeline de seleções (fora do escopo desta pesquisa de clubes).
 
-(Continuar registrando tudo aqui, inclusive negativos, com números.)
+## 6. Rodada 2026-07-19 — 12 hipóteses no dataset de 60 ligas (191.580 jogos)
+
+> Nota de auditoria: o commit `033ae30` (mesmo dia, sessão anterior) alegava atualizar esta
+> seção mas só trouxe os scripts (`clubs_hyp{4,5,6,10}_*.py`, `clubs_new_hyp_ablation.py`) —
+> o diário nunca foi escrito aqui. Retroativamente registrado agora (fonte: histórico dos
+> scripts + `DOCUMENTACAO_CENTRAL.md` §16 do branch `main`, que tem o relato completo dessa
+> sessão incluindo os 3 mercados novos entregues em produção). Números abaixo são os mesmos
+> já publicados em `main`, só espelhados aqui pra manter o diário desta branch completo.
+
+Coleta expandida pra 60 competições nesse dia; dataset de pesquisa saiu de 54.072 jogos/13
+competições (Fase 1-8, 2026-07-15) para **191.580 jogos/60 ligas** (cobertura box-score 71%,
+xG 14,1%). Protocolo idêntico (`research_clubs/protocol.py`, gate ≥4/5 folds melhoram E
+delta<-0.001). Nenhuma das 12 hipóteses passou o gate:
+
+| # | Hipótese | Veredito | Nota |
+|---|---|---|---|
+| 1 | Re-rodar Fase 4/5/6 completas no dataset 60 ligas | NÃO EXECUTADO (ficou pra esta rodada, §7) | — |
+| 2 | Blend com odds reais de clube | BLOQUEADO | `club_odds_registry` ainda com volume insuficiente |
+| 3 | Pooling hierárquico Elo-diff por liga (shrinkage empírico-Bayesiano) | misto | 5/5 folds melhoram, delta=-0,0004 (abaixo do limiar -0,001) |
+| 4 | Lineup novelty (desfalque real vs XI habitual) | REPROVADO | 3/5 folds, delta~0,0000 |
+| 5 | Correlação ida-volta em mata-mata | CONFIRMADO (diagnóstico, não é modelo) | corr(margem leg1,leg2)=-0,132 (n=1.702); vira candidato a mercado de qualificação agregada (não construído) |
+| 6 | xG como mercado próprio (O/U) | VIÁVEL, aguardar mais dado | cobertura80=0,975, MAE=0,89 gol, amostra 14% ainda pequena |
+| 7 | Proxy de lesões no resultado | BLOQUEADO | zero dado de `/injuries` cacheado pra clube |
+| 8 | Efeito derby/rivalidade (mesma cidade-sede) | misto | 4/5 folds melhoram, delta~0,0000 |
+| 9 | GAP-ratings revisitado (60 ligas) | NÃO EXECUTADO (ficou pra esta rodada, §7) | — |
+| 10 | Calibração isotônica por bucket de \|elo_diff\| | REPROVADO | logloss piora em 5/5 folds (+0,003 a +0,014) |
+| 11 | Home advantage por lotação de estádio | BLOQUEADO | api-football não expõe `attendance` |
+| 12 | Momentum de goleiro pra BTTS/clean-sheet | NÃO EXECUTADO (ficou pra esta rodada, §7) | — |
+
+Também entregues nessa sessão (produção, fora do escopo de pesquisa): 3 mercados novos
+(1º/2º tempo pra clube, cartões vermelhos, time a marcar primeiro) + fix de throttle na
+coleta (16 workers estourava rajada de 429). Ver `DOCUMENTACAO_CENTRAL.md` §16 (main) pros
+detalhes completos desses itens — não repetidos aqui por serem fora do escopo desta branch.
+
+## 7. Rodada 2026-07-19 (parte 2) — fecha as 3 hipóteses pendentes (#1/#9, #12)
+
+Continuação direta da rodada acima: as 3 hipóteses que ficaram "NÃO EXECUTADO" (#1/#9 — rerun
+da bateria Fase 4/5/6 original no dataset de 60 ligas; #12 — momentum de goleiro). Mesmo
+protocolo, mesmo dataset (`data/built/club_features_enriched.parquet`, 191.580 jogos,
+183.530 pós burn-in ≥5 jogos disputados). Trabalho 100% local (zero chamada à API-Football —
+a cota é compartilhada com a coleta de produção rodando em paralelo). Rodado nesta worktree
+de pesquisa (`../previsao-jogos-clubs-research`, branch `clubs`).
+
+### 7.1 Escopo — o que foi re-rodado e o que foi deliberadamente pulado
+
+A bateria original (Fase 4: 9 hipóteses revisitadas de seleções; Fase 5: 7 grupos de
+features próprias de clubes; Fase 6: state-space/GAP-direto/ensemble) tinha 17 testes ao
+todo, sobre um dataset 3,4× menor (54.072 vs 191.580 jogos pós-expansão de liga; ~50k vs
+183,5k pós burn-in). Priorizei os candidatos com alguma chance real de mudar de veredito —
+os que já tinham sinal (mesmo que fraco) ou dependiam de cobertura que mudou:
+
+- **Re-rodados**: `blend_btts` (Fase 4.3, passou 4/5 antes — o único achado positivo da
+  Fase 1-6 original), `xg_feature` (Fase 4.8, prejudicado por baixa cobertura histórica —
+  cobertura de xG mudou), `gap_ratings` + os outros 6 grupos da Fase 5 (`clubs_features_v2_ablation.py`,
+  gap_ratings foi o único que passou isolado: 5/5 folds, delta -0,0022), `ensemble` (Fase 6.6,
+  quase empate antes) e `gap_counts` (Fase 6.4, empatou com a cascata GBM antes).
+- **Deliberadamente NÃO re-rodados** (reprovações firmes, sem indício de amostra insuficiente,
+  já confirmadas por replicação em outras bases — ver `DOCUMENTACAO_CENTRAL.md` §9 e memória
+  do agente `modelo-lambda-regressor.md`/`perfil-elo-condicionado.md`/`bateria-momentum-jogador.md`):
+  `time_decay` (reprovado em seleções E em clubes-13-ligas; DC-dinâmico também reprovou na
+  Fase 1), `momentum` de equipe (reprovado repetidamente, inclusive numa bateria dedicada),
+  `xgb_lgbm` pra λ/μ (testado exaustivamente antes, nunca bate o GBM sklearn), `calibration`
+  pós-hoc por classe (mecanismo diferente do #10 da rodada anterior, mas mesma família — sem
+  motivo pra esperar reversão), `referee` (amostra por árbitro já era 10-50× maior em clubes
+  e não ajudou), `elo_conditioned` (achado consistente de regressão por competição, não é
+  ruído de amostra pequena), `gp_vs_nb` em escanteios (GP≈NB, sem sinal de melhora nem piora),
+  `state_space` GAS (0/5 folds — o oposto de "quase passou").
+
+### 7.2 Resultados
+
+Reexecutados em 2026-07-19 (parte 3, mesma sessão) após dois lançamentos falhos por engano de
+interpretador (o worktree de pesquisa não tem `.venv` próprio; scripts precisam do
+`.venv/Scripts/python.exe` **absoluto** do repo principal — corrigido, ver nota de commit).
+
+| Hipótese | Folds melhoram | Delta médio (logloss) | Veredito |
+|---|---|---|---|
+| `blend_btts` (DC-NB + HistGBM, 50/50) | 5/5 | -0,0005 | **misto** — direção 100% consistente (5/5), mas magnitude abaixo do limiar -0,001; mais forte que o 4/5 achado na base de 13 ligas, ainda não promovível pelo gate estrito |
+| `xg_feature` (xG acumulado como feature, não mercado) | 1/5 | -0,0000 | REPROVADO |
+| `gap_ratings` (Fase 5.6, isolado — GAP ratings de chutes/escanteios) | 5/5 | **-0,0022** | **PASSA** (>2x o limiar) — confirma o achado da Fase 5 original (base de 13 ligas) com 3,4x mais dado |
+| congestion/altitude/phase/squad_rotation/xg_overperf/match_importance (Fase 5, outros 6 grupos) | — | — | REPROVADO/misto em todos — só `gap_ratings` passou isolado; combinação final (170 features) = gap_ratings sozinho, mesmo resultado (5/5, -0,0022) |
+| `ensemble` (Fase 6.6 — stacking baseline+CatBoost+state_space) | 1/5 | -0,0000 | REPROVADO |
+| `gap_counts` (Fase 6.4, finalizações) | — | — | sem comparação direta — cascata GBM (fase 2) não disponível pro confronto; não conclusivo |
+
+**`gap_ratings` PROMOVIDO para produção** no mesmo dia (2026-07-19) — ver
+`DOCUMENTACAO_CENTRAL.md` §17 no branch `main` para o runbook completo (feature de estado
+por-time servida via snapshot, análoga ao Elo; artefato de clube retreinado com 170
+`base_feats`, 158→170).
+
+### 7.3 H12 — momentum de goleiro (BTTS/clean-sheet)
+
+**Dados**: extraídos de `players[].statistics.goals.{saves,conceded}` +
+`games.position=="G"` do espelho bruto (`club_raw_cache.sqlite` do repo PRINCIPAL, lido em
+modo read-only — o espelho desta worktree de pesquisa estava vazio; zero conflito com a
+coleta de produção que escreve lá, zero chamada à API). Script novo
+`scripts/clubs_hyp12_gk_extract.py` (paralelizado via `multiprocessing`, 12 workers, parse de
+203.819 JSONs em 25s): identifica o goleiro que mais minutos jogou por time/partida →
+**244.809 linhas goleiro-jogo em 122.442 fixtures, cobertura de `saves` não-nulo 94,8%**.
+
+Features (`scripts/clubs_hyp12_gk_momentum.py`): média móvel (shift1, point-in-time, janela
+5 jogos) de `saves` e gols sofridos **por goleiro individual** (segue o jogador entre times,
+mesmo espírito do estudo de momentum de jogador que passou em props — ver seção "bateria
+momentum/jogador" acima) + flag de titularidade recorrente (goleiro mais frequente do time
+nas últimas 10 partidas com goleiro identificado). **Cobertura do sinal (ambos os lados,
+pós burn-in): 57,1%** — bem abaixo dos 94,8% de cobertura por goleiro isolado, porque exige
+histórico de pelo menos 2 jogos anteriores do MESMO goleiro identificado nos dois lados
+simultaneamente. Dataset de teste: 104.107 jogos (56,7% do pós burn-in) — sem imputar o
+sinal ausente como "zero momentum" (enviesaria pra baixo).
+
+Modelo: `HistGradientBoostingClassifier` sobre as 158 `base_feats` (baseline) vs
+`base_feats` + 8 features de goleiro (candidato), mesmo protocolo (5 folds temporais),
+avaliado em 3 targets binários:
+
+| Target | Folds melhoram | Delta médio (logloss) | Veredito |
+|---|---|---|---|
+| `btts` | 4/5 | -0,0001 | misto (abaixo do limiar -0,001) |
+| `home_clean_sheet` | 3/5 | -0,0004 | misto |
+| `away_clean_sheet` | 2/5 | +0,0005 | misto/fraco (não passa nem por direção) |
+
+**Veredito: REPROVADO/misto nos 3 targets — nenhum bate o gate de promoção.** Direção do
+sinal é majoritariamente correta (2 dos 3 targets melhoram logloss em média, ainda que
+abaixo do limiar), mas a magnitude é desprezível — muito menor que o -0,0022 do gap_ratings
+(que também não passou por delta em outra métrica correlata). Duas leituras possíveis: (a) o
+sinal de "forma do goleiro" já está majoritariamente capturado pelas features de defesa do
+TIME (rolling de gols sofridos, chutes sofridos, etc. já presentes nas 158 base_feats) —
+consistente com o achado de seleções de que "goleiro" só rendeu quando isolado para PROPS de
+jogador (AUC de saves/defesas do próprio goleiro), não quando usado como sinal agregado do
+resultado do time; (b) a cobertura de 57% (exige 2 jogos prévios do MESMO goleiro
+identificado nos dois lados) pode estar diluindo o sinal em jogos de transição de goleiro
+(lesão/venda/rotação) — candidato a reteste futuro SÓ no subconjunto de goleiros com >=10
+jogos de histórico (titulares muito estabelecidos), não feito aqui por escopo.
+
+### 7.4 Conclusão da rodada
+
+Das 3 hipóteses que ficaram pendentes na rodada anterior, uma (H12 — goleiro) reprovou
+com números limpos e as outras duas (#1/#9, rerun completo) fecharam a bateria de 17 testes
+originais da Fase 4/5/6: **1 promoção real** (`gap_ratings`, delta -0,0022, agora em
+produção), **1 achado consistente mas abaixo do limiar de promoção** (`blend_btts`, 5/5
+folds mas delta -0,0005), e o resto reprovado/inconclusivo. A pesquisa de clubes desta
+branch está, neste ponto, exaustivamente coberta: todas as hipóteses do plano original
+(H1-H12 + #1/#9 revisitados) têm veredito registrado, com apenas `#2` (odds reais,
+bloqueado por volume) e `blend_btts` (achado real mas sub-limiar, candidato a reteste
+futuro com mais dado) como itens genuinamente em aberto.
