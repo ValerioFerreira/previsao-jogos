@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.domains.analysis import schemas
 from app.domains.analysis.models import Analysis, FreeDailyUse
+from app.domains.admin.models import MatchDeepAnalysis
 from app.domains.analytics import service as analytics_service
 from app.domains.enums import AnalysisStatus, AnalysisType, CreditTxType
 from app.domains.users.models import User
@@ -182,12 +183,18 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
     analytics_service.track(db, "analysis_finished", user_id=user.id, analysis_id=str(analysis.id))
     db.commit()
 
+    res_snapshot = dict(snapshot)
+    if req.fixture_id:
+        da = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id == req.fixture_id)).scalar_one_or_none()
+        if da:
+            res_snapshot["deep_analysis"] = {"analyst_name": da.analyst_name, "markdown_content": da.markdown_content}
+
     return schemas.AnalysisResponse(
         id=str(analysis.id), type=atype.value, status=analysis.status.value,
         home_team=home, away_team=away, tournament=req.tournament, fixture_id=req.fixture_id,
         algo_version=ANALYSIS_ALGO_VERSION, data_version=data_version, model_hash=model_hash,
         created_at=analysis.created_at, credits_consumed=consumed, credits_reserved=reserved,
-        is_free=is_free, available_balance=wallet.available_balance, snapshot=snapshot,
+        is_free=is_free, available_balance=wallet.available_balance, snapshot=res_snapshot,
     )
 
 

@@ -13,25 +13,31 @@ import os
 from functools import lru_cache
 import numpy as np
 
-ART = os.path.join(os.path.dirname(__file__), "..", "..", "model_artifacts", "shots_prop_model.joblib")
+ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 LINE_LABEL = {1: "0.5", 2: "1.5", 3: "2.5"}  # >= N  ->  linha Over N-0.5
 
 
-@lru_cache(maxsize=1)
-def _load():
+def _art_path(scope: str) -> str:
+    d = "model_artifacts_clubes" if scope == "clube" else "model_artifacts"
+    return os.path.join(ROOT, d, "shots_prop_model.joblib")
+
+
+@lru_cache(maxsize=2)
+def _load(scope: str = "selecao"):
     import joblib
-    if not os.path.exists(ART):
+    path = _art_path(scope)
+    if not os.path.exists(path):
         return None
-    return joblib.load(ART)
+    return joblib.load(path)
 
 
-def available() -> bool:
-    return _load() is not None
+def available(scope: str = "selecao") -> bool:
+    return _load(scope) is not None
 
 
-def shots_probs_by_player(team_id: int, opp_id: int, is_home: int) -> dict[int, dict[str, float]]:
+def shots_probs_by_player(team_id: int, opp_id: int, is_home: int, scope: str = "selecao") -> dict[int, dict[str, float]]:
     """player_id -> {"0.5": p, "1.5": p, "2.5": p} (probabilidades calibradas)."""
-    art = _load()
+    art = _load(scope)
     if art is None:
         return {}
     ps = art["player_state"]

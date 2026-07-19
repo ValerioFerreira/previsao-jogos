@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domains.analysis import schemas, service
@@ -30,10 +31,17 @@ def get_analysis(analysis_id: str, user: User = Depends(get_current_user), db: S
     from app.domains.wallet.service import get_or_create_wallet
     wallet = get_or_create_wallet(db, user.id)
     db.commit()
+    res_snapshot = dict(a.snapshot)
+    if a.fixture_id:
+        from app.domains.admin.models import MatchDeepAnalysis
+        da = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id == a.fixture_id)).scalar_one_or_none()
+        if da:
+            res_snapshot["deep_analysis"] = {"analyst_name": da.analyst_name, "markdown_content": da.markdown_content}
+
     return schemas.AnalysisResponse(
         id=str(a.id), type=a.type.value, status=a.status.value, home_team=a.home_team,
         away_team=a.away_team, tournament=a.tournament, fixture_id=a.fixture_id,
         algo_version=a.algo_version, data_version=a.data_version, model_hash=a.model_hash,
         created_at=a.created_at, credits_consumed=0, credits_reserved=0,
-        available_balance=wallet.available_balance, snapshot=a.snapshot,
+        available_balance=wallet.available_balance, snapshot=res_snapshot,
     )

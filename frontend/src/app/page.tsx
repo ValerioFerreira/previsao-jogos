@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -770,6 +771,14 @@ export default function Previsoes() {
             {errMsg}{errMsg.toLowerCase().includes('insuficiente') && <> <Link href="/carteira" className="underline font-medium">Comprar créditos</Link>.</>}
           </div>
         )}
+        
+        {/* Badge Análise Aprofundada (Antes de Gerar) */}
+        {!loading && fixtureId && !analysis && upcoming.find(f => f.fixture_id === fixtureId)?.deep_analyst && (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-2 bg-slate-900 border border-indigo-500/50 text-indigo-200 text-xs px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.2)]">
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            Esta partida possui uma <strong className="text-white">Análise Aprofundada Detalhada</strong> feita pelo analista <strong className="text-white">{upcoming.find(f => f.fixture_id === fixtureId)?.deep_analyst}</strong>
+          </motion.div>
+        )}
         {user && competition === 'Copa do Mundo' && !loading && (
           <motion.p
             initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
@@ -825,6 +834,22 @@ export default function Previsoes() {
               <div className="flex justify-center">
                 <MatchReliabilityBadge confiabilidade={projection.confiabilidade} />
               </div>
+            )}
+
+            {/* ANÁLISE APROFUNDADA (Opcional) */}
+            {projection.deep_analysis && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-slate-900 border-2 border-indigo-500/40 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.15)]">
+                <div className="bg-indigo-500/10 px-5 py-3 border-b border-indigo-500/20 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                  <h3 className="font-heading font-bold text-lg text-indigo-100 tracking-wide uppercase">Análise Aprofundada Detalhada</h3>
+                </div>
+                <div className="p-5 prose prose-sm dark:prose-invert max-w-none text-slate-300">
+                  <ReactMarkdown>{(projection.deep_analysis as any).markdown_content}</ReactMarkdown>
+                </div>
+                <div className="bg-black/20 px-5 py-2.5 text-right border-t border-white/5">
+                  <span className="text-xs text-muted-foreground italic">Análise por <strong className="text-indigo-300">{(projection.deep_analysis as any).analyst_name}</strong></span>
+                </div>
+              </motion.div>
             )}
 
             {/* MERCADOS PRINCIPAIS — Resultados | Ambas Marcam / Dupla Chance | Empate Anula / Placar Exato | Handicaps */}

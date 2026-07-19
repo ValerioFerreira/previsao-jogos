@@ -15,15 +15,21 @@ from functools import lru_cache
 from typing import Any, Optional
 import numpy as np
 
-ART = os.path.join(os.path.dirname(__file__), "..", "..", "model_artifacts", "scorer_model.joblib")
+ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 
 
-@lru_cache(maxsize=1)
-def _load():
+def _art_path(scope: str) -> str:
+    d = "model_artifacts_clubes" if scope == "clube" else "model_artifacts"
+    return os.path.join(ROOT, d, "scorer_model.joblib")
+
+
+@lru_cache(maxsize=2)
+def _load(scope: str = "selecao"):
     import joblib
-    if not os.path.exists(ART):
+    path = _art_path(scope)
+    if not os.path.exists(path):
         return None
-    return joblib.load(ART)
+    return joblib.load(path)
 
 
 def _fair_odd(p: float) -> float:
@@ -33,28 +39,24 @@ def _fair_odd(p: float) -> float:
 
 def get_scorers(home: str, away: str, top: int = 12, min_recent_year: int = 2023,
                 scope: str = "selecao") -> dict[str, Any]:
-    if scope == "clube":
-        # scorer_model.joblib é treinado só com jogadores de seleção -- não expor
-        # prop errado para clube (fast-follow: retreinar com dados de clube, que
-        # têm cobertura de box-score muito melhor que seleção).
-        return {"disponivel": False, "motivo": "props de jogador ainda não disponíveis para clubes"}
-    art = _load()
+    art = _load(scope)
     if art is None:
         return {"disponivel": False, "motivo": "modelo de goleador ainda não construído"}
     from app.services.predictor_service import get_team_ids, _norm
-    name2id = get_team_ids()
+    name2id = get_team_ids(scope)
     hid = name2id.get(_norm(home)) or name2id.get(home)
     aid = name2id.get(_norm(away)) or name2id.get(away)
     if not hid or not aid:
-        return {"disponivel": False, "motivo": "sem team_id para uma das seleções"}
+        return {"disponivel": False, "motivo": "sem team_id para uma das equipes"}
 
     ps = art["player_state"]; td = art["team_def"].set_index("team_id")["gc"].to_dict()
     model, iso, feats = art["model"], art["calibrator"], art["feats"]
     glob_gc = art["glob_gc"]
 
-    # Prop de finalizações do jogador (mesmo elenco), anexado a cada jogador.
-    from app.services import shots_prop_service
-    shots_ok = shots_prop_service.available()
+    # Prop de finalizações e de assistência do jogador (mesmo elenco), anexadas a cada jogador.
+    from app.services import shots_prop_service, assist_service
+    shots_ok = shots_prop_service.available(scope)
+    assist_ok = assist_service.available(scope)
 
     def side(team_id: int, opp_id: int, is_home: int):
         cand = ps[ps["team_id"] == team_id].copy()
@@ -71,7 +73,8 @@ def get_scorers(home: str, away: str, top: int = 12, min_recent_year: int = 2023
         cal = np.clip(iso.predict(raw), 1e-4, 1 - 1e-4)
         cand["prob"] = cal
         cand = cand.sort_values("prob", ascending=False).head(top)
-        shots_map = shots_prop_service.shots_probs_by_player(team_id, opp_id, is_home) if shots_ok else {}
+        shots_map = shots_prop_service.shots_probs_by_player(team_id, opp_id, is_home, scope) if shots_ok else {}
+        assist_map = assist_service.assist_probs_by_player(team_id, opp_id, is_home, scope) if assist_ok else {}
         rows = []
         for _, r in cand.iterrows():
             pid = int(r.player_id) if r.player_id == r.player_id else None
@@ -81,11 +84,15 @@ def get_scorers(home: str, away: str, top: int = 12, min_recent_year: int = 2023
             if sp:
                 item["finalizar"] = {line: {"prob": round(100 * p, 1), "odd_justa": _fair_odd(p)}
                                      for line, p in sp.items()}
+            ap = assist_map.get(pid) if pid is not None else None
+            if ap is not None:
+                item["assistir"] = {"prob": round(100 * ap, 1), "odd_justa": _fair_odd(ap)}
             rows.append(item)
         return rows
 
     return {"disponivel": True,
-            "info": "P(marca a qualquer momento | joga) e P(finalizações ≥ linha | joga), calibradas. "
-                    "Candidatos = elenco recente da seleção.",
+            "info": "P(marca a qualquer momento | joga), P(finalizações ≥ linha | joga) e "
+                    "P(dá assistência | joga), calibradas. Candidatos = elenco recente.",
             "finalizar_disponivel": shots_ok,
+            "assistir_disponivel": assist_ok,
             home: side(hid, aid, 1), away: side(aid, hid, 0)}

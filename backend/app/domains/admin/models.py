@@ -50,3 +50,12 @@ class Banner(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # ordem fina entre banners de mesma prioridade.
     priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class MatchDeepAnalysis(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Análise aprofundada textual feita por administradores para uma partida específica."""
+    __tablename__ = "app_match_deep_analyses"
+
+    fixture_id: Mapped[int] = mapped_column(Integer, unique=True, index=True, nullable=False)
+    analyst_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    markdown_content: Mapped[str] = mapped_column(String, nullable=False)

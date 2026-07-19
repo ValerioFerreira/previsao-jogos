@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2, Shield, Ban, CheckCircle2, Coins, Plus, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { adminApi, type AdminUser, type AuditEntry } from "@/lib/adminApi";
+import { api, type UpcomingFixture } from "@/lib/api";
 import { legalApi, type LegalDoc } from "@/lib/monetizationApi";
+import { MatchPickerModal } from "@/components/platform/MatchPickerModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -168,10 +170,18 @@ export default function AdminPage() {
   const [affiliates, setAffiliates] = useState<Record<string, unknown>[]>([]);
   const [banners, setBanners] = useState<Record<string, unknown>[]>([]);
   const [campaigns, setCampaigns] = useState<Record<string, unknown>[]>([]);
+  const [deepAnalyses, setDeepAnalyses] = useState<Record<string, unknown>[]>([]);
+  const [demoUsage, setDemoUsage] = useState<Record<string, unknown>[]>([]);
   const [settings, setSettings] = useState<Record<string, unknown>[]>([]);
   const [legalDocs, setLegalDocs] = useState<LegalDoc[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [legalMsg, setLegalMsg] = useState<string | null>(null);
+
+  // States for MatchPickerModal
+  const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
+  const [teamIds, setTeamIds] = useState<Record<string, number>>({});
+  const [allCompetitions, setAllCompetitions] = useState<{ selecao: string[]; clube: string[] }>({ selecao: [], clube: [] });
+  const [pickerDeepAnalysisOpen, setPickerDeepAnalysisOpen] = useState(false);
 
   const [newPromo, setNewPromo] = useState({ code: "", name: "", type: "refund_if_lose" });
   const [newCoupon, setNewCoupon] = useState({
@@ -187,9 +197,9 @@ export default function AdminPage() {
   const [partnerFilter, setPartnerFilter] = useState("");
   const [partnerSortByCommission, setPartnerSortByCommission] = useState(false);
   const [approveCodeDrafts, setApproveCodeDrafts] = useState<Record<string, string>>({});
-  const [demoUsage, setDemoUsage] = useState<{ cpf: string; affiliate_name: string | null; logins: number; analyses: number; last_login_at: string }[]>([]);
   const [newBanner, setNewBanner] = useState({ title: "", body: "", image_url: "", priority: "0", sort_order: "0" });
   const [newCampaign, setNewCampaign] = useState({ name: "", priority: "0" });
+  const [newDeepAnalysis, setNewDeepAnalysis] = useState({ fixture_id: "", analyst_name: "", markdown_content: "" });
   const [newSetting, setNewSetting] = useState({ key: "", value: "" });
   const [attributionDays, setAttributionDays] = useState("30");
 
@@ -224,15 +234,24 @@ export default function AdminPage() {
   const loadAll = useCallback(async () => {
     await loadUsers();
     try {
-      const [p, pr, a, d, cp, ca, pk, af, bn, cm, st, ld, du] = await Promise.all([
+      const [p, pr, a, d, cp, ca, pk, af, ld, du] = await Promise.all([
         adminApi.payments(), adminApi.promotions(), adminApi.audit(), adminApi.dashboard(),
         adminApi.coupons(), adminApi.couponAnalytics(), adminApi.packages(), adminApi.affiliates(),
-        adminApi.banners(), adminApi.campaigns(), adminApi.settings(), legalApi.documents(),
+        legalApi.documents(),
         adminApi.demoUsage(),
+      ]);
+      await Promise.all([
+        adminApi.campaigns().then(r => setCampaigns(r.items)),
+        adminApi.deepAnalyses().then(r => setDeepAnalyses(r.items)),
+        adminApi.settings().then(r => setSettings(r.items)),
+        adminApi.banners().then(r => setBanners(r.items)),
+        api.upcomingFixtures().then(r => setUpcoming(r.fixtures)),
+        Promise.all([api.teamIds("selecao"), api.teamIds("clube")]).then(([sel, clu]) => setTeamIds({ ...sel, ...clu })),
+        Promise.all([api.teams("selecao"), api.teams("clube")]).then(([sel, clu]) => setAllCompetitions({ selecao: sel.tournaments, clube: clu.tournaments }))
       ]);
       setPayments(p.items); setPromos(pr.items); setAudit(a.items); setDashboard(d);
       setCoupons(cp.items); setCouponAnalytics(ca.items); setPackages(pk.items); setAffiliates(af.items);
-      setBanners(bn.items); setCampaigns(cm.items); setSettings(st.items); setLegalDocs(ld);
+      setLegalDocs(ld);
       setDemoUsage(du.items);
     } catch (e) { setErr((e as Error).message); }
   }, [loadUsers]);
@@ -599,6 +618,31 @@ export default function AdminPage() {
     } catch (e) { setErr((e as Error).message); }
   }
 
+  async function submitDeepAnalysis(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await adminApi.upsertDeepAnalysis({
+        fixture_id: Number(newDeepAnalysis.fixture_id),
+        analyst_name: newDeepAnalysis.analyst_name,
+        markdown_content: newDeepAnalysis.markdown_content,
+      });
+      setNewDeepAnalysis({ fixture_id: "", analyst_name: "", markdown_content: "" });
+      setDeepAnalyses((await adminApi.deepAnalyses()).items);
+    } catch (e) { setErr((e as Error).message); }
+  }
+
+  function deleteDeepAnalysis(fixtureId: number) {
+    setConfirmState({
+      message: "Excluir esta análise aprofundada?",
+      onConfirm: async () => {
+        try {
+          await adminApi.deleteDeepAnalysis(fixtureId);
+          setDeepAnalyses((await adminApi.deepAnalyses()).items);
+        } catch (e) { setErr((e as Error).message); }
+      },
+    });
+  }
+
   if (loading || !isAdmin) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   const rev = dashboard?.revenue as Record<string, string> | undefined;
@@ -621,6 +665,7 @@ export default function AdminPage() {
           <TabsTrigger value="afiliados">Parceiros</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="config">Configurações</TabsTrigger>
+          <TabsTrigger value="deep">Análise Aprofundada</TabsTrigger>
           <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
         </TabsList>
 
@@ -1095,12 +1140,12 @@ export default function AdminPage() {
                   </thead>
                   <tbody className="divide-y">
                     {demoUsage.map((d) => (
-                      <tr key={d.cpf} className="hover:bg-muted/30">
-                        <td className="px-3 py-2 font-mono text-xs">{d.cpf}</td>
-                        <td className="px-3 py-2">{d.affiliate_name ?? "—"}</td>
-                        <td className="px-3 py-2 text-right">{d.logins}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{d.analyses}</td>
-                        <td className="px-3 py-2 text-right text-xs text-muted-foreground">{fmt(d.last_login_at)}</td>
+                      <tr key={String(d.cpf)} className="hover:bg-muted/30">
+                        <td className="px-3 py-2 font-mono text-xs">{String(d.cpf)}</td>
+                        <td className="px-3 py-2">{String(d.affiliate_name ?? "—")}</td>
+                        <td className="px-3 py-2 text-right">{Number(d.logins)}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{Number(d.analyses)}</td>
+                        <td className="px-3 py-2 text-right text-xs text-muted-foreground">{fmt(String(d.last_login_at))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1167,6 +1212,59 @@ export default function AdminPage() {
                   </div>
                 ))}
                 {settings.filter((s) => s.key !== "affiliate_attribution_days").length === 0 && <p className="text-sm text-muted-foreground">Nenhuma configuração definida (usa os defaults do código).</p>}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------- Análise Aprofundada ---------------- */}
+        <TabsContent value="deep">
+          <Card>
+            <CardHeader><CardTitle>Análise Aprofundada Detalhada</CardTitle></CardHeader>
+            <CardContent>
+              <form onSubmit={submitDeepAnalysis} className="space-y-4 max-w-2xl bg-muted/30 p-4 rounded-lg border border-border/50 mb-8">
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Partida (Selecione a partida agendada)">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start text-left"
+                      onClick={() => setPickerDeepAnalysisOpen(true)}
+                    >
+                      {newDeepAnalysis.fixture_id
+                        ? upcoming.find(f => String(f.fixture_id) === newDeepAnalysis.fixture_id)?.home
+                          ? `${upcoming.find(f => String(f.fixture_id) === newDeepAnalysis.fixture_id)?.home} x ${upcoming.find(f => String(f.fixture_id) === newDeepAnalysis.fixture_id)?.away}`
+                          : `ID: ${newDeepAnalysis.fixture_id}`
+                        : "Selecionar Partida..."}
+                    </Button>
+                  </Field>
+                  <Field label="Nome do Analista">
+                    <Input required value={newDeepAnalysis.analyst_name} onChange={(e) => setNewDeepAnalysis({ ...newDeepAnalysis, analyst_name: e.target.value })} />
+                  </Field>
+                </div>
+                <Field label="Conteúdo da Análise (Markdown)">
+                  <Textarea className="min-h-[250px] font-mono text-xs" required value={newDeepAnalysis.markdown_content} onChange={(e) => setNewDeepAnalysis({ ...newDeepAnalysis, markdown_content: e.target.value })} />
+                </Field>
+                <div className="flex justify-end"><Button type="submit" size="sm"><Plus className="w-4 h-4 mr-1" /> Salvar / Atualizar Análise</Button></div>
+              </form>
+
+              <div className="space-y-3">
+                {deepAnalyses.map(da => (
+                  <div key={String(da.id)} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
+                    <div>
+                      <div className="font-semibold text-sm">Partida ID: {String(da.fixture_id)}</div>
+                      <div className="text-xs text-muted-foreground flex gap-3 mt-1">
+                        <span>Analista: {String(da.analyst_name)}</span>
+                        <span>Atualizado em: {fmt(String(da.updated_at))}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setNewDeepAnalysis({ fixture_id: String(da.fixture_id), analyst_name: String(da.analyst_name), markdown_content: String(da.markdown_content) })}>Editar</Button>
+                      <Button variant="destructive" size="sm" onClick={() => deleteDeepAnalysis(Number(da.fixture_id))}>Excluir</Button>
+                    </div>
+                  </div>
+                ))}
+                {deepAnalyses.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhuma análise cadastrada.</p>}
               </div>
             </CardContent>
           </Card>
@@ -1394,6 +1492,17 @@ export default function AdminPage() {
           </div>
         )}
       </Modal>
+
+      <MatchPickerModal
+        open={pickerDeepAnalysisOpen}
+        onOpenChange={setPickerDeepAnalysisOpen}
+        fixtures={upcoming}
+        teamIds={teamIds}
+        onSelect={(fx) => { setNewDeepAnalysis({ ...newDeepAnalysis, fixture_id: String(fx.fixture_id) }); setPickerDeepAnalysisOpen(false); }}
+        title="Selecionar Partida para Análise Aprofundada"
+        defaultScope="selecao"
+        allCompetitions={allCompetitions}
+      />
     </div>
   );
 }

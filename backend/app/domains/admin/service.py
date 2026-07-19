@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from app.domains.admin import schemas
-from app.domains.admin.models import AdminAuditLog, Banner, PlatformSetting
+from app.domains.admin.models import AdminAuditLog, Banner, PlatformSetting, MatchDeepAnalysis
 from app.domains.affiliates import service as affiliates_service
 from app.domains.affiliates.models import Affiliate, AffiliateCommission, AffiliatePayment, DemoAccessLog
 from app.domains.analysis.models import Analysis
@@ -1089,3 +1089,42 @@ def list_audit(db: Session, limit: int, offset: int) -> dict:
                        "target_id": str(a.target_id) if a.target_id else None,
                        "before": a.before, "after": a.after, "created_at": a.created_at.isoformat()}
                       for a in rows], "total": total, "limit": limit, "offset": offset}
+
+
+# --------------------------------------------------------------- deep analysis
+def _deep_analysis_out(da: MatchDeepAnalysis) -> dict:
+    return {
+        "id": str(da.id),
+        "fixture_id": da.fixture_id,
+        "analyst_name": da.analyst_name,
+        "markdown_content": da.markdown_content,
+        "created_at": da.created_at.isoformat(),
+        "updated_at": da.updated_at.isoformat(),
+    }
+
+def list_deep_analyses(db: Session) -> dict:
+    rows = db.execute(select(MatchDeepAnalysis).order_by(MatchDeepAnalysis.created_at.desc())).scalars().all()
+    return {"items": [_deep_analysis_out(da) for da in rows]}
+
+def upsert_deep_analysis(db: Session, admin: User, data: schemas.MatchDeepAnalysisRequest, ip) -> dict:
+    da = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id == data.fixture_id)).scalar_one_or_none()
+    if da:
+        before = _deep_analysis_out(da)
+        da.analyst_name = data.analyst_name
+        da.markdown_content = data.markdown_content
+        audit(db, admin, "deep_analysis_update", "deep_analysis", da.id, before=before, after=_deep_analysis_out(da), ip=ip)
+    else:
+        da = MatchDeepAnalysis(fixture_id=data.fixture_id, analyst_name=data.analyst_name, markdown_content=data.markdown_content)
+        db.add(da)
+        db.flush()
+        audit(db, admin, "deep_analysis_create", "deep_analysis", da.id, after=_deep_analysis_out(da), ip=ip)
+    db.commit()
+    return _deep_analysis_out(da)
+
+def delete_deep_analysis(db: Session, admin: User, fixture_id: int, ip) -> None:
+    da = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id == fixture_id)).scalar_one_or_none()
+    if not da:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Análise não encontrada.")
+    audit(db, admin, "deep_analysis_delete", "deep_analysis", da.id, before=_deep_analysis_out(da), ip=ip)
+    db.delete(da)
+    db.commit()

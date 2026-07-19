@@ -55,6 +55,13 @@ export default function AccountMenu() {
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
           <DropdownMenuSeparator />
+          {(user.role === "admin" || user.role === "superadmin") && (
+            <DropdownMenuItem asChild>
+              <Link href="/admin" className="cursor-pointer font-medium text-emerald-600 dark:text-emerald-400">
+                Painel Admin
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem asChild>
             <Link href="/perfil" className="cursor-pointer">
               <UserIcon className="w-4 h-4 mr-2" /> Meu perfil

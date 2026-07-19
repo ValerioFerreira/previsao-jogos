@@ -73,10 +73,6 @@ export default function PerfilPage() {
                   <span className="text-muted-foreground">{k}</span><span className="font-medium">{v}</span>
                 </div>
               ))}
-              <div className="pt-3 flex gap-2">
-                <Link href="/carteira"><Button variant="outline" size="sm">Carteira</Button></Link>
-                {(user.role === "admin" || user.role === "superadmin") && <Link href="/admin"><Button size="sm">Painel admin</Button></Link>}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

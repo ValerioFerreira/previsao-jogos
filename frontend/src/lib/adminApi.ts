@@ -79,6 +79,11 @@ export const adminApi = {
     authFetch(`/admin/banners/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteBanner: (id: string) => authFetch(`/admin/banners/${id}`, { method: "DELETE" }),
 
+  deepAnalyses: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/deep-analyses"),
+  upsertDeepAnalysis: (body: Record<string, unknown>) =>
+    authFetch("/admin/deep-analyses", { method: "POST", body: JSON.stringify(body) }),
+  deleteDeepAnalysis: (fixtureId: number) => authFetch(`/admin/deep-analyses/${fixtureId}`, { method: "DELETE" }),
+
   campaigns: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/campaigns"),
   createCampaign: (body: Record<string, unknown>) =>
     authFetch("/admin/campaigns", { method: "POST", body: JSON.stringify(body) }),

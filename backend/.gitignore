@@ -17,6 +17,8 @@ reports/
 # Prevent ignoring essential files in model_artifacts
 !model_artifacts/
 !model_artifacts/*
+!model_artifacts_clubes/
+!model_artifacts_clubes/*
 
 # Ignore root level heavy CSV and JSON
 /*.csv

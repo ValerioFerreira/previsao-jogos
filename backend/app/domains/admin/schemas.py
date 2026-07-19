@@ -219,6 +219,13 @@ class LegalPublishRequest(BaseModel):
     body_md: str
 
 
+# ---------- deep analysis ----------
+class MatchDeepAnalysisRequest(BaseModel):
+    fixture_id: int
+    analyst_name: str
+    markdown_content: str
+
+
 class OkResponse(BaseModel):
     ok: bool = True
     detail: str | None = None

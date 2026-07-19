@@ -13,10 +13,11 @@ validado na bateria EXP8 (finalizações do jogador >=2: AUC 0,74->0,76). Aqui:
 
 Uso: python scripts/build_shots_prop_model.py
 """
+import argparse
 import sys, json, warnings
 from pathlib import Path
 import numpy as np, pandas as pd, joblib
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import log_loss, roc_auc_score
 warnings.filterwarnings("ignore")
@@ -26,18 +27,17 @@ try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
-OUT = ROOT / "model_artifacts" / "shots_prop_model.joblib"
 WINS = [3, 5, 10]
 LINES = [1, 2, 3]  # >= N finalizações (linhas 0.5, 1.5, 2.5)
 FEATS = ["base_shots", "form_shots_5", "form_shots_10", "form_rating_5",
          "minutes_base", "is_home", "opp_shots_allowed"]
 
 
-def load_from_cache():
+def load_from_cache(scope: str = "selecao"):
     # Bruto do espelho LOCAL (SQLite) quando disponível — zero egress do Neon no rebuild.
     from app.services import raw_cache
     pg, team_shots = [], []
-    for d in raw_cache.iter_all_raw():
+    for d in raw_cache.iter_all_raw(scope):
         if not d:
             continue
         fx = d.get("fixture") or {}
@@ -123,7 +123,7 @@ def temporal_validation(df, target="ge2"):
         tr, te = d.iloc[:n], d.iloc[n:m]
         if len(te) < 300:
             continue
-        clf = GradientBoostingClassifier(n_estimators=200, max_depth=3, learning_rate=0.05, random_state=42)
+        clf = HistGradientBoostingClassifier(max_iter=200, max_depth=3, learning_rate=0.05, random_state=42)
         clf.fit(tr[FEATS], tr[target])
         p = clf.predict_proba(te[FEATS])[:, 1]
         # base: rank pela taxa-base de finalizações (base_shots)
@@ -140,8 +140,13 @@ def temporal_validation(df, target="ge2"):
 
 
 def main():
-    print("Carregando cache...", flush=True)
-    pg, ts = load_from_cache()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scope", choices=["selecao", "clube"], default="selecao")
+    args = ap.parse_args()
+    out = ROOT / ("model_artifacts_clubes" if args.scope == "clube" else "model_artifacts") / "shots_prop_model.joblib"
+
+    print(f"Carregando cache (scope={args.scope})...", flush=True)
+    pg, ts = load_from_cache(args.scope)
     ts, glob_sa = team_defense(ts)
     df, gsh, gr, glob_sa = build_features(pg, ts, glob_sa)
     print(f"player-games: {len(df)} | media finalizacoes={df.shots.mean():.2f} | "
@@ -168,10 +173,10 @@ def main():
     models = {}
     for L in LINES:
         y = d[f"ge{L}"]
-        clf_cal = GradientBoostingClassifier(n_estimators=200, max_depth=3, learning_rate=0.05, random_state=42).fit(d.iloc[:cut][FEATS], y.iloc[:cut])
+        clf_cal = HistGradientBoostingClassifier(max_iter=200, max_depth=3, learning_rate=0.05, random_state=42).fit(d.iloc[:cut][FEATS], y.iloc[:cut])
         pv = clf_cal.predict_proba(d.iloc[cut:][FEATS])[:, 1]
         iso = IsotonicRegression(out_of_bounds="clip").fit(pv, y.iloc[cut:].values)
-        clf = GradientBoostingClassifier(n_estimators=200, max_depth=3, learning_rate=0.05, random_state=42).fit(d[FEATS], y)
+        clf = HistGradientBoostingClassifier(max_iter=200, max_depth=3, learning_rate=0.05, random_state=42).fit(d[FEATS], y)
         models[L] = {"model": clf, "calibrator": iso}
 
     latest = df.sort_values("date").groupby("player_id").tail(1).copy()
@@ -182,8 +187,8 @@ def main():
     joblib.dump({"models": models, "lines": LINES, "feats": FEATS,
                  "glob_sa": float(glob_sa), "glob_shots": float(gsh), "glob_rating": float(gr),
                  "player_state": player_state, "team_def": team_def,
-                 "built_at": pd.Timestamp.now().isoformat(), "n_train": int(len(d))}, OUT)
-    print(f"\nArtefato salvo: {OUT} | jogadores no estado: {len(player_state)} | times: {len(team_def)}", flush=True)
+                 "built_at": pd.Timestamp.now().isoformat(), "n_train": int(len(d))}, out)
+    print(f"\nArtefato salvo: {out} | jogadores no estado: {len(player_state)} | times: {len(team_def)}", flush=True)
 
 
 if __name__ == "__main__":

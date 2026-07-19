@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 from fastapi.middleware.cors import CORSMiddleware
 
 # Precisa vir antes de allowed_origins() (usado no add_middleware abaixo): é este import
@@ -70,6 +72,7 @@ from app.domains.payments.router import router as payments_router  # noqa: E402
 from app.domains.legal.router import router as legal_router  # noqa: E402
 from app.domains.analysis.router import router as analysis_router  # noqa: E402
 from app.domains.bets.router import router as bets_router  # noqa: E402
+from app.domains.auth.deps import get_db
 from app.domains.admin.router import router as admin_router  # noqa: E402
 from app.domains.security.router import router as security_router  # noqa: E402
 from app.domains.promotions.router import router as promotions_router  # noqa: E402
@@ -237,8 +240,17 @@ def competition_benchmark(tournament: str = Query(""), scope: str = Query("selec
 
 
 @app.get("/api/fixtures/upcoming")
-def upcoming_fixtures() -> dict:
-    return {"fixtures": get_upcoming_fixtures()}
+def upcoming_fixtures(db: Session = Depends(get_db)) -> dict:
+    from app.domains.admin.models import MatchDeepAnalysis
+    fixtures = get_upcoming_fixtures()
+    if fixtures:
+        f_ids = [f["fixture_id"] for f in fixtures if f.get("fixture_id")]
+        analyses = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id.in_(f_ids))).scalars().all() if f_ids else []
+        amap = {a.fixture_id: a.analyst_name for a in analyses}
+        for f in fixtures:
+            if f.get("fixture_id") in amap:
+                f["deep_analyst"] = amap[f["fixture_id"]]
+    return {"fixtures": fixtures}
 
 
 @app.get("/api/fixtures/past")

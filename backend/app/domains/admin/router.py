@@ -334,6 +334,25 @@ def delete_banner(banner_id: str, request: Request,
     return schemas.OkResponse(detail="Banner excluído.")
 
 
+# ---------- deep analysis ----------
+@router.get("/deep-analyses")
+def list_deep_analyses(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.list_deep_analyses(db)
+
+
+@router.post("/deep-analyses")
+def upsert_deep_analysis(data: schemas.MatchDeepAnalysisRequest, request: Request,
+                         admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.upsert_deep_analysis(db, admin, data, client_ip(request))
+
+
+@router.delete("/deep-analyses/{fixture_id}", response_model=schemas.OkResponse)
+def delete_deep_analysis(fixture_id: int, request: Request,
+                         admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    service.delete_deep_analysis(db, admin, fixture_id, client_ip(request))
+    return schemas.OkResponse(detail="Análise profunda excluída.")
+
+
 # ---------- auditoria ----------
 @router.get("/audit")
 def audit_log(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),

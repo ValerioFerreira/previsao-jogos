@@ -389,9 +389,10 @@ export type PropLine = { prob: number; odd_justa: number };
 export type ScorerPlayer = {
   player_id: number | null; nome: string; pos: string | null; prob: number; odd_justa: number;
   finalizar?: Record<string, PropLine>;  // { "0.5": {...}, "1.5": {...}, "2.5": {...} }
+  assistir?: PropLine;
 };
 export type ScorersResponse = {
-  disponivel: boolean; motivo?: string; info?: string; finalizar_disponivel?: boolean;
+  disponivel: boolean; motivo?: string; info?: string; finalizar_disponivel?: boolean; assistir_disponivel?: boolean;
   [team: string]: boolean | string | ScorerPlayer[] | undefined;
 };
 

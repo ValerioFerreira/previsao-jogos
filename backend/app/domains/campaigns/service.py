@@ -41,7 +41,7 @@ def list_active_campaigns(db: Session) -> list[dict]:
 
         out.append({
             "id": str(c.id), "name": c.name, "priority": c.priority,
-            "banner": {"title": banner.title, "body": banner.body, "type": banner.type} if banner else None,
+            "banner": {"title": banner.title, "body": banner.body, "type": banner.type} if (banner and banner.active) else None,
             "packages": [{"id": str(p.id), "name": p.name, "credits": p.credits,
                          "price_brl": str(p.price_brl)} for p in packages],
             "coupons": [{"id": str(co.id), "code": co.code} for co in coupons],

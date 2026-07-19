@@ -475,18 +475,84 @@ def get_system_status() -> dict[str, str]:
     return {"last_successful_run": "2026-06-22 00:00:00"}
 
 
+_CLUB_MATCHES_LONG_MEMO: pd.DataFrame | None = None
+_CLUB_GOAL_TIMING_MEMO: pd.DataFrame | None = None
+
+
+def _load_club_matches_long() -> pd.DataFrame:
+    """club_matches_long.parquet (scripts/build_club_local_history.py) -- equivalente
+    local da tabela `matches` do Neon, mas para clube. Memoizado em processo."""
+    global _CLUB_MATCHES_LONG_MEMO
+    if _CLUB_MATCHES_LONG_MEMO is None:
+        path = ARTIFACT_DIR_CLUBES / "club_matches_long.parquet"
+        try:
+            df = pd.read_parquet(path)
+            df["date"] = pd.to_datetime(df["date"])
+        except Exception as e:
+            print(f"[AVISO] club_matches_long.parquet: {e}")
+            df = pd.DataFrame(columns=["team", "opponent", "date", "competition", "is_home",
+                                        "goals_scored", "goals_conceded", "sb_shots",
+                                        "sb_shots_on_target", "sb_corners", "sb_cards",
+                                        "sb_offsides", "sb_fouls", "sb_possession", "sb_passes"])
+        _CLUB_MATCHES_LONG_MEMO = df
+    return _CLUB_MATCHES_LONG_MEMO
+
+
+def _load_club_goal_timing() -> pd.DataFrame:
+    global _CLUB_GOAL_TIMING_MEMO
+    if _CLUB_GOAL_TIMING_MEMO is None:
+        path = ARTIFACT_DIR_CLUBES / "club_goal_timing.parquet"
+        try:
+            df = pd.read_parquet(path)
+        except Exception as e:
+            print(f"[AVISO] club_goal_timing.parquet: {e}")
+            df = pd.DataFrame(columns=["team", "n_matches"] +
+                               [f"scored_{i}" for i in range(6)] + [f"conceded_{i}" for i in range(6)])
+        _CLUB_GOAL_TIMING_MEMO = df
+    return _CLUB_GOAL_TIMING_MEMO
+
+
+def _club_recent_matches(team_name: str) -> dict[str, Any]:
+    df = _load_club_matches_long()
+    sub = df[df["team"] == team_name]
+    if sub.empty:
+        return {"matches": [], "total_matches": 0}
+    sub = sub.sort_values("date", ascending=False)
+    matches = []
+    for _, row in sub.head(60).iterrows():
+        def _f(col):
+            v = row.get(col)
+            return float(v) if pd.notna(v) else 0.0
+        matches.append({
+            "date": row["date"].strftime("%Y-%m-%d"),
+            "opponent": str(row["opponent"]),
+            "competition": str(row["competition"]) if pd.notna(row.get("competition")) else "",
+            "is_home": bool(row["is_home"]),
+            "goals_scored": int(_f("goals_scored")),
+            "goals_conceded": int(_f("goals_conceded")),
+            "sb_shots": _f("sb_shots"),
+            "sb_shots_on_target": _f("sb_shots_on_target"),
+            "sb_corners": _f("sb_corners"),
+            "sb_cards": _f("sb_cards"),
+            "sb_offsides": _f("sb_offsides"),
+            "sb_fouls": _f("sb_fouls"),
+            "sb_possession": _f("sb_possession"),
+            "sb_passes": _f("sb_passes"),
+        })
+    return {"matches": matches, "total_matches": len(sub)}
+
+
 def get_recent_matches(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     """Consulta PostgreSQL e extrai as últimas 60 partidas reais da equipe.
 
     60 (e não 10) para dar sinal suficiente aos cálculos de momentum/tendência da
     página de Estatísticas (comparando os 10 mais recentes com os 50 anteriores).
 
-    Escopo 'clube': a tabela `matches` (agregado precomputado) só cobre seleções hoje
-    -- degrada com graça (lista vazia) até um `club_matches` equivalente existir
-    (fast-follow, ver DOCUMENTACAO_CENTRAL.md §14).
+    Escopo 'clube': lê o equivalente local club_matches_long.parquet (ver
+    scripts/build_club_local_history.py) -- 100% local, sem tocar o Neon.
     """
     if scope == "clube":
-        return {"matches": [], "total_matches": 0}
+        return _club_recent_matches(team_name)
     from app.db.connection import engine
     from sqlalchemy import text as _text
     try:
@@ -565,8 +631,12 @@ def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     ]
 
     if scope == "clube":
-        return {"team": team_name, "elo_history": elo_history, "attack_avg": 0.0,
-                "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
+        df_team = _load_club_matches_long()
+        df_team = df_team[df_team["team"] == team_name].sort_values("date", ascending=True)
+        if df_team.empty:
+            return {"team": team_name, "elo_history": elo_history, "attack_avg": 0.0,
+                    "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
+        return _team_history_from_matches(team_name, df_team, elo_history)
     from app.db.connection import engine
     from sqlalchemy import text as _text
     try:
@@ -581,6 +651,13 @@ def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     if df_team.empty:
         return {"team": team_name, "elo_history": elo_history, "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
 
+    return _team_history_from_matches(team_name, df_team, elo_history)
+
+
+def _team_history_from_matches(team_name: str, df_team: pd.DataFrame, elo_history: list) -> dict[str, Any]:
+    """Trend/ataque-defesa/frequência de escanteios-cartões a partir de um df já
+    ordenado por data ASC com colunas goals_scored/goals_conceded/sb_corners/sb_cards
+    -- compartilhado entre seleção (via Neon) e clube (via club_matches_long local)."""
     # Tendência de gols nas últimas 10 partidas (marcados vs sofridos).
     goal_trend = []
     for _, row in df_team.tail(10).iterrows():
@@ -602,13 +679,13 @@ def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     # 3. Frequência de Escanteios (últimas 20 partidas)
     corners_freq = []
     cards_freq = []
-    
+
     if len(df_recent_20) > 0:
         corners_counts = df_recent_20["sb_corners"].value_counts().sort_index()
         for val, count in corners_counts.items():
             if pd.notna(val):
                 corners_freq.append({"label": str(int(val)), "frequency": int(count)})
-                
+
         cards_counts = df_recent_20["sb_cards"].value_counts().sort_index()
         for val, count in cards_counts.items():
             if pd.notna(val):
@@ -638,16 +715,34 @@ def _timing_block_idx(elapsed: int) -> int:
     return min((elapsed - 1) // 15, 5)
 
 
+def _club_goal_timing(team_name: str) -> dict[str, Any]:
+    blocks = [{"label": lbl, "scored": 0, "conceded": 0} for _, _, lbl in _TIMING_BLOCKS]
+    empty = {"team": team_name, "n_matches": 0, "total_scored": 0, "total_conceded": 0, "blocks": blocks}
+    df = _load_club_goal_timing()
+    row = df[df["team"] == team_name]
+    if row.empty:
+        return empty
+    r = row.iloc[0]
+    blocks = [{"label": lbl, "scored": int(r[f"scored_{i}"]), "conceded": int(r[f"conceded_{i}"])}
+              for i, (_, _, lbl) in enumerate(_TIMING_BLOCKS)]
+    return {
+        "team": team_name,
+        "n_matches": int(r["n_matches"]),
+        "total_scored": sum(b["scored"] for b in blocks),
+        "total_conceded": sum(b["conceded"] for b in blocks),
+        "blocks": blocks,
+    }
+
+
 def get_goal_timing(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     """Distribuição de MINUTAGEM de gols (marcados e sofridos) por blocos de 15',
     agregada do histórico já cacheado (match_detail_cache). Zero chamada à API.
-    Escopo 'clube': match_detail_cache/goal_timing_agg só cobrem seleções hoje --
-    degrada com graça (fast-follow: club_match_detail_cache já existe, falta o
-    agregado equivalente)."""
+    Escopo 'clube': lê club_goal_timing.parquet (pré-computado localmente por
+    scripts/build_club_local_history.py a partir do club_raw_cache.sqlite)."""
     blocks = [{"label": lbl, "scored": 0, "conceded": 0} for _, _, lbl in _TIMING_BLOCKS]
     empty = {"team": team_name, "n_matches": 0, "total_scored": 0, "total_conceded": 0, "blocks": blocks}
     if scope == "clube":
-        return empty
+        return _club_goal_timing(team_name)
     if team_name in _GOAL_TIMING_MEMO:
         return _GOAL_TIMING_MEMO[team_name]
 
@@ -912,15 +1007,48 @@ _COMP_BUCKETS: dict[str, list[str]] = {
 }
 
 
+def _club_competition_benchmark(tournament: str) -> dict[str, Any]:
+    empty = {"attack_mean": 0.0, "attack_std": 0.0, "defense_mean": 0.0,
+             "defense_std": 0.0, "n_teams": 0, "scope": "global"}
+    df = _load_club_matches_long()
+    if df.empty:
+        return empty
+    # 'tournament' vem cru do frontend (fx.tournament, mesma string de club_features_enriched)
+    # -- casa exato com a coluna 'competition' de club_matches_long.
+    teams_in = set(df.loc[df["competition"] == tournament, "team"].unique())
+    scope_out = "competition"
+    if len(teams_in) < 4:
+        teams_in = set(df["team"].unique())
+        scope_out = "global"
+    sub = df[df["team"].isin(teams_in)]
+    per = sub.groupby("team").agg(atk=("goals_scored", "mean"),
+                                  dff=("goals_conceded", "mean"),
+                                  n=("goals_scored", "size"))
+    per = per[per["n"] >= 5]
+    if per.empty:
+        return empty
+    out = {
+        "attack_mean": round(float(per["atk"].mean()), 3),
+        "attack_std": round(float(per["atk"].std(ddof=0)), 3),
+        "defense_mean": round(float(per["dff"].mean()), 3),
+        "defense_std": round(float(per["dff"].std(ddof=0)), 3),
+        "n_teams": int(len(per)),
+        "scope": scope_out,
+    }
+    out["team_stats"] = {team: {"attack": round(float(row["atk"]), 3), "defense": round(float(row["dff"]), 3)}
+                          for team, row in per.iterrows()}
+    return out
+
+
 def get_competition_benchmark(tournament: str, scope: str = "selecao") -> dict[str, Any]:
     """Faixa típica de ataque/defesa (gols pró/contra por jogo) das seleções que disputam
     a competição analisada — usada para desenhar o 'cardume' no gráfico de quadrantes.
-    Escopo 'clube': a tabela `matches` só cobre seleções hoje -- degrada com graça
-    (fast-follow: precisaria do equivalente `club_matches`)."""
+    Escopo 'clube': lê club_matches_long.parquet (local, ver build_club_local_history.py)
+    e filtra pela competição exata (fx.tournament cru vindo do frontend)."""
     empty0 = {"attack_mean": 0.0, "attack_std": 0.0, "defense_mean": 0.0,
               "defense_std": 0.0, "n_teams": 0, "scope": "global"}
     if scope == "clube":
-        return empty0
+        return _club_competition_benchmark(tournament)
     key = tournament or "_"
     if key in _COMP_BENCH_MEMO:
         return _COMP_BENCH_MEMO[key]

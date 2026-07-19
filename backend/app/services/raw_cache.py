@@ -20,20 +20,27 @@ import sqlite3
 from pathlib import Path
 
 LOCAL_PATH = Path(__file__).resolve().parents[2] / "data" / "raw_cache.sqlite"
+LOCAL_PATH_CLUBE = Path(__file__).resolve().parents[2] / "data" / "club_raw_cache.sqlite"
 
 
-def _conn() -> sqlite3.Connection:
-    LOCAL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(LOCAL_PATH))
+def _path_for(scope: str) -> Path:
+    return LOCAL_PATH_CLUBE if scope == "clube" else LOCAL_PATH
+
+
+def _conn(scope: str = "selecao") -> sqlite3.Connection:
+    path = _path_for(scope)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
     conn.execute("CREATE TABLE IF NOT EXISTS raw (key TEXT PRIMARY KEY, fixture_id INTEGER, raw TEXT)")
     return conn
 
 
-def local_available() -> bool:
-    if not LOCAL_PATH.exists():
+def local_available(scope: str = "selecao") -> bool:
+    path = _path_for(scope)
+    if not path.exists():
         return False
     try:
-        conn = _conn()
+        conn = _conn(scope)
         n = conn.execute("SELECT count(*) FROM raw").fetchone()[0]
         conn.close()
         return n > 0
@@ -41,9 +48,9 @@ def local_available() -> bool:
         return False
 
 
-def local_count() -> int:
+def local_count(scope: str = "selecao") -> int:
     try:
-        conn = _conn()
+        conn = _conn(scope)
         n = conn.execute("SELECT count(*) FROM raw").fetchone()[0]
         conn.close()
         return int(n)
@@ -63,11 +70,12 @@ def local_put(key: str, fixture_id, raw: dict) -> None:
         print(f"[AVISO] raw_cache.local_put {key}: {e}")
 
 
-def iter_all_raw():
+def iter_all_raw(scope: str = "selecao"):
     """Itera todos os `raw` (dicts) do detalhe de jogos — do SQLite LOCAL se disponível
-    (zero Neon), senão faz fallback para o Neon (leitura streaming)."""
-    if local_available():
-        conn = _conn()
+    (zero Neon), senão faz fallback para o Neon (leitura streaming). scope='clube' lê
+    o espelho de clube (club_raw_cache.sqlite / club_match_detail_cache)."""
+    if local_available(scope):
+        conn = _conn(scope)
         try:
             cur = conn.execute("SELECT raw FROM raw")
             for (rawj,) in cur:
@@ -80,8 +88,9 @@ def iter_all_raw():
     else:
         from app.db.connection import engine
         from sqlalchemy import text
+        table = "club_match_detail_cache" if scope == "clube" else "match_detail_cache"
         with engine.connect().execution_options(stream_results=True) as c:
-            for (rawj,) in c.execute(text("SELECT raw FROM match_detail_cache")):
+            for (rawj,) in c.execute(text(f"SELECT raw FROM {table}")):
                 try:
                     yield json.loads(rawj) if isinstance(rawj, str) else rawj
                 except Exception:
