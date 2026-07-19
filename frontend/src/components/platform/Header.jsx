@@ -29,15 +29,8 @@ export default function Header() {
           <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2 shrink-0 min-h-[44px] min-w-[44px] justify-self-start">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
-                <Activity className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-heading font-bold text-base sm:text-lg tracking-tight flex items-center gap-0.5">
-                Apost
-                <span className="font-mono font-extrabold bg-gradient-to-br from-emerald-500 to-cyan-500 text-white px-1.5 py-0.5 rounded-md leading-none">aI</span>
-                nfo
-                <span className="hidden sm:inline ml-1.5 text-xs font-normal text-muted-foreground tracking-normal">Análises Esportivas</span>
-              </span>
+              <img src="/images/so-o-A-sem-fundo.png" alt="ApostaInfo" className="w-8 h-8 object-contain" />
+              <img src="/images/so-o-texto-sem-fundo.png" alt="ApostaInfo" className="h-6 sm:h-7 w-auto object-contain" />
             </Link>
 
             {/* Navigation - Desktop */}

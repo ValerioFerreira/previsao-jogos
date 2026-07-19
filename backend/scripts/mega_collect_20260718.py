@@ -46,6 +46,7 @@ except Exception:
 
 import requests  # noqa: E402
 from scripts.fetch_odds import BASE, load_key  # noqa: E402
+from scripts import quota_tracker  # noqa: E402
 
 LOG_PATH = ROOT / "data" / "mega_collect_log.jsonl"
 
@@ -139,6 +140,10 @@ def main():
         log(evento="skip_wait", usado=used, assinatura_fim=sub_end)
     else:
         sub_end = wait_for_reset(a.poll_seconds, a.reset_threshold)
+        used, limit, _ = check_status()
+
+    quota_tracker.init(used_at_start=used, daily_limit=limit)
+    log(evento="quota_tracker_init", usado_at_start=used, limite_diario=limit)
 
     completas: list[str] = []
     try:

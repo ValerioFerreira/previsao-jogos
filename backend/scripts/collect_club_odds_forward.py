@@ -40,6 +40,7 @@ except Exception:
 
 from scripts.fetch_odds import BASE, load_key, parse_fixture_odds  # noqa: E402
 from scripts.prefetch_clubs import LEAGUES  # noqa: E402
+from scripts import quota_tracker  # noqa: E402
 
 ODDS_DIR = ROOT / "data" / "odds"
 SNAP_DIR = ODDS_DIR / "club_snapshots"
@@ -110,6 +111,7 @@ def _priority_rank(league_name: str) -> int:
 def api_get(path: str, key: str, **params):
     r = requests.get(BASE + path, headers={"x-apisports-key": key}, params=params, timeout=30)
     r.raise_for_status()
+    quota_tracker.note_call()
     return r.json(), r.headers.get("x-ratelimit-requests-remaining")
 
 
@@ -186,8 +188,8 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: 
                 fx.get("id"), home_name, away_name,
                 TARGET_LEAGUES[lid], lid, fx.get("date"), status, offset,
             ))
-        if remaining is not None and int(remaining) <= quota_buffer:
-            print(f"[AVISO] cota perto do limite ({remaining} restantes) -- parando a descoberta em {day}")
+        if quota_tracker.remaining() <= quota_buffer:
+            print(f"[AVISO] cota diaria perto do limite ({quota_tracker.remaining()} restantes) -- parando a descoberta em {day}")
             stopped_early = True
             break
 
@@ -212,8 +214,8 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: 
     odds_collected = 0
 
     for fixture_id, home, away, league_name, lid, date, status, offset in odds_candidates:
-        if remaining is not None and int(remaining) <= quota_buffer:
-            print(f"[AVISO] cota perto do limite ({remaining} restantes) -- parando antes de {league_name}")
+        if quota_tracker.remaining() <= quota_buffer:
+            print(f"[AVISO] cota diaria perto do limite ({quota_tracker.remaining()} restantes) -- parando antes de {league_name}")
             stopped_early = True
             break
 
@@ -245,7 +247,7 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: 
         sync_registry_to_db(registry)
 
     return {"dias": days, "jogos_vistos": len(seen_fixtures), "odds_coletadas": odds_collected,
-           "fixtures": seen_fixtures, "cota_restante": remaining, "dry_run": dry_run,
+           "fixtures": seen_fixtures, "cota_restante": quota_tracker.remaining(), "dry_run": dry_run,
            "parou_por_cota": stopped_early}
 
 

@@ -50,6 +50,7 @@ except Exception:
     pass
 
 from scripts.fetch_odds import BASE, BET_MAP, load_key, parse_fixture_odds  # noqa: E402
+from scripts import quota_tracker  # noqa: E402
 
 FIXTURES_DIR = ROOT / "data" / "raw" / "fixtures"
 ODDS_DIR = ROOT / "data" / "odds"
@@ -92,6 +93,7 @@ def target_league_ids() -> set[int]:
 def api_get(path: str, key: str, **params):
     r = requests.get(BASE + path, headers={"x-apisports-key": key}, params=params, timeout=30)
     r.raise_for_status()
+    quota_tracker.note_call()
     remaining = r.headers.get("x-ratelimit-requests-remaining")
     return r.json(), remaining
 
@@ -191,8 +193,8 @@ def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: 
     stopped_early = False
 
     for offset in range(days):
-        if remaining is not None and int(remaining) <= quota_buffer:
-            print(f"[AVISO] cota perto do limite ({remaining} restantes) -- parando a descoberta")
+        if quota_tracker.remaining() <= quota_buffer:
+            print(f"[AVISO] cota diaria perto do limite ({quota_tracker.remaining()} restantes) -- parando a descoberta")
             stopped_early = True
             break
         day = (today + timedelta(days=offset)).isoformat()
@@ -228,7 +230,7 @@ def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: 
             if offset > odds_window_days:
                 continue  # fora da janela em que a api-football publica odds -- não tenta
 
-            if remaining is not None and int(remaining) <= quota_buffer:
+            if quota_tracker.remaining() <= quota_buffer:
                 stopped_early = True
                 continue
 
@@ -272,7 +274,7 @@ def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: 
         "jogos_vistos": len(seen_fixtures),
         "odds_coletadas": odds_collected,
         "fixtures": seen_fixtures,
-        "cota_restante": remaining,
+        "cota_restante": quota_tracker.remaining(),
         "dry_run": dry_run,
         "parou_por_cota": stopped_early,
     }

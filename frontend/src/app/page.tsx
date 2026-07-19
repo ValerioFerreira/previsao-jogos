@@ -58,35 +58,7 @@ const CLUB_LEAGUES = [
   "Champions League", "Premier League", "La Liga", "Bundesliga", "Serie A (Itália)", "Ligue 1",
 ];
 
-// Data/hora do lançamento dos mercados de clubes: 18/07/2026 14:00 (horário de Brasília, UTC-3).
-const CLUBS_LAUNCH_ISO = "2026-07-18T14:00:00-03:00";
-
-// Contador regressivo (dias/horas/min/seg) até o lançamento dos mercados de clubes.
-function useCountdown(targetIso: string) {
-  const calc = useCallback(() => Math.max(0, new Date(targetIso).getTime() - Date.now()), [targetIso]);
-  const [msLeft, setMsLeft] = useState(calc);
-  useEffect(() => {
-    const id = setInterval(() => setMsLeft(calc()), 1000);
-    return () => clearInterval(id);
-  }, [calc]);
-  const totalSeconds = Math.floor(msLeft / 1000);
-  return {
-    days: Math.floor(totalSeconds / 86400),
-    hours: Math.floor((totalSeconds % 86400) / 3600),
-    minutes: Math.floor((totalSeconds % 3600) / 60),
-    seconds: totalSeconds % 60,
-    done: msLeft <= 0,
-  };
-}
-
-function CountdownUnit({ value, label, big = false }: { value: number; label: string; big?: boolean }) {
-  return (
-    <div className={`flex flex-col items-center rounded-lg backdrop-blur-sm border border-white/15 bg-white/10 ${big ? "px-3 sm:px-4 py-2 sm:py-2.5 min-w-[58px] sm:min-w-[76px]" : "px-2 py-1 min-w-[44px] sm:min-w-[52px]"}`}>
-      <span className={`font-mono font-extrabold tabular-nums leading-none text-white ${big ? "text-2xl sm:text-4xl" : "text-base sm:text-xl"}`}>{String(value).padStart(2, "0")}</span>
-      <span className={`uppercase tracking-wide text-white/70 mt-0.5 sm:mt-1 ${big ? "text-[9px] sm:text-[11px]" : "text-[8px] sm:text-[9px]"}`}>{label}</span>
-    </div>
-  );
-}
+// Cronômetro removido a pedido.
 
 // Anúncio no topo da Análise — mercados de clubes chegando, com contagem regressiva.
 // Dispensável (fica escondido em localStorage) para não incomodar quem já viu.
@@ -96,7 +68,6 @@ function CountdownUnit({ value, label, big = false }: { value: number; label: st
 const NEWS_BANNER_KEY = "apostai:news_banner_v4_dismissed";
 function ClubMarketsBanner({ onExplore }: { onExplore: () => void }) {
   const [dismissed, setDismissed] = useState(true);
-  const countdown = useCountdown(CLUBS_LAUNCH_ISO);
   useEffect(() => {
     try { setDismissed(localStorage.getItem(NEWS_BANNER_KEY) === "1"); } catch { setDismissed(false); }
   }, []);
@@ -110,24 +81,26 @@ function ClubMarketsBanner({ onExplore }: { onExplore: () => void }) {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-2xl shadow-xl shadow-cyan-900/20 bg-slate-950"
+      className="relative overflow-hidden rounded-2xl shadow-xl shadow-cyan-900/20 bg-slate-100 dark:bg-slate-950"
     >
-      {/* fundo decorativo em CSS puro (sem imagem externa) — brilhos + linhas de campo */}
-      <div
+      {/* Imagem de fundo restaurada (Dark Mode) */}
+      <img
         aria-hidden
-        className="absolute inset-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 15% 20%, rgba(16,185,129,0.35), transparent 45%),' +
-            'radial-gradient(circle at 85% 15%, rgba(34,211,238,0.35), transparent 45%),' +
-            'radial-gradient(circle at 50% 100%, rgba(16,185,129,0.2), transparent 55%),' +
-            'repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 64px)',
-        }}
+        src="https://png.pngtree.com/thumb_back/fh260/background/20230705/pngtree-intense-football-game-at-the-stadium-3d-rendering-of-competing-players-image_3821105.jpg"
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover opacity-60 hidden dark:block"
       />
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-slate-950/75 via-slate-950/60 to-background" />
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-background/50 via-transparent to-background/50" />
+      {/* Imagem de fundo (Light Mode) */}
+      <img
+        aria-hidden
+        src="https://www.shutterstock.com/image-vector/silhouette-soccer-football-player-set-260nw-2710080835.jpg"
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover opacity-60 block dark:hidden"
+      />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/50 to-slate-100 dark:from-slate-950/75 dark:via-slate-950/60 dark:to-background" />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-slate-100/50 via-transparent to-slate-100/50 dark:from-background/50 dark:to-background/50" />
 
-      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-3 right-3 text-white/70 hover:text-white transition-colors z-10">
+      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-3 right-3 text-slate-600 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors z-10">
         <X className="w-4 h-4" />
       </button>
 
@@ -135,41 +108,28 @@ function ClubMarketsBanner({ onExplore }: { onExplore: () => void }) {
         <motion.p
           animate={{ opacity: [0.85, 1, 0.85] }}
           transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-          className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-cyan-300"
+          className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300"
         >
           Nova Atualização
         </motion.p>
-        <h2 className="font-heading font-extrabold text-2xl sm:text-4xl text-white leading-tight tracking-tight">
-          MERCADOS DE <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">CLUBES</span>
+        <h2 className="font-heading font-extrabold text-2xl sm:text-4xl text-slate-900 dark:text-white leading-tight tracking-tight">
+          MERCADOS DE <span className="bg-gradient-to-r from-emerald-600 to-cyan-600 dark:from-emerald-400 dark:to-cyan-400 bg-clip-text text-transparent">CLUBES</span>
         </h2>
 
         <div className="flex flex-wrap justify-center gap-1.5 max-w-2xl">
           {CLUB_LEAGUES.map((l) => (
-            <span key={l} className="text-[11px] font-medium bg-white/10 border border-white/15 text-white/90 rounded-full px-2.5 py-1 backdrop-blur-sm">{l}</span>
+            <span key={l} className="text-[11px] font-medium bg-slate-900/5 border border-slate-900/10 text-slate-800 dark:bg-white/10 dark:border-white/15 dark:text-white/90 rounded-full px-2.5 py-1 backdrop-blur-sm">{l}</span>
           ))}
+          <span className="text-[11px] font-bold bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 dark:from-emerald-500/20 dark:to-cyan-500/20 border border-emerald-500/30 text-slate-900 dark:text-white rounded-full px-2.5 py-1 backdrop-blur-sm">
+            E mais 36 competições
+          </span>
         </div>
 
-        <div className="flex flex-col items-center gap-2 pt-2">
-          <span className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-white/70">
-            <Clock className="w-3.5 h-3.5" /> Lançamento em
-          </span>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <CountdownUnit value={countdown.days} label="dias" big />
-            <span className="font-bold text-white/30 text-xl sm:text-2xl">:</span>
-            <CountdownUnit value={countdown.hours} label="hrs" big />
-            <span className="font-bold text-white/30 text-xl sm:text-2xl">:</span>
-            <CountdownUnit value={countdown.minutes} label="min" big />
-            <span className="font-bold text-white/30 text-xl sm:text-2xl">:</span>
-            <CountdownUnit value={countdown.seconds} label="seg" big />
-          </div>
-          <span className="text-[11px] sm:text-xs text-white/60 italic pt-0.5">
-            Houve um pequeno delay, mas tá no forno! 👨‍🍳
-          </span>
-        </div>
+
 
         <button
           onClick={() => { dismiss(); onExplore(); }}
-          className="mt-1 px-5 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 hover:opacity-90 transition-opacity"
+          className="mt-1 px-5 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-emerald-500 to-cyan-500 dark:from-emerald-400 dark:to-cyan-400 text-white dark:text-slate-950 hover:opacity-90 transition-opacity"
         >
           Analisar um jogo de clube →
         </button>

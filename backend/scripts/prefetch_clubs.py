@@ -17,17 +17,22 @@ Uso: python scripts/prefetch_clubs.py [--max 60000] [--margin 200] [--from 2026]
 import argparse
 import json
 import sys
+import threading
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import text
 from app.services.fixture_fetch import _get
+from scripts import quota_tracker
 
 def _get_throttled(path, **params):
-    """_get() com throttle: 450 req/min = 0.15s entre requests."""
+    """_get() com throttle GLOBAL de 440/min compartilhado entre threads (quota_tracker.throttle)
+    -- ao contrário de um time.sleep fixo por chamada, isso permite paralelizar downloads
+    (várias chamadas em voo ao mesmo tempo) sem estourar o limite por-minuto da api-football."""
+    quota_tracker.throttle()
     result = _get(path, **params)
-    time.sleep(0.15)
+    quota_tracker.note_call()
     return result
 
 # (league_id, nome) na ordem de prioridade: Brasil -> Europa -> [expansão 2026-07-15].
@@ -125,18 +130,43 @@ def cached_ids() -> set:
     return {r[0] for r in rows if r[0] is not None}
 
 
+_write_lock = threading.Lock()
+_write_buffer: list[tuple] = []
+_BUFFER_FLUSH_SIZE = 40  # lote -- 1 round-trip a cada N fixtures em vez de 1 por fixture
+
+
 def put(fixture_id, league_id, season, raw):
-    from app.db.connection import engine
+    """Bufferiza em memória (thread-safe) em vez de gravar no Neon/sqlite a cada
+    chamada -- o round-trip síncrono por fixture era o gargalo real do backfill
+    (~1s/chamada vs ~0.14s do throttle de API), não a cota. flush_writes() drena o
+    buffer em lote; chamar sempre ao final de um lote de downloads e no fim do
+    processo (perda máxima em caso de crash: <_BUFFER_FLUSH_SIZE fixtures, re-baixadas
+    no próximo resume -- cache-first, sem risco de inconsistência)."""
     key = f"club|{league_id}|{fixture_id}"
+    with _write_lock:
+        _write_buffer.append((key, fixture_id, league_id, season, raw))
+        should_flush = len(_write_buffer) >= _BUFFER_FLUSH_SIZE
+    if should_flush:
+        flush_writes()
+
+
+def flush_writes():
+    global _write_buffer
+    with _write_lock:
+        if not _write_buffer:
+            return
+        batch = _write_buffer
+        _write_buffer = []
+    from app.db.connection import engine
     with engine.begin() as c:
         c.execute(text(
             f"INSERT INTO {TABLE} (key, fixture_id, league_id, season, raw, cached_at) "
             "VALUES (:k,:f,:l,:s,:r, now()) ON CONFLICT (key) DO UPDATE SET raw=EXCLUDED.raw, cached_at=now()"
-        ), {"k": key, "f": fixture_id, "l": league_id, "s": season, "r": json.dumps(raw, ensure_ascii=False)})
-    _local_put(key, fixture_id, league_id, season, raw)
+        ), [{"k": k, "f": f, "l": l, "s": s, "r": json.dumps(r, ensure_ascii=False)} for k, f, l, s, r in batch])
+    _local_put_batch(batch)
 
 
-def _local_put(key, fixture_id, league_id, season, raw):
+def _local_put_batch(batch):
     """Espelho local de clubes (data/club_raw_cache.sqlite) — os jobs pesados leem
     do disco em vez de puxar blobs do Neon (ARCHITECTURE.md §3.1). Silencioso em falha."""
     try:
@@ -147,9 +177,9 @@ def _local_put(key, fixture_id, league_id, season, raw):
         conn.execute(
             "CREATE TABLE IF NOT EXISTS raw (key TEXT PRIMARY KEY, fixture_id INTEGER, "
             "league_id INTEGER, season INTEGER, raw TEXT)")
-        conn.execute(
+        conn.executemany(
             "INSERT OR REPLACE INTO raw(key, fixture_id, league_id, season, raw) VALUES (?,?,?,?,?)",
-            (key, fixture_id, league_id, season, json.dumps(raw, ensure_ascii=False)))
+            [(k, f, l, s, json.dumps(r, ensure_ascii=False)) for k, f, l, s, r in batch])
         conn.commit()
         conn.close()
     except Exception:
@@ -171,7 +201,7 @@ def main():
     def budget_ok():
         if state["calls"] >= a.max:
             state["parou"] = "MAX"; return False
-        if state["rem"] is not None and state["rem"] <= a.margin:
+        if quota_tracker.remaining() <= a.margin:
             state["parou"] = "LIMITE_DIARIO"; return False
         return True
 
@@ -212,8 +242,9 @@ def main():
                     state["falhas"] += 1
                     print(f"    [AVISO] fixture {fid}: {e}", flush=True)
 
+    flush_writes()
     print(f">> Clubs: {state['novos']} novos | {state['falhas']} falhas | {state['calls']} chamadas | "
-          f"cota ~{state['rem']} | parou por: {state['parou'] or 'FIM (tudo coberto)'}", flush=True)
+          f"cota ~{quota_tracker.remaining()} | parou por: {state['parou'] or 'FIM (tudo coberto)'}", flush=True)
 
 
 if __name__ == "__main__":

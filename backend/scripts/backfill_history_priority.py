@@ -39,7 +39,48 @@ try:
 except Exception:
     pass
 
-from scripts.prefetch_clubs import LEAGUES, FINISHED, ensure_table, cached_ids, put, _get_throttled  # noqa: E402
+import concurrent.futures
+import threading
+
+from scripts.prefetch_clubs import LEAGUES, FINISHED, ensure_table, cached_ids, put, flush_writes, _get_throttled  # noqa: E402
+from scripts import quota_tracker  # noqa: E402
+
+DOWNLOAD_WORKERS = 8  # a Neon/api-football aguentam paralelo -- o gargalo era round-trip serial
+
+
+def _download_batch(items: list[tuple[int, int, int]], budget: "Budget", log: "Logger",
+                     have: set, context: str = "") -> list[tuple[int, int, int]]:
+    """Baixa detalhe de várias fixtures em paralelo (ThreadPoolExecutor), respeitando
+    o rate-limit GLOBAL de 440/min (quota_tracker.throttle, compartilhado entre as
+    threads) e o budget (checado sob lock antes de cada request, pra não estourar).
+    Escritas no Neon/sqlite ficam bufferizadas (put() em prefetch_clubs.py) e drenadas
+    em lote ao final -- é essa serialização por-fixture que fazia o backfill rodar a
+    ~52/min em vez dos ~440/min do throttle de API."""
+    lock = threading.Lock()
+    downloaded: list[tuple[int, int, int]] = []
+
+    def worker(fid: int, league_id: int, season: int):
+        with lock:
+            if not budget.ok():
+                return
+        try:
+            resp, rem = _get_throttled("/fixtures", id=fid)
+        except Exception as e:
+            log.log(evento="erro_detalhe", contexto=context, fixture=fid, erro=str(e))
+            return
+        with lock:
+            budget.note(rem)
+        if resp:
+            put(fid, league_id, season, resp[0])
+            with lock:
+                have.add(fid)
+                downloaded.append((fid, league_id, season))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as ex:
+        list(ex.map(lambda item: worker(*item), items))
+
+    flush_writes()
+    return downloaded
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -99,23 +140,28 @@ class Logger:
 
 
 class Budget:
+    """`remaining` do header por-request é o limite POR MINUTO (450/min), não a cota
+    DIÁRIA -- usar aquele pra decidir parar faz o backfill desistir cedo demais (bug
+    corrigido 2026-07-19). A cota diária real vem de `quota_tracker` (compartilhado
+    com os outros coletores no mesmo processo, inicializado 1x via /status)."""
     def __init__(self, max_calls: int, margin: int):
         self.max_calls = max_calls
         self.margin = margin
         self.calls = 0
-        self.remaining = None
         self.stopped = None
 
     def note(self, remaining):
         self.calls += 1
-        if remaining is not None:
-            self.remaining = int(remaining)
+
+    @property
+    def remaining(self):
+        return quota_tracker.remaining()
 
     def ok(self) -> bool:
         if self.calls >= self.max_calls:
             self.stopped = "MAX_CALLS"
             return False
-        if self.remaining is not None and self.remaining <= self.margin:
+        if quota_tracker.remaining() <= self.margin:
             self.stopped = "LIMITE_DIARIO"
             return False
         return True
@@ -140,26 +186,18 @@ def backfill_league(league_id: int, nome: str, have: set, budget: Budget, log: L
             completa = False
             continue
         finished = [f for f in fxs if ((f.get("fixture") or {}).get("status") or {}).get("short") in FINISHED]
-        todo = [f for f in finished if (f.get("fixture") or {}).get("id") not in have]
-        if todo:
-            log.log(evento="descoberta", liga=nome, temporada=season, encontrados=len(finished), faltam=len(todo))
-        for f in todo:
-            if not budget.ok():
-                completa = False
-                faltam_total += len(todo)
-                break
-            fid = (f.get("fixture") or {}).get("id")
-            if not fid:
-                continue
-            try:
-                resp, rem = _get_throttled("/fixtures", id=fid)
-                budget.note(rem)
-                if resp:
-                    put(fid, league_id, season, resp[0])
-                    have.add(fid)
-                    novos += 1
-            except Exception as e:
-                log.log(evento="erro_detalhe", liga=nome, fixture=fid, erro=str(e))
+        todo_ids = [(f.get("fixture") or {}).get("id") for f in finished if (f.get("fixture") or {}).get("id") not in have]
+        if todo_ids:
+            log.log(evento="descoberta", liga=nome, temporada=season, encontrados=len(finished), faltam=len(todo_ids))
+        if not budget.ok():
+            completa = False
+            faltam_total += len(todo_ids)
+            continue
+        baixados = _download_batch([(fid, league_id, season) for fid in todo_ids], budget, log, have, context=nome)
+        novos += len(baixados)
+        if len(baixados) < len(todo_ids):
+            completa = False
+            faltam_total += len(todo_ids) - len(baixados)
     return {"completa": completa, "novos": novos}
 
 
@@ -217,20 +255,16 @@ def backfill_remaining_tier(have: set, budget: Budget, log: Logger, season_from:
     log.log(evento="tier2_descoberta_fim", partidas_faltando=len(todo_global), cota_restante=budget.remaining)
 
     todo_global.sort(key=lambda t: -t[0])
+    log.log(evento="tier2_detalhe_inicio", partidas=len(todo_global), workers=DOWNLOAD_WORKERS)
+    items = [(fid, league_id, season) for _prio, fid, league_id, season in todo_global]
+    baixados_lista = _download_batch(items, budget, log, have, context="tier2")
     league_baixados: dict[int, int] = {}
-    for prio, fid, league_id, season in todo_global:
-        if not budget.ok():
-            log.log(evento="tier2_detalhe_parou", motivo=budget.stopped, partidas_restantes=len(todo_global))
-            break
-        try:
-            resp, rem = _get_throttled("/fixtures", id=fid)
-            budget.note(rem)
-            if resp:
-                put(fid, league_id, season, resp[0])
-                have.add(fid)
-                league_baixados[league_id] = league_baixados.get(league_id, 0) + 1
-        except Exception as e:
-            log.log(evento="erro_detalhe", fixture=fid, erro=str(e))
+    for fid, league_id, season in baixados_lista:
+        league_baixados[league_id] = league_baixados.get(league_id, 0) + 1
+    if len(baixados_lista) < len(todo_global):
+        log.log(evento="tier2_detalhe_parou", motivo=budget.stopped, partidas_restantes=len(todo_global) - len(baixados_lista))
+    else:
+        log.log(evento="tier2_detalhe_fim", partidas_baixadas=len(baixados_lista))
 
     resultados = []
     for league_id, nome in REMAINING_LEAGUES:
