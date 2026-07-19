@@ -217,6 +217,28 @@ export function clearApiCache(prefix?: string) {
 // tratável depois de um tempo razoável, em vez de spinner eterno.
 const REQUEST_TIMEOUT_MS = 20000;
 
+// Janela de restart do Render (deploy) derruba requisições por poucos segundos --
+// erro de rede (inclusive falha de preflight CORS num 502 sem headers) ou 502/503/504.
+// Só faz sentido reexecutar GETs (idempotentes); POST/PUT/DELETE nunca são retried aqui.
+const RETRY_DELAYS_MS = [1000, 2500];
+
+function isRetryableError(e: unknown): boolean {
+  if (e instanceof TransientHttpError) return [502, 503, 504].includes(e.status);
+  return e instanceof Error && e.message === "erro de conexão ao falar com a API.";
+}
+
+class TransientHttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method || "GET").toUpperCase();
   const cacheable = method === "GET";
@@ -228,7 +250,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (inflight) return inflight as Promise<T>;
   }
 
-  const doFetch = (async () => {
+  const attemptFetch = async () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     let response: Response;
@@ -248,9 +270,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      throw new Error(body?.detail || `Erro ${response.status} ao falar com a API.`);
+      const message = body?.detail || `Erro ${response.status} ao falar com a API.`;
+      throw new TransientHttpError(response.status, message);
     }
     return response.json();
+  };
+
+  const doFetch = (async () => {
+    if (!cacheable) return attemptFetch();
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        return await attemptFetch();
+      } catch (e) {
+        lastError = e;
+        if (attempt === RETRY_DELAYS_MS.length || !isRetryableError(e)) throw e;
+        await sleep(RETRY_DELAYS_MS[attempt]);
+      }
+    }
+    throw lastError;
   })();
 
   if (!cacheable) return doFetch as Promise<T>;
