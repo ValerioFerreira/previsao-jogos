@@ -22,7 +22,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { analysisApi } from '@/lib/monetizationApi';
 import BetLab from '@/components/platform/BetLab';
 import BetBuilder from '@/components/platform/BetBuilder';
-import { DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard } from '@/components/platform/DerivedMarkets';
+import { DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard, TimeAMarcarPrimeiroCard } from '@/components/platform/DerivedMarkets';
 import H2HCard from '@/components/platform/H2HCard';
 import ScorersCard from '@/components/platform/ScorersCard';
 import ScreenshotGuard from '@/components/platform/ScreenshotGuard';
@@ -920,8 +920,11 @@ export default function Previsoes() {
                 </div>
               )}
 
-              {/* Dupla Chance | Handicaps */}
-              {projection.mercados_derivados && <DuplaChanceCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />}
+              {/* Dupla Chance e Time a Marcar Primeiro | Handicaps */}
+              <div className="flex flex-col gap-4 lg:gap-6">
+                {projection.mercados_derivados && <DuplaChanceCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />}
+                {projection.time_marca_primeiro && <TimeAMarcarPrimeiroCard d={projection.time_marca_primeiro} home={homeTeamId} away={awayTeamId} />}
+              </div>
               {projection.mercados_derivados && <HandicapsCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />}
               {/* Placar Exato — card detalhado em largura total */}
               {projection.placar_exato && (
@@ -1023,32 +1026,7 @@ export default function Previsoes() {
                 </CollapsibleMarket>
               )}
 
-              {/* Time a marcar primeiro (mercado novo, exibido cru) */}
-              {projection.time_marca_primeiro && (
-                <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
-                  <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
-                    Time a Marcar Primeiro
-                    <InfoTooltip text="Probabilidade de cada time marcar o 1º gol da partida (ou de a partida terminar sem gols)." />
-                  </h4>
-                  <div className="flex-1 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:gap-x-8 text-center">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{teamPt(homeTeamId)}</p>
-                      <p className="text-2xl font-mono font-bold text-emerald-400">{projection.time_marca_primeiro[homeTeamId]?.prob}%</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {projection.time_marca_primeiro[homeTeamId]?.odd_justa}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{teamPt(awayTeamId)}</p>
-                      <p className="text-2xl font-mono font-bold text-blue-400">{projection.time_marca_primeiro[awayTeamId]?.prob}%</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {projection.time_marca_primeiro[awayTeamId]?.odd_justa}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Nenhum (0x0)</p>
-                      <p className="text-2xl font-mono font-bold text-muted-foreground">{projection.time_marca_primeiro.nenhum?.prob}%</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {projection.time_marca_primeiro.nenhum?.odd_justa}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Jogador — modelo de goleador (dentro dos secundários, colapso individual) */}
               {scorers?.disponivel && (

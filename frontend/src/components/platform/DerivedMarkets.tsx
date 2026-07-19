@@ -59,6 +59,14 @@ export function DuplaChanceCard({ d, home, away }: DProps) {
   ]} />;
 }
 
+export function TimeAMarcarPrimeiroCard({ d, home, away }: { d: any; home: string; away: string }) {
+  return <DerivedBigCard title="Time a Marcar Primeiro" tip="Probabilidade de cada time marcar o 1º gol da partida (ou de a partida terminar sem gols)." outcomes={[
+    { label: teamPt(home), o: d[home], color: "text-emerald-400" },
+    { label: teamPt(away), o: d[away], color: "text-blue-400" },
+    { label: "Nenhum (0x0)", o: d.nenhum, color: "text-muted-foreground" },
+  ]} />;
+}
+
 export function EmpateAnulaCard({ d, home, away }: DProps) {
   return <DerivedBigCard title="Empate Anula (DNB)" tip="Seleção no vencedor; se a partida empatar, o valor é devolvido." outcomes={[
     { label: teamPt(home), o: d.empate_anula[home], color: "text-emerald-400" },
