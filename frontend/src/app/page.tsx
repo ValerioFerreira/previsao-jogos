@@ -323,9 +323,9 @@ function RecentMatchRow({ match, onOpen }: { match: RecentMatch; onOpen?: () => 
 
 // Card compacto da equipe (nome + últimos 5 jogos em linhas + radar de anomalias),
 // para empilhar no lado direito do bloco de confronto.
-function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onOpenMatch }: {
+function TeamRecentBlock({ teamId, form, anomalies, label, loading, error, teamIds, onOpenMatch }: {
   teamId: string; form: { matches: RecentMatch[]; total: number }; anomalies: Anomaly[];
-  label: string; loading: boolean; teamIds: Record<string, number>; onOpenMatch: (m: RecentMatch) => void;
+  label: string; loading: boolean; error?: boolean; teamIds: Record<string, number>; onOpenMatch: (m: RecentMatch) => void;
 }) {
   const [showMore, setShowMore] = React.useState(false);
   const totalAvailable = React.useMemo(() => Math.min(10, (form.matches || []).length), [form.matches]);
@@ -346,6 +346,10 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, teamIds, onO
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-xs">
             <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-emerald-500 rounded-full animate-spin" /> Buscando…
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-amber-500/80 text-xs text-center px-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" /> Não foi possível carregar os dados. Tente novamente em instantes.
           </div>
         ) : (<>
           <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -444,12 +448,14 @@ export default function Previsoes() {
 
   // Busca o H2H assim que as duas seleções estão escolhidas — o card de confronto
   // direto fica disponível ANTES de gerar a análise (e persiste ao voltar à página).
+  const [errorH2H, setErrorH2H] = useState(false);
   React.useEffect(() => {
     if (homeTeamId && awayTeamId && homeTeamId !== awayTeamId) {
-      setLoadingH2H(true);
-      api.h2h(homeTeamId, awayTeamId, scope).then(h => setH2hData(h?.metrics ?? null)).catch(() => setH2hData(null)).finally(() => setLoadingH2H(false));
+      setLoadingH2H(true); setErrorH2H(false);
+      api.h2h(homeTeamId, awayTeamId, scope).then(h => setH2hData(h?.metrics ?? null))
+        .catch(() => { setH2hData(null); setErrorH2H(true); }).finally(() => setLoadingH2H(false));
     } else {
-      setH2hData(null); setLoadingH2H(false);
+      setH2hData(null); setLoadingH2H(false); setErrorH2H(false);
     }
   }, [homeTeamId, awayTeamId, scope]);
 
@@ -538,29 +544,34 @@ export default function Previsoes() {
       .catch(() => {});
   }, []);
 
+  const [errorHome, setErrorHome] = useState(false);
+  const [errorAway, setErrorAway] = useState(false);
+
   React.useEffect(() => {
     if (homeTeamId) {
-      setLoadingHome(true);
+      setLoadingHome(true); setErrorHome(false);
       Promise.all([
         api.recentMatches(homeTeamId, scope).then(res => setHomeForm({matches: res.matches, total: res.total_matches})),
         api.teamAnomalies(homeTeamId, scope).then(res => setHomeAnomalies(res.anomalies)),
-      ]).catch(() => {}).finally(() => setLoadingHome(false));
+      ]).catch(() => { setErrorHome(true); }).finally(() => setLoadingHome(false));
     } else {
       setHomeForm({matches: [], total: 0});
       setHomeAnomalies([]);
+      setErrorHome(false);
     }
   }, [homeTeamId, scope]);
 
   React.useEffect(() => {
     if (awayTeamId) {
-      setLoadingAway(true);
+      setLoadingAway(true); setErrorAway(false);
       Promise.all([
         api.recentMatches(awayTeamId, scope).then(res => setAwayForm({matches: res.matches, total: res.total_matches})),
         api.teamAnomalies(awayTeamId, scope).then(res => setAwayAnomalies(res.anomalies)),
-      ]).catch(() => {}).finally(() => setLoadingAway(false));
+      ]).catch(() => { setErrorAway(true); }).finally(() => setLoadingAway(false));
     } else {
       setAwayForm({matches: [], total: 0});
       setAwayAnomalies([]);
+      setErrorAway(false);
     }
   }, [awayTeamId, scope]);
 
@@ -734,6 +745,10 @@ export default function Previsoes() {
                     </div>
                   ) : h2hData ? (
                     <H2HCard h2hData={h2hData} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
+                  ) : errorH2H ? (
+                    <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex items-center justify-center gap-2 text-sm text-amber-500/80 text-center">
+                      <AlertTriangle className="w-4 h-4 shrink-0" /> Não foi possível carregar os dados. Tente novamente em instantes.
+                    </div>
                   ) : (
                     <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex items-center justify-center text-sm text-muted-foreground italic text-center">
                       Sem confrontos diretos no histórico entre as seleções.
@@ -744,10 +759,10 @@ export default function Previsoes() {
                     crescem além disso se necessário para não cortar dados dos jogos anteriores) */}
                 <div className="flex flex-col gap-4 h-full">
                   <div className="flex-1">
-                    <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
+                    <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} error={errorHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
                   </div>
                   <div className="flex-1">
-                    <TeamRecentBlock teamId={awayTeamId} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} teamIds={teamIds} onOpenMatch={openMatch(awayTeamId)} />
+                    <TeamRecentBlock teamId={awayTeamId} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} error={errorAway} teamIds={teamIds} onOpenMatch={openMatch(awayTeamId)} />
                   </div>
                 </div>
               </motion.div>
@@ -755,11 +770,11 @@ export default function Previsoes() {
           }
           // Só uma equipe selecionada — card único centralizado
           const s = homeTeamId
-            ? { teamId: homeTeamId, form: homeForm, anomalies: homeAnomalies, label: 'Mandante', loading: loadingHome }
-            : { teamId: awayTeamId, form: awayForm, anomalies: awayAnomalies, label: 'Visitante', loading: loadingAway };
+            ? { teamId: homeTeamId, form: homeForm, anomalies: homeAnomalies, label: 'Mandante', loading: loadingHome, error: errorHome }
+            : { teamId: awayTeamId, form: awayForm, anomalies: awayAnomalies, label: 'Visitante', loading: loadingAway, error: errorAway };
           return (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="max-w-md mx-auto">
-              <TeamRecentBlock teamId={s.teamId} form={s.form} anomalies={s.anomalies} label={s.label} loading={s.loading} teamIds={teamIds} onOpenMatch={openMatch(s.teamId)} />
+              <TeamRecentBlock teamId={s.teamId} form={s.form} anomalies={s.anomalies} label={s.label} loading={s.loading} error={s.error} teamIds={teamIds} onOpenMatch={openMatch(s.teamId)} />
             </motion.div>
           );
         })()}
@@ -773,10 +788,10 @@ export default function Previsoes() {
         )}
         
         {/* Badge Análise Aprofundada (Antes de Gerar) */}
-        {!loading && fixtureId && !analysis && upcoming.find(f => f.fixture_id === fixtureId)?.deep_analyst && (
+        {!loading && fixtureId && !analysis && upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst && (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-2 bg-slate-900 border border-indigo-500/50 text-indigo-200 text-xs px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.2)]">
             <Sparkles className="w-4 h-4 text-indigo-400" />
-            Esta partida possui uma <strong className="text-white">Análise Aprofundada Detalhada</strong> feita pelo analista <strong className="text-white">{upcoming.find(f => f.fixture_id === fixtureId)?.deep_analyst}</strong>
+            Esta partida possui uma <strong className="text-white">Análise Aprofundada Detalhada</strong> feita pelo analista <strong className="text-white">{upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst}</strong>
           </motion.div>
         )}
         {user && competition === 'Copa do Mundo' && !loading && (

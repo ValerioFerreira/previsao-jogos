@@ -61,6 +61,8 @@ export type PlacarMotivo =
   | { tipo: "placar_alto"; exp_total: number; prob_4_mais: number };
 
 export type PredictionResponse = {
+  // Análise aprofundada textual, opcional, feita por admin pra uma partida específica.
+  deep_analysis?: { analyst_name: string; markdown_content: string };
   vencedor: {
     vencedor: string;
     confianca: number;
@@ -196,6 +198,12 @@ export function clearApiCache(prefix?: string) {
   for (const k of _cache.keys()) if (k.startsWith(prefix)) _cache.delete(k);
 }
 
+// `fetch` nativo não tem timeout -- se a conexão cair no meio de um restart do
+// backend (Render redeploy/cold start), a requisição fica pendurada indefinidamente
+// e a UI nunca sai do estado de "carregando". REQUEST_TIMEOUT_MS força um erro
+// tratável depois de um tempo razoável, em vez de spinner eterno.
+const REQUEST_TIMEOUT_MS = 20000;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method || "GET").toUpperCase();
   const cacheable = method === "GET";
@@ -208,10 +216,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const doFetch = (async () => {
-    const response = await fetch(`${API_URL}${path}`, {
-      ...init,
-      headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}${path}`, {
+        ...init,
+        headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        throw new Error("timeout ao falar com a API.");
+      }
+      throw new Error("erro de conexão ao falar com a API.");
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       throw new Error(body?.detail || `Erro ${response.status} ao falar com a API.`);
@@ -433,6 +454,8 @@ export type UpcomingFixture = {
   league_name: string;
   league_id?: number | null;
   scope: Scope;
+  // Nome do analista, presente se a partida tiver Análise Aprofundada cadastrada no admin.
+  deep_analyst?: string;
 };
 
 // URL do logo da seleção (api-football media; não conta cota).
