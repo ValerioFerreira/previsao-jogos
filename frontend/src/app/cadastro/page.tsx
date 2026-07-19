@@ -37,8 +37,33 @@ export default function CadastroPage() {
     }
   }, []);
 
-  const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const maskCPF = (v: string) => {
+    let r = v.replace(/\D/g, "");
+    if (r.length > 11) r = r.slice(0, 11);
+    if (r.length > 9) return `${r.slice(0, 3)}.${r.slice(3, 6)}.${r.slice(6, 9)}-${r.slice(9)}`;
+    if (r.length > 6) return `${r.slice(0, 3)}.${r.slice(3, 6)}.${r.slice(6)}`;
+    if (r.length > 3) return `${r.slice(0, 3)}.${r.slice(3)}`;
+    return r;
+  };
+
+  const maskPhone = (v: string) => {
+    let r = v.replace(/\D/g, "");
+    if (r.length > 11) r = r.slice(0, 11);
+    if (r.length > 2) {
+      if (r.length > 7) return `(${r.slice(0, 2)}) ${r.slice(2, 7)}-${r.slice(7)}`;
+      return `(${r.slice(0, 2)}) ${r.slice(2)}`;
+    }
+    return r ? `(${r}` : "";
+  };
+
+  const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    if (k === "full_name") val = val.toUpperCase();
+    else if (k === "email") val = val.toLowerCase().replace(/\s/g, "");
+    else if (k === "cpf") val = maskCPF(val);
+    else if (k === "phone") val = maskPhone(val);
+    setForm((f) => ({ ...f, [k]: val }));
+  };
 
   async function submitDados(e: React.FormEvent) {
     e.preventDefault();

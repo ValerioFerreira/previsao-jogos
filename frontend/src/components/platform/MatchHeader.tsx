@@ -38,7 +38,7 @@ export function MatchHeader({
     competition,
     fmtDateTime(date),
     venue ? `🏟️ ${venue}` : '',
-    typeof neutral === 'boolean' ? (neutral ? '🏟️ Campo neutro' : '🏟️ Com mando de campo') : '',
+    typeof neutral === 'boolean' ? (neutral ? '🏟️ Campo neutro' : (venue ? '' : '🏟️ Com mando de campo')) : '',
     referee ? `👨‍⚖️ ${referee}` : '',
   ].filter(Boolean);
 

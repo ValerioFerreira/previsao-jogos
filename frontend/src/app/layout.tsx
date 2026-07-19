@@ -16,7 +16,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "ApostaInfo - Análises Esportivas",
-  description: "Análise quantitativa e previsão probabilística para partidas de futebol de seleções.",
+  description: "Análise quantitativa e previsão probabilística para partidas de futebol.",
   icons: {
     icon: "/images/favicon-32x32.ico",
     shortcut: "/images/favicon-32x32.ico",

@@ -256,7 +256,7 @@ def main():
     joblib.dump(ortho_weights, str(OUT / "style_ortho_weights.joblib"))
     with open(OUT / "meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
-    slim_cols = ["date", "home_team", "away_team", "home_score", "away_score"]
+    slim_cols = ["date", "home_team", "away_team", "home_score", "away_score", "tournament"]
     df[slim_cols].to_csv(OUT / "results_slim.csv", index=False)
 
     print(f"\n>> OK. Artefatos em {OUT}/")

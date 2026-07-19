@@ -301,20 +301,20 @@ class Predictor:
     def _reliability(self, snap_h, snap_a):
         """Tier de confiabilidade do jogo a partir da cobertura de dados refinados.
 
-        Um jogo é tão confiável quanto o lado com MENOS dados: seleções de ligas com
+        Um jogo é tão confiável quanto o lado com MENOS dados: equipes de ligas com
         pouca cobertura (sem box-score) caem para Baixa e dependem só de Elo+forma de
-        resultado; jogos entre seleções ricas em dados ficam Alta e usam de fato as
+        resultado; jogos entre equipes ricas em dados ficam Alta e usam de fato as
         features refinadas (chutes, posse, estilo) que afinam escanteios/cartões/chutes.
         """
         ch, ca = self._coverage(snap_h), self._coverage(snap_a)
         score = min(ch, ca)
         tier = "Alta" if score >= 0.7 else ("Média" if score >= 0.3 else "Baixa")
         explica = {
-            "Alta": "Temos bastante histórico detalhado das duas seleções, então a previsão "
+            "Alta": "Temos bastante histórico detalhado das duas equipes, então a previsão "
                     "usa todas as informações de jogo (chutes, posse, estilo). É a nossa melhor estimativa.",
-            "Média": "Temos histórico detalhado de uma das seleções, mas pouco da outra. A "
+            "Média": "Temos histórico detalhado de uma das equipes, mas pouco da outra. A "
                      "previsão ainda é boa, mas com mais incerteza do que o normal.",
-            "Baixa": "Uma das seleções tem pouco histórico detalhado disponível. A previsão se "
+            "Baixa": "Uma das equipes tem pouco histórico detalhado disponível. A previsão se "
                      "apoia principalmente na força geral (ranking) e nos resultados recentes — "
                      "leia com cautela.",
         }[tier]
@@ -588,7 +588,7 @@ class Predictor:
             "over_2_5": over_res,
             "placar_exato": placar_exato,
             "tempos": tempos,
-            "confronto_direto": h2h["_resumo"],
+            "confronto_direto": h2h,
             "confiabilidade": confiabilidade,
         }
 

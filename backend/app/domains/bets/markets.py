@@ -177,8 +177,9 @@ def auto_select(candidates: dict[str, dict], cap: float) -> list[dict]:
 
     dfs(0, set(), 1.0, [])
     if not found:
-        allc = [c for c in candidates.values() if c["odd"]]
-        return [min(allc, key=lambda c: c["odd"])] if allc else []
+        # Se nenhuma opção tiver odd <= cap, retorna lista vazia. Não devemos retornar
+        # uma aposta que viole a regra do cap, para não quebrar a UI de auto-seleção.
+        return []
 
     best_prod = max(prod for prod, _ in found)
     # mantém só combinações razoavelmente próximas do teto (>= 80% da melhor encontrada)

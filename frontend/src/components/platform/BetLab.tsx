@@ -61,9 +61,19 @@ function LineExplorer({ prediction }: { prediction: PredictionResponse }) {
           <div className="h-9 flex items-center justify-center text-2xl font-bold font-mono">{marketData.mean}</div>
         </div>
       </div>
-      <div className="mb-4">
-        <Label className="text-xs text-muted-foreground mb-2 block">{side === "over" ? "Acima de" : "Abaixo de"} {line}</Label>
-        <Slider value={[line]} onValueChange={([v]) => { const s = Math.floor(v) + 0.5; setLine(s > maxLine ? maxLine : s); }} min={minLine} max={maxLine} step={1} className="w-full" />
+      <div className="mb-6">
+        <Label className="text-xs text-muted-foreground mb-4 block">{side === "over" ? "Acima de" : "Abaixo de"} {line.toFixed(1)}</Label>
+        <div className="relative">
+          <Slider value={[line]} onValueChange={([v]) => { setLine(v > maxLine ? maxLine : v); }} min={minLine} max={maxLine} step={0.5} className="w-full relative z-10" />
+          <div className="absolute top-4 left-0 right-0 flex justify-between pointer-events-none text-[10px] text-muted-foreground/60 px-1">
+            {Array.from({ length: Math.floor(maxLine - minLine) + 1 }).map((_, i) => (
+              <span key={i} className="flex flex-col items-center">
+                <span className="h-1 w-px bg-border mb-0.5" />
+                {maxLine < 20 || i % 2 === 0 ? Math.floor(minLine + i) : ''}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-4 bg-muted/50 rounded-lg p-4">
         <div className="text-center"><p className="text-[10px] text-muted-foreground mb-1">Linha</p><p className="text-base font-bold font-mono">{side === "over" ? "Acima de" : "Abaixo de"} {line}</p></div>

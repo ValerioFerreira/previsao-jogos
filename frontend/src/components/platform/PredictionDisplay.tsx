@@ -55,21 +55,14 @@ function PlacarExatoCard({ data, home, away, teamIds }: { data: NonNullable<Pred
         <Target className="w-4 h-4 text-purple-500" /> Placar Exato
         <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols (Dixon-Coles)." />
       </h4>
-      <div className="flex items-center justify-center gap-2 mb-3">
-        {teamLogoUrl(teamIds[home]) && (
-          <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-5 h-5 object-contain" loading="lazy" onError={onImgError} />
-        )}
-        <p className="text-[10px] text-muted-foreground">{teamPt(home)}</p>
-        <span className="text-[10px] text-muted-foreground">×</span>
-        <p className="text-[10px] text-muted-foreground">{teamPt(away)}</p>
-        {teamLogoUrl(teamIds[away]) && (
-          <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-5 h-5 object-contain" loading="lazy" onError={onImgError} />
-        )}
-      </div>
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-3 gap-2 mb-4 mt-2">
         {data.top.map((s, i) => (
           <div key={i} className={`text-center rounded-lg p-2 border ${i === 0 ? "bg-purple-500/10 border-purple-500/30" : "bg-muted/30 border-border/30"}`}>
-            <p className="text-xl font-mono font-bold text-foreground">{s.mandante}<span className="text-muted-foreground mx-0.5">–</span>{s.visitante}</p>
+            <div className="flex items-center justify-center gap-1.5 mb-0.5">
+              {teamLogoUrl(teamIds[home]) && <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-4 h-4 object-contain" onError={onImgError} />}
+              <p className="text-xl font-mono font-bold text-foreground leading-none">{s.mandante}<span className="text-muted-foreground mx-0.5">–</span>{s.visitante}</p>
+              {teamLogoUrl(teamIds[away]) && <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-4 h-4 object-contain" onError={onImgError} />}
+            </div>
             <p className="text-[11px] font-mono text-cyan-400 mt-0.5">{s.prob.toFixed(1)}%</p>
             <p className="text-[9px] text-muted-foreground mt-0.5">odd {oddRangeStr(s.prob)}</p>
           </div>

@@ -72,7 +72,7 @@ export default function LoginPage() {
             <form onSubmit={sendReset} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">E-mail</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value.toLowerCase().replace(/\s/g, ""))} required />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enviar código"}
@@ -90,7 +90,7 @@ export default function LoginPage() {
             <form onSubmit={submit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">E-mail</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value.toLowerCase().replace(/\s/g, ""))} required autoComplete="email" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="password">Senha</Label>
