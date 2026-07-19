@@ -1,12 +1,39 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
-> está e o que fazer a seguir. Última atualização: **2026-07-18** (merge da branch `clubs` na `main`).
+> está e o que fazer a seguir. Última atualização: **2026-07-19** (bateria de hipóteses + 3 mercados novos).
 > Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
 > não repetir**, **§12 = monetização**, **§13 = pesquisa de clubes**), `ARCHITECTURE.md` (infra —
 > **§3.1 Neon, §5 monetização, §6 e-mail, §7 ambiente de pesquisa reproduzível**),
 > `docs/ARQUITETURA_MONETIZACAO.md`, `backend/docs/PESQUISA_CLUBES.md` (diário completo),
 > `backend/docs/RELATORIO_FINAL_PESQUISA_CLUBES.md` (números consolidados).
+
+---
+
+## 0. Sessão (2026-07-19) — bateria de 12 hipóteses (dataset 60 ligas) + 3 mercados novos + fix de coleta
+
+Pedido do dono: subir coleta pra 16 workers, testar exaustivamente 12 hipóteses de modelo pra
+clube, implementar os mercados novos identificados na sessão anterior. **Nenhuma hipótese passou
+o gate §6** — produção do resultado (DC-NB) continua a do §15 (174.697 jogos/46 competições), sem
+mudança. Detalhe completo em `DOCUMENTACAO_CENTRAL.md` §16.
+
+Bug real achado e corrigido: `quota_tracker.throttle()` liberava rajada até o teto de 440/min em
+vez de espaçar — com 16 workers (pedido desta sessão) isso gerava centenas de 429; corrigido com
+espaçamento mínimo entre chamadas + teto reduzido pra 380/min. Dataset de clube reconstruído
+100% local (sqlite de 5,2GB): **191.580 fixtures**, `club_lineups.parquet` regenerado pela
+primeira vez desde a expansão pras 60 ligas (378k escalações).
+
+**3 mercados novos em produção** (backend+frontend, ambos escopos, opcional/retrocompatível —
+zero risco): **1º/2º tempo pra clube** (já existia pra seleção, só faltava treinar o lado clube),
+**cartões vermelhos isolados** (novo pros dois escopos), **time a marcar primeiro** (novo pros
+dois escopos, classificador multinomial). Handicap de escanteios/cartões por time: checado, já
+existia (não era gap real). Verificados ponta a ponta (`Predictor` isolado + fetch real no dev
+server + `tsc --noEmit`).
+
+**Pendências pro próximo round:** rerun completo da bateria §13 (Fase 4/5/6) no dataset de 60
+ligas (hipóteses #1/#9); mercado de qualificação/agregado de mata-mata (hipótese #5 confirmou
+dependência real, corr=-0,132, mas o modelo+UI não foram construídos); mercado de assistências
+(dado existe, arquitetura maior — não coube); momentum de goleiro pra BTTS (hipótese #12).
 
 ---
 

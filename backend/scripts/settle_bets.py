@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.db.models import Base  # noqa: F401  (registra TODOS os modelos p/ resolver FKs entre domínios)
 from app.db.base import SessionLocal
 from app.domains.bets.results import get_result_provider
 from app.domains.bets.settlement import run_due_settlements

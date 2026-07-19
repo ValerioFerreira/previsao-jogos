@@ -22,7 +22,9 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   2026-07-15 — arquitetura atual venceu tudo, sem exceção de push)**, **§14 mercados de clubes em
   produção (2026-07-18 — `scope="selecao"|"clube"` ponta a ponta, gaps documentados)**, **§15
   partida agendada de clube + Elo histórico real + retreino 60 ligas (2026-07-18, mesmo dia —
-  fecha os gaps da §14)**.
+  fecha os gaps da §14)**, **§16 bateria de 12 hipóteses (dataset 60 ligas, nenhuma passou o
+  gate) + 3 mercados novos: 1º/2º tempo pra clube, cartões vermelhos, time a marcar primeiro
+  (2026-07-19)**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa
@@ -63,6 +65,10 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
 - `app/core/{config,email,startup,security,rate_limit}.py` — config/JWT/OTP/e-mail/guarda de boot.
 - `app/db/connection.py` — engine SQLAlchemy (Neon) + `truncate_and_append`.
 - `model_artifacts/*.joblib` — modelos em produção (DC, NB/GP, `scorer_model`, `shots_prop_model`, calibradores).
+  Opcionais (ausência = mercado não exposto, `Predictor.__init__` checa `os.path.exists`):
+  `offsides_nb`, `gols_{1,2}t_nb`/`cartoes_{1,2}t_nb` (por-tempo — clube ganhou em 2026-07-19),
+  `cartoes_vermelhos_nb`, `first_scorer_clf` (novos 2026-07-19, ambos escopos — ver
+  DOCUMENTACAO_CENTRAL.md §16).
 - **Dataset de treino:** `international_features_enriched_apifootball.csv` (gitignored; espelho `features_enriched`).
 
 ### Scripts (`/backend/scripts`)
@@ -75,6 +81,12 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   `prefetch_wc.cmd` (Task Scheduler `\PrevisaoJogos\`). **Checar cota/validade da assinatura antes
   de coleta grande:** ver `ARCHITECTURE.md §7.2`.
 - **Modelos:** `build_scorer_model.py`, `build_shots_prop_model.py` (leem o espelho local).
+  **Mercados por-tempo/vermelhos/marcador-primeiro (novo 2026-07-19, §16):**
+  `build_clubs_halftime_targets.py` + `train_clubs_halftime_markets.py` (1º/2º tempo pra clube),
+  `train_redcards_market.py --scope {selecao,clube}` (cartões vermelhos isolados),
+  `build_first_scorer_targets.py` + `train_first_scorer_market.py --scope {selecao,clube}` (time
+  a marcar primeiro) — todos 100% locais (leem `data/{club_,}raw_cache.sqlite`), opcionais em
+  `predictor.py`.
 - **Agregados:** `precompute_aggregates.py` (roda após os rebuilds no cron). `build_elo_history.py`
   (novo, §15 do doc-mestre — deriva `elo_history.csv` de cada `model_artifacts{,_clubes}/` a
   partir do `home_elo_pre`/`away_elo_pre` já presente no dataset de treino; sem custo de API).

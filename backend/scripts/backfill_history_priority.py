@@ -45,7 +45,7 @@ import threading
 from scripts.prefetch_clubs import LEAGUES, FINISHED, ensure_table, cached_ids, put, flush_writes, _get_throttled  # noqa: E402
 from scripts import quota_tracker  # noqa: E402
 
-DOWNLOAD_WORKERS = 8  # a Neon/api-football aguentam paralelo -- o gargalo era round-trip serial
+DOWNLOAD_WORKERS = 16  # a Neon/api-football aguentam paralelo -- o gargalo era round-trip serial
 
 
 def _download_batch(items: list[tuple[int, int, int]], budget: "Budget", log: "Logger",

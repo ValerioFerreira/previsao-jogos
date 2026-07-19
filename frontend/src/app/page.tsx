@@ -972,6 +972,44 @@ export default function Previsoes() {
                 </CollapsibleMarket>
               )}
 
+              {/* Cartões vermelhos isolados (mercado novo, exibido cru) */}
+              {projection.cartoes_vermelhos && projection.cartoes_vermelhos.total && (
+                <CollapsibleMarket title="Cartões Vermelhos" tip="Cartões vermelhos diretos ou por segundo amarelo — mercado raro, evento binário na maioria dos jogos.">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <MarketCard title="Cartões Vermelhos" subtitle={teamPt(homeTeamId)} prediction={projection.cartoes_vermelhos[homeTeamId]} />
+                    <MarketCard title="Cartões Vermelhos" subtitle="Totais (Partida)" prediction={projection.cartoes_vermelhos.total} />
+                    <MarketCard title="Cartões Vermelhos" subtitle={teamPt(awayTeamId)} prediction={projection.cartoes_vermelhos[awayTeamId]} />
+                  </div>
+                </CollapsibleMarket>
+              )}
+
+              {/* Time a marcar primeiro (mercado novo, exibido cru) */}
+              {projection.time_marca_primeiro && (
+                <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
+                    Time a Marcar Primeiro
+                    <InfoTooltip text="Probabilidade de cada time marcar o 1º gol da partida (ou de a partida terminar sem gols)." />
+                  </h4>
+                  <div className="flex-1 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:gap-x-8 text-center">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{teamPt(homeTeamId)}</p>
+                      <p className="text-2xl font-mono font-bold text-emerald-400">{projection.time_marca_primeiro[homeTeamId]?.prob}%</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {projection.time_marca_primeiro[homeTeamId]?.odd_justa}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{teamPt(awayTeamId)}</p>
+                      <p className="text-2xl font-mono font-bold text-blue-400">{projection.time_marca_primeiro[awayTeamId]?.prob}%</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {projection.time_marca_primeiro[awayTeamId]?.odd_justa}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Nenhum (0x0)</p>
+                      <p className="text-2xl font-mono font-bold text-muted-foreground">{projection.time_marca_primeiro.nenhum?.prob}%</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {projection.time_marca_primeiro.nenhum?.odd_justa}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Jogador — modelo de goleador (dentro dos secundários, colapso individual) */}
               {scorers?.disponivel && (
                 <CollapsibleMarket title="Jogador" tip="Por jogador do elenco recente, se jogar: probabilidade de marcar a qualquer momento e de dar ≥ 0,5/1,5/2,5 finalizações — modelos de goleador e de finalizações (forma + defesa do adversário + mando + minutos), calibrados. Odd justa = 1/probabilidade, sem margem de casa.">

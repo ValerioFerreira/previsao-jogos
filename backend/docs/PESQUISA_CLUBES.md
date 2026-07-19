@@ -189,3 +189,23 @@ base de clubes (4/5 folds) — não testado ainda em seleções; candidato a inv
 sob o próprio pipeline de seleções (fora do escopo desta pesquisa de clubes).
 
 (Continuar registrando tudo aqui, inclusive negativos, com números.)
+
+## 6. Rodada 2026-07-19 — 12 hipóteses novas no dataset de 60 ligas (191.580 jogos)
+
+Ver `DOCUMENTACAO_CENTRAL.md` §16 para a tabela completa de vereditos. Resumo: **nenhuma passou
+o gate** (mesmo padrão da rodada anterior — a arquitetura de produção continua difícil de bater).
+Achados de interesse pra próximas rodadas:
+
+- **Correlação ida-volta em mata-mata confirmada** (corr margem leg1×leg2 = -0,132, n=1.702,
+  regressão mostra efeito de motivação real) — não é sobre o modelo de RESULTADO por-jogo (esse
+  continua bem servido pela independência assumida), é sobre um MERCADO novo (qualificação
+  agregada) que precisaria de um modelo bivariado condicional dedicado, não construído ainda.
+- **Calibração isotônica por bucket de \|elo_diff\|** — REPROVADO de forma limpa (5/5 folds
+  piora), diferente do O/U de contagem onde calibração já ajuda. Não insistir nessa direção pro
+  resultado H/D/A sem uma ideia nova.
+- **League pooling (shrinkage empírico-Bayesiano)** e **derby** — ambos "misto": direção do
+  sinal correta mas efeito abaixo do limiar de promoção. Não vale reinvestir sem uma
+  parametrização diferente (ex.: shrinkage mais agressivo, ou derby com curadoria manual em vez
+  de heurística por cidade-sede).
+- Bloqueados por falta de dado (não retestar sem coletar antes): lesões (zero cache de
+  `/injuries` pra clube) e lotação de estádio (`attendance` não existe na api-football).

@@ -77,6 +77,8 @@ SOT_LINES = [5.5, 6.5, 7.5, 8.5, 9.5, 10.5]       # chutes a gol (total)
 SOT_TEAM_LINES = [2.5, 3.5, 4.5, 5.5, 6.5]        # chutes a gol por equipe
 GOALS_HALF_LINES = [0.5, 1.5, 2.5, 3.5]           # gols por tempo (total)
 CARDS_HALF_LINES = [1.5, 2.5, 3.5, 4.5]           # cartões por tempo (total)
+REDCARD_TEAM_LINES = [0.5]                        # cartão vermelho por equipe (raro — sim/não)
+REDCARD_LINES = [0.5, 1.5]                        # cartão vermelho total
 GOALS_LINES = [0.5, 1.5, 2.5, 3.5, 4.5]           # gols (equipe/total, partida)
 OFFSIDES_LINES = [1.5, 2.5, 3.5, 4.5, 5.5]        # impedimentos (total)
 OFFSIDES_TEAM_LINES = [0.5, 1.5, 2.5, 3.5]        # impedimentos por equipe
@@ -110,6 +112,19 @@ class Predictor:
         _off_path = f"{art_dir}/offsides_nb.joblib"
         if os.path.exists(_off_path):
             self.offsides = CornersNB.load(_off_path)
+        # Cartões vermelhos isolados (mercado novo — hoje "cartoes" soma amarelo+
+        # vermelho). Mesmo padrão opcional/retrocompatível de offsides acima.
+        self.cartoes_vermelhos = None
+        _red_path = f"{art_dir}/cartoes_vermelhos_nb.joblib"
+        if os.path.exists(_red_path):
+            self.cartoes_vermelhos = CornersNB.load(_red_path)
+        # Time a marcar primeiro (mercado novo) — classificador multinomial
+        # (HistGradientBoosting) sobre base_feats, salvo como dict {pipe, feats}.
+        # Mesmo padrão opcional/retrocompatível.
+        self.first_scorer = None
+        _fs_path = f"{art_dir}/first_scorer_clf.joblib"
+        if os.path.exists(_fs_path):
+            self.first_scorer = joblib.load(_fs_path)
         # Mercados por tempo (1º/2º) — gols e cartões (CornersNB sobre base_feats).
         # Opcional/retrocompatível (mesmo padrão do offsides acima): escopos sem esses
         # artefatos (ex.: clubes, ainda não validados pela pesquisa) só não expõem "tempos".
@@ -600,6 +615,28 @@ class Predictor:
                 home_team: self._corners_market(of["home"][0], OFFSIDES_TEAM_LINES),
                 away_team: self._corners_market(of["away"][0], OFFSIDES_TEAM_LINES),
                 "total": self._corners_market(of["total"][0], OFFSIDES_LINES),
+            }
+
+        # Cartões vermelhos isolados (mercado novo, exibido cru — sem gate de
+        # calibração ainda). Só é anexado se o artefato existe.
+        if self.cartoes_vermelhos is not None:
+            rc = self.cartoes_vermelhos.predict_distributions(X[self.cartoes_vermelhos.feats])
+            resultado["cartoes_vermelhos"] = {
+                home_team: self._corners_market(rc["home"][0], REDCARD_TEAM_LINES),
+                away_team: self._corners_market(rc["away"][0], REDCARD_TEAM_LINES),
+                "total": self._corners_market(rc["total"][0], REDCARD_LINES),
+            }
+
+        # Time a marcar primeiro (mercado novo, exibido cru). Só é anexado se o
+        # artefato existe.
+        if self.first_scorer is not None:
+            fs_pipe, fs_feats = self.first_scorer["pipe"], self.first_scorer["feats"]
+            fs_probs = fs_pipe.predict_proba(X[fs_feats])[0]
+            fs_map = dict(zip(fs_pipe.named_steps["clf"].classes_, fs_probs))
+            resultado["time_marca_primeiro"] = {
+                home_team: _mk(fs_map.get("home", 0.0)),
+                away_team: _mk(fs_map.get("away", 0.0)),
+                "nenhum": _mk(fs_map.get("none", 0.0)),
             }
 
         return resultado

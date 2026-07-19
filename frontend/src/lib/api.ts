@@ -77,6 +77,10 @@ export type PredictionResponse = {
   cartoes: Record<string, CountPrediction>;
   // Impedimentos (mandante/visitante/total) — mercado NB exposto cru (sem calibração).
   impedimentos?: Record<string, CountPrediction>;
+  // Cartões vermelhos isolados (mandante/visitante/total) — mercado NB exposto cru.
+  cartoes_vermelhos?: Record<string, CountPrediction>;
+  // Time a marcar primeiro — mandante/visitante/"nenhum" (probabilidade + odd justa).
+  time_marca_primeiro?: Record<string, { prob: number; odd_justa: number }>;
   // Mercados derivados: cortes exatos da matriz conjunta do Dixon-Coles / PMFs de gols.
   mercados_derivados?: DerivedMarkets;
   // Mercados por tempo (1º/2º): cada chave (gols_1t, gols_2t, cartoes_1t, cartoes_2t)

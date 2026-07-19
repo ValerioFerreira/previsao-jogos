@@ -922,3 +922,103 @@ em ambos os branches; `get_team_history(..., scope="clube")` retorna Elo real (e
 Club, 17 pontos mensais 2024-02→2026-07). Frontend: `tsc --noEmit` limpo nos dois momentos
 (antes e depois do fix do §15.5); fluxo completo testado no browser (modal → grid de
 competições → seleção de partida → confronto carregado → `/estatisticas` completo).
+
+## 16. Bateria de 12 hipóteses (dataset 60 ligas) + 3 mercados novos + fix de coleta (2026-07-19)
+
+Pedido do dono: subir a coleta pra 16 workers, testar exaustivamente uma lista de 12 hipóteses
+de modelo pra clube, e implementar os mercados novos identificados na sessão anterior. Trabalho
+executado localmente (worktree `../previsao-jogos-clubs-research` na branch `clubs`, dataset
+copiado — evita reprocessar/reescrever o `main` e evita Neon pra computação, só a coleta grava
+lá). **Nenhuma hipótese passou o gate §6 desta vez** — produção continua sem exceção de push.
+
+### 16.1 Coleta — bug real encontrado e corrigido
+
+`quota_tracker.throttle()` (criado na sessão anterior pro fix de cota diária) liberava rajada
+até o teto de 440/min em vez de espaçar as chamadas — com 8 workers o jitter não estourava o
+limite por-segundo real da api-football, mas com **16 workers** (pedido desta sessão) gerou
+centenas de `429 Too Many Requests` (chamadas desperdiçadas, não afeta cota diária mas atrasa).
+Corrigido: `throttle()` agora aplica um espaçamento mínimo (`MIN_GAP = 60/PER_MINUTE_CAP`) entre
+liberações, além do teto por janela — rajada inicial eliminada. `PER_MINUTE_CAP` também reduzido
+de 440→380 (margem maior pro jitter de 16 threads). `DOWNLOAD_WORKERS` em
+`backfill_history_priority.py`: 8→16.
+
+Resultado: `data/built/club_matches.parquet`/`club_fixtures.parquet`/`club_lineups.parquet`
+reconstruídos do zero sobre o espelho local (`club_raw_cache.sqlite`, 5,2 GB, 100% local) —
+**191.580 fixtures, cobertura box-score 71%, cobertura xG 14,1%**. Coleta do dia rodou em duas
+levas (relançada após o fix): 44 ligas completas (tier1+tier2), cota final ~39.6k/75k restante
+(sobrou pra amanhã). `club_lineups.parquet` novo: 378.291 escalações em 189.150 jogos (nunca
+tinha sido regenerado desde a expansão pras 60 ligas).
+
+**Nota:** o artefato de PRODUÇÃO (`model_artifacts_clubes/`, DC-NB principal) continua o do §15
+(174.697 jogos/46 competições) — não foi retreinado nesta rodada porque nenhuma hipótese testada
+abaixo passou o gate de promoção; o dataset de 191.580 jogos foi usado só pra pesquisa e pros 3
+mercados novos por-tempo/vermelhos/marcador-primeiro (que treinam modelos independentes, não
+tocam o DC-NB principal).
+
+### 16.2 As 12 hipóteses — vereditos
+
+Protocolo reusado de `research_clubs/protocol.py` (splits temporais expanding, gate: **≥4/5
+folds melhoram logloss E delta<-0.001** pra "PASSA"). Scripts novos em
+`backend/scripts/clubs_hyp{3,4,5,6,10}_*.py` + `clubs_new_hyp_ablation.py` (H3+H8), todos na
+branch `clubs` (worktree).
+
+| # | Hipótese | Veredito | Nota |
+|---|---|---|---|
+| 1 | Re-rodar Fase 4/5/6 completas no dataset 60 ligas | **NÃO EXECUTADO** | dataset rebuildado a tempo, mas a bateria completa (13 testes da §13) não foi re-rodada nesta sessão — fica pro próximo round |
+| 2 | Blend com odds reais de clube | **BLOQUEADO** | `club_odds_registry` só começou a popular hoje (103→ mais odds na Fase A do mega_collect); volume insuficiente pra backtest |
+| 3 | Pooling hierárquico Elo-diff por liga (shrinkage empírico-Bayesiano) | **misto** | 5/5 folds melhoram mas delta=-0.0004 (abaixo do limiar -0.001) — direção certa, efeito pequeno demais |
+| 4 | Lineup novelty (desfalque real vs XI habitual, não só turnover) | **REPROVADO** | 3/5 folds, delta~0.0000 |
+| 5 | Correlação ida-volta em mata-mata | **CONFIRMADO (diagnóstico)** | corr(margem leg1, leg2)=-0,132 (n=1.702), regressão mostra efeito de motivação real (coef_deficit=-0,069, R²=0,096) — vale construir mercado de qualificação agregada com modelo correlacionado (não feito ainda, ver §16.4) |
+| 6 | xG como mercado próprio (O/U, não feature) | **VIÁVEL, aguardar mais dado** | cobertura80=0,975, MAE=0,89 gol — amostra de 14% ainda pequena pra servir com confiança |
+| 7 | Proxy de lesões no resultado | **BLOQUEADO** | zero dado de `/injuries` cacheado pra clube; coletar 190k+ jogos custaria cota alta sem garantia (já marginal em seleção) |
+| 8 | Efeito derby/rivalidade (mesma cidade-sede) | **misto** | 4/5 folds melhoram mas delta~0,0000 — sem sinal incremental sobre Elo |
+| 9 | GAP-ratings revisitado (60 ligas) | **NÃO EXECUTADO** | mesmo caso do #1 — fica pro próximo round de pesquisa |
+| 10 | Calibração isotônica por bucket de \|elo_diff\| | **REPROVADO** | logloss piora em 5/5 folds (+0,003 a +0,014) vs baseline no mesmo dataset/folds — diferente do O/U de contagem (calibração lá já promovida), não ajuda o resultado H/D/A |
+| 11 | Home advantage por lotação/capacidade de estádio | **BLOQUEADO** | api-football não expõe `attendance` no bloco `fixture.venue` (só id/nome/cidade) |
+| 12 | Momentum de goleiro pra BTTS/clean-sheet | **NÃO EXECUTADO** | dado de saves por goleiro existe no box-score (`players[].statistics.goals.saves`), mas não foi extraído/testado nesta rodada |
+
+### 16.3 Mercados novos entregues (backend + frontend, ambos escopos)
+
+Todos seguem o padrão opcional/retrocompatível já usado por `impedimentos` (`if os.path.exists`
+no `Predictor.__init__`, artefato ausente = mercado não aparece — zero risco pra produção atual):
+
+- **1º/2º tempo pra CLUBE** (`gols_1t/2t`, `cartoes_1t/2t`) — já existia pra seleção (§ antiga,
+  nunca documentada como "gap"); só faltava treinar pro escopo clube. Novo
+  `build_clubs_halftime_targets.py` (extrai placar/cartões por tempo dos eventos brutos do
+  espelho local, 191.392 jogos) + `train_clubs_halftime_markets.py` (mesma classe `CornersNB` da
+  cascata de escanteios). 174.544 jogos casados. Frontend **não precisou mudar** — `tempos` já
+  era servido de forma agnóstica de escopo.
+- **Cartões vermelhos isolados** (`cartoes_vermelhos`) — hoje `cartoes` soma amarelo+vermelho;
+  novo mercado separado (`CornersNB`, grade pequena `max_corners=4`, raro: ~0,10-0,13/time/jogo).
+  `build/train_redcards_market.py --scope {selecao,clube}`, artefato em ambos
+  `model_artifacts{,_clubes}/cartoes_vermelhos_nb.joblib`. Frontend: card novo em `page.tsx`
+  (mesmo padrão de "Impedimentos"), tipo `cartoes_vermelhos` em `api.ts`.
+- **Time a marcar primeiro** (`time_marca_primeiro`) — P(mandante/visitante marca o 1º gol /
+  nenhum gol). Novo `build_first_scorer_targets.py` (extrai do 1º evento `type=Goal` ordenado por
+  minuto, ambos os espelhos locais) + `train_first_scorer_market.py` (classificador multinomial
+  `HistGradientBoostingClassifier` sobre `base_feats`, salvo como `{pipe, feats}` via joblib — não
+  é `CornersNB`, é probabilidade direta). 191.305 jogos (clube) / 6.317 (seleção, amostra menor —
+  poucos jogos de seleção têm eventos completos). Frontend: card de 3 vias no padrão "Ambas
+  Marcam" (`page.tsx`), tipo `{ prob, odd_justa }` em `api.ts`.
+
+Todos os 3 verificados ponta a ponta: smoke test do `Predictor` isolado + fetch real contra o
+`/predict` do dev server + `tsc --noEmit` limpo. **Gotcha encontrado:** `uvicorn --reload` no
+Windows por vezes não detecta mudança em `predictor.py` (WatchFiles perde o evento) — se um
+`fetch` novo não trouxer o campo esperado, reiniciar o servidor manualmente antes de suspeitar de
+bug de código.
+
+**Handicap de escanteios/cartões por time**: checado e já existia (não era gap real) —
+`escanteios`/`cartoes` sempre expuseram O/U por time (`home_team`/`away_team`) além do total,
+renderizado em `page.tsx` desde sempre.
+
+### 16.4 Não executado nesta rodada (fica documentado pro próximo round)
+
+- Mercado de **qualificação/agregado de mata-mata** (depende da hipótese #5, confirmada — falta
+  o modelo bivariado condicional e a UI de "confronto agregado").
+- Mercado de **assistências** (marcador de assistência) — dado existe
+  (`players[].statistics.goals.assists`), mas replicar a arquitetura de
+  `build_scorer_model.py`/`build_shots_prop_model.py` pro escopo clube é um trabalho maior
+  (painel jogador-partida, features de defesa do adversário, validação temporal) que não coube
+  nesta sessão.
+- Hipóteses #1/#9 (rerun completo da bateria §13 no dataset de 60 ligas) e #12 (momentum de
+  goleiro) — não executadas, dado/infra prontos pro próximo round.
