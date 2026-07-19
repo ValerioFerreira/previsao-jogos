@@ -167,17 +167,32 @@ class Predictor:
         # ligas/confederações com pouca cobertura. A fração presente vira o tier de
         # confiabilidade do jogo (ver _reliability).
         self._box_bases = [b for b in self.meta["bases"] if b.startswith("sb_")]
-        # historico de confrontos (h2h)
-        self.results = pd.read_csv(f"{art_dir}/results_slim.csv", parse_dates=["date"])
+        # historico de confrontos (h2h). dtype=category em team/tournament: essas colunas
+        # se repetem em ~todas as linhas (191k jogos p/ clube) e como object/str custam várias
+        # vezes mais em memória que como categoria -- é o maior redutor de RAM aqui, sem mudar
+        # nenhum comportamento (comparação/sort/groupby funcionam igual em Series categóricas).
+        # placar nunca tem NaN (confirmado nos 3 CSVs) -- int32 é folga de sobra pro range
+        # real (0-15) e ainda corta 4 bytes/valor vs o int64 default do pandas. Os stats de
+        # box-score (chutes/escanteios/cartões) têm ~57% de NaN em h2h_stats.csv -> precisam
+        # continuar float, mas float32 já tem precisão de sobra pra médias de poucas casas.
+        _team_dtype = {"home_team": "category", "away_team": "category", "tournament": "category"}
+        _score_dtype = {"home_score": "int32", "away_score": "int32"}
+        _stat_cols = ["home_shots", "away_shots", "home_sot", "away_sot",
+                      "home_corners", "away_corners", "home_cards", "away_cards"]
+        _stat_dtype = {c: "float32" for c in _stat_cols}
+        self.results = pd.read_csv(f"{art_dir}/results_slim.csv", parse_dates=["date"],
+                                    dtype={**_team_dtype, **_score_dtype})
         self.anchor_date = self.results["date"].max()
         # estatísticas por jogo (placar+box-score) p/ médias do confronto direto
         try:
-            self.h2h_stats = pd.read_csv(f"{art_dir}/h2h_stats.csv", parse_dates=["date"])
+            self.h2h_stats = pd.read_csv(f"{art_dir}/h2h_stats.csv", parse_dates=["date"],
+                                          dtype={**_team_dtype, **_score_dtype, **_stat_dtype})
         except Exception:
             self.h2h_stats = None
         # base profunda de resultados (martj42 pré-2016 + api 2016+) só para o card H2H
         try:
-            self.h2h_results = pd.read_csv(f"{art_dir}/h2h_results.csv", parse_dates=["date"])
+            self.h2h_results = pd.read_csv(f"{art_dir}/h2h_results.csv", parse_dates=["date"],
+                                            dtype={**_team_dtype, **_score_dtype})
         except Exception:
             self.h2h_results = None
 
