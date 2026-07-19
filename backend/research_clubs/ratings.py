@@ -93,13 +93,18 @@ def compute_berrar_ratings(df: pd.DataFrame, alpha_h: float = 5.0, alpha_a: floa
 # ─── GAP ratings (por estatística) ───────────────────────────────────────────
 def compute_gap_ratings(df: pd.DataFrame, home_stat_col: str, away_stat_col: str,
                         lam: float = 0.1, phi1: float = 0.7, phi2: float = 0.7,
-                        prefix: str = "gap") -> pd.DataFrame:
+                        prefix: str = "gap", return_state: bool = False):
     """
     GAP ratings para UMA estatística (ex.: chutes: home_cur_sb_shots/away_cur_sb_shots).
     4 ratings por time (ataque/defesa × casa/fora), init = média incremental da liga.
     Retorna colunas pré-jogo: {prefix}_home_att, {prefix}_home_def, {prefix}_away_att,
     {prefix}_away_def, {prefix}_exp_home, {prefix}_exp_away.
     Linhas sem a estatística não atualizam ratings (e recebem os valores correntes).
+
+    `return_state=True`: retorna também (Ha, Hd, Aa, Ad, running_mean) — os
+    ratings FINAIS por time (após a última linha de `df`, que deve estar
+    ordenado por data) — usado para servir o mercado em produção (snapshot do
+    estado "atual" de cada time, mesmo padrão do elo_pre snapshot).
     """
     Ha: dict = {}; Hd: dict = {}; Aa: dict = {}; Ad: dict = {}
     out = np.full((len(df), 6), np.nan)
@@ -134,6 +139,9 @@ def compute_gap_ratings(df: pd.DataFrame, home_stat_col: str, away_stat_col: str
         Ha[at] = max(ha_j + lam * (1 - phi2) * err_a, 0.0)
         Ad[at] = max(ad_j + lam * phi2 * err_h, 0.0)
         Hd[at] = max(hd_j + lam * (1 - phi2) * err_h, 0.0)
-    return pd.DataFrame(out, columns=[
+    res = pd.DataFrame(out, columns=[
         f"{prefix}_home_att", f"{prefix}_home_def", f"{prefix}_away_att",
         f"{prefix}_away_def", f"{prefix}_exp_home", f"{prefix}_exp_away"], index=df.index)
+    if return_state:
+        return res, {"Ha": Ha, "Hd": Hd, "Aa": Aa, "Ad": Ad, "running_mean": running_mean}
+    return res

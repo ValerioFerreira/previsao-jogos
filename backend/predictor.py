@@ -79,7 +79,20 @@ GOALS_HALF_LINES = [0.5, 1.5, 2.5, 3.5]           # gols por tempo (total)
 CARDS_HALF_LINES = [1.5, 2.5, 3.5, 4.5]           # cartões por tempo (total)
 REDCARD_TEAM_LINES = [0.5]                        # cartão vermelho por equipe (raro — sim/não)
 REDCARD_LINES = [0.5, 1.5]                        # cartão vermelho total
+YELLOWCARD_LINES = CARDS_LINES                    # cartão amarelo — mesma grade do total (é a maioria)
 GOALS_LINES = [0.5, 1.5, 2.5, 3.5, 4.5]           # gols (equipe/total, partida)
+AGG_GOALS_LINES = [2.5, 3.5, 4.5, 5.5, 6.5]       # gols agregados (mata-mata ida-volta, 2 pernas)
+# Competições continentais de clube que rodam mata-mata em duas pernas (mando invertido
+# na volta) — únicas onde o mercado "agregado" (predict_aggregate) faz sentido anexar
+# automaticamente. Seleções (Copa do Mundo/Euro/Copa América/Eliminatórias) não entram:
+# os mata-matas de seleção são jogo único (ou playoffs raros não distinguíveis pelo nome
+# do torneio sozinho).
+KNOCKOUT_TOURNAMENTS = {
+    "Champions League", "Europa League", "Conference League",
+    "Copa Libertadores", "Copa Sul-Americana", "Copa do Brasil",
+    "AFC Champions League", "AFC Champions League Elite",
+    "CAF Champions League", "CONCACAF Champions League",
+}
 OFFSIDES_LINES = [1.5, 2.5, 3.5, 4.5, 5.5]        # impedimentos (total)
 OFFSIDES_TEAM_LINES = [0.5, 1.5, 2.5, 3.5]        # impedimentos por equipe
 
@@ -118,6 +131,11 @@ class Predictor:
         _red_path = f"{art_dir}/cartoes_vermelhos_nb.joblib"
         if os.path.exists(_red_path):
             self.cartoes_vermelhos = CornersNB.load(_red_path)
+        # Cartões amarelos isolados (mercado novo, mesmo padrão opcional/retrocompatível).
+        self.cartoes_amarelos = None
+        _yellow_path = f"{art_dir}/cartoes_amarelos_nb.joblib"
+        if os.path.exists(_yellow_path):
+            self.cartoes_amarelos = CornersNB.load(_yellow_path)
         # Time a marcar primeiro (mercado novo) — classificador multinomial
         # (HistGradientBoosting) sobre base_feats, salvo como dict {pipe, feats}.
         # Mesmo padrão opcional/retrocompatível.
@@ -300,6 +318,25 @@ class Predictor:
             pg, pa = row.get("pace_gf", np.nan), row.get("pace_ga", np.nan)
             row["pace_total"] = (pg + pa) if (pd.notna(pg) and pd.notna(pa)) else np.nan
         if "btts_sum" in row: row["btts_sum"] = _sum2("home_bttsrate_l10", "away_bttsrate_l10")
+
+        # GAP ratings (Wheatcroft) de chutes/escanteios — feature de clube validada
+        # sob o gate §6 (5/5 folds, delta logloss -0,0022, dataset 191.580 jogos/60
+        # ligas — ver DOCUMENTACAO_CENTRAL.md §17). Opcional/retrocompatível: só
+        # existe (`gap_ratings_state` no meta.json) pro artefato de clube retreinado
+        # com este mercado; seleção não tem a chave e o bloco não roda.
+        gs = self.meta.get("gap_ratings_state")
+        if gs:
+            for stat_key, prefix in (("shots", "gap_shots"), ("corners", "gap_corners")):
+                st = gs[stat_key]
+                m = st.get("running_mean", 2.0)
+                ha_i = st["Ha"].get(home_team, m); hd_i = st["Hd"].get(home_team, m)
+                aa_j = st["Aa"].get(away_team, m); ad_j = st["Ad"].get(away_team, m)
+                row[f"{prefix}_home_att"] = ha_i
+                row[f"{prefix}_home_def"] = hd_i
+                row[f"{prefix}_away_att"] = aa_j
+                row[f"{prefix}_away_def"] = ad_j
+                row[f"{prefix}_exp_home"] = (ha_i + ad_j) / 2.0
+                row[f"{prefix}_exp_away"] = (aa_j + hd_i) / 2.0
 
         return pd.DataFrame([row]), h2h
 
@@ -627,6 +664,26 @@ class Predictor:
                 "total": self._corners_market(rc["total"][0], REDCARD_LINES),
             }
 
+        # Cartões amarelos isolados (mercado novo, exibido cru). Só é anexado se o
+        # artefato existe.
+        if self.cartoes_amarelos is not None:
+            yc = self.cartoes_amarelos.predict_distributions(X[self.cartoes_amarelos.feats])
+            resultado["cartoes_amarelos"] = {
+                home_team: self._corners_market(yc["home"][0], YELLOWCARD_LINES),
+                away_team: self._corners_market(yc["away"][0], YELLOWCARD_LINES),
+                "total": self._corners_market(yc["total"][0], YELLOWCARD_LINES),
+            }
+
+        # Qualificação/agregado (mata-mata ida-volta) — só nas competições continentais
+        # que efetivamente jogam em duas pernas com mando invertido (ver KNOCKOUT_TOURNAMENTS).
+        # Home_team/away_team já escolhidos = mandante da ida / mandante da volta.
+        if tournament in KNOCKOUT_TOURNAMENTS:
+            try:
+                resultado["mata_mata_agregado"] = self.predict_aggregate(
+                    home_team, away_team, tournament=tournament, neutral=neutral)
+            except Exception:
+                pass
+
         # Time a marcar primeiro (mercado novo, exibido cru). Só é anexado se o
         # artefato existe.
         if self.first_scorer is not None:
@@ -640,6 +697,67 @@ class Predictor:
             }
 
         return resultado
+
+    # ----------------------------------------------------------------- mata-mata ida-volta
+    def predict_aggregate(self, team_a, team_b, tournament="Amistoso", neutral=False):
+        """Mercado de QUALIFICAÇÃO/AGREGADO em mata-mata ida-e-volta (jogo 1: team_a
+        mandante; jogo 2: team_b mandante, mando invertido). Convolução 2D das duas
+        matrizes conjuntas do Dixon-Coles (uma por perna) assumindo pernas
+        INDEPENDENTES — simplificação deliberada: a pesquisa de clubes (hipótese H5,
+        DOCUMENTACAO_CENTRAL.md/PESQUISA_CLUBES.md) mediu corr(margem perna1, margem
+        perna2) = -0,132 (n=1.702, mata-mata continentais de clube) — dependência
+        fraca, não modelada aqui. Empate no agregado é tratado como prorrogação/
+        pênaltis ~50/50 (sem sinal de mando/força em pênaltis disponível) — não
+        implementa a regra do gol fora (abolida na maioria das confederações desde
+        2021+).
+        """
+        team_a, team_b = self.norm_team(team_a), self.norm_team(team_b)
+        bf = self.meta["base_feats"]
+        X1, _ = self.build_row(team_a, team_b, neutral, tournament)
+        X2, _ = self.build_row(team_b, team_a, neutral, tournament)
+        P1 = np.asarray(self.dc.predict_proba_markets(X1[bf])["joint"][0], dtype=float)  # [gA1, gB1]
+        P2 = np.asarray(self.dc.predict_proba_markets(X2[bf])["joint"][0], dtype=float)  # [gB2, gA2]
+        P2ab = P2.T  # reindexado para [gA2, gB2]
+
+        from scipy.signal import fftconvolve
+        P_agg = fftconvolve(P1, P2ab)
+        P_agg = np.clip(P_agg, 0.0, None)
+        P_agg /= P_agg.sum()
+        n = P_agg.shape[0]  # = 2*max_goals + 1
+
+        def _mk(p):
+            p = _clamp_p(p)
+            return {"prob": round(100 * p, 1), "odd_justa": _fair_odd(p)}
+
+        idx = np.arange(n)
+        S, T = np.meshgrid(idx, idx, indexing="ij")
+        p_a_win = float(P_agg[S > T].sum())
+        p_draw = float(P_agg[S == T].sum())
+        p_b_win = float(P_agg[S < T].sum())
+        p_a_qual = p_a_win + 0.5 * p_draw
+        p_b_qual = p_b_win + 0.5 * p_draw
+
+        cells = sorted(
+            ((i, j, float(P_agg[i, j])) for i in range(n) for j in range(n)),
+            key=lambda t: t[2], reverse=True,
+        )
+        top_placares = [{team_a: int(i), team_b: int(j), "prob": round(100 * p, 1)}
+                         for i, j, p in cells[:3]]
+
+        agg_total_pmf = np.zeros(2 * n - 1)
+        for i in range(n):
+            for j in range(n):
+                agg_total_pmf[i + j] += P_agg[i, j]
+
+        return {
+            "leg1_mandante": team_a, "leg2_mandante": team_b,
+            "qualifica": {team_a: _mk(p_a_qual), team_b: _mk(p_b_qual)},
+            "placar_agregado_top": top_placares,
+            "empate_agregado_prob": round(100 * p_draw, 1),
+            "gols_agregados": self._corners_market(agg_total_pmf, AGG_GOALS_LINES),
+            "_nota": ("Pernas tratadas como independentes (sem gol fora); empate no "
+                      "agregado = prorrogação/pênaltis, estimado 50/50."),
+        }
 
 
 if __name__ == "__main__":

@@ -219,6 +219,22 @@ def predict(payload: PredictRequest) -> dict:
     return predict_match(payload, scope=payload.scope)
 
 
+@app.get("/api/aggregate")
+def aggregate(team_a: str = Query(...), team_b: str = Query(...),
+              tournament: str = Query("Amistoso"), scope: str = Query("selecao")) -> dict:
+    """Mercado de qualificação/agregado em mata-mata ida-e-volta. team_a manda a
+    perna 1, team_b manda a perna 2 (mando invertido) — ver Predictor.predict_aggregate."""
+    predictor = _predictor_for(scope)
+    team_a, team_b = predictor.norm_team(team_a), predictor.norm_team(team_b)
+    if team_a == team_b:
+        raise HTTPException(status_code=400, detail="Escolha duas equipes diferentes.")
+    if team_a not in predictor.teams() or team_b not in predictor.teams():
+        raise HTTPException(status_code=404, detail="Time nao encontrado.")
+    if tournament not in predictor.meta["tournament_weights"]:
+        raise HTTPException(status_code=400, detail="Competicao invalida.")
+    return predictor.predict_aggregate(team_a, team_b, tournament=tournament)
+
+
 @app.get("/api/referees")
 def referees() -> dict:
     return {"referees": get_referees()}

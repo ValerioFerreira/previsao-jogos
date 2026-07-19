@@ -81,6 +81,19 @@ export type PredictionResponse = {
   impedimentos?: Record<string, CountPrediction>;
   // Cartões vermelhos isolados (mandante/visitante/total) — mercado NB exposto cru.
   cartoes_vermelhos?: Record<string, CountPrediction>;
+  // Cartões amarelos isolados (mandante/visitante/total) — mercado NB exposto cru.
+  cartoes_amarelos?: Record<string, CountPrediction>;
+  // Mata-mata ida-e-volta (só competições continentais de clube com 2 pernas) —
+  // mandante da análise = mandante da ida, visitante = mandante da volta.
+  mata_mata_agregado?: {
+    leg1_mandante: string;
+    leg2_mandante: string;
+    qualifica: Record<string, { prob: number; odd_justa: number }>;
+    placar_agregado_top: Array<Record<string, number>>;
+    empate_agregado_prob: number;
+    gols_agregados: CountPrediction;
+    _nota: string;
+  };
   // Time a marcar primeiro — mandante/visitante/"nenhum" (probabilidade + odd justa).
   time_marca_primeiro?: Record<string, { prob: number; odd_justa: number }>;
   // Mercados derivados: cortes exatos da matriz conjunta do Dixon-Coles / PMFs de gols.

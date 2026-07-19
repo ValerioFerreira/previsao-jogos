@@ -51,12 +51,23 @@ from corner_interactions import add_corner_interactions, CORNER_INTERACTIONS
 from scripts.clubs_train_counts import (
     base_feats, decay_w, fit_shots_with_decay, oof_shots_for_train, STYLE_RAW,
 )
+from research_clubs.ratings import compute_gap_ratings
 
 FEATURES = ROOT / "data" / "built" / "club_features_enriched.parquet"
 SELECAO_META = ROOT / "model_artifacts" / "meta.json"
 OUT = ROOT / "model_artifacts_clubes"
 
 DC_PARAMS = dict(n_estimators=100, max_depth=3, learning_rate=0.05, max_goals=12, random_state=42)
+
+# GAP ratings (Wheatcroft) de chutes/escanteios — único grupo da Fase 5 que passou
+# o gate na bateria 2026-07-19 (dataset 191.580 jogos/60 ligas): 5/5 folds, delta
+# logloss -0,0022 (>2x o limiar -0,001). Ver DOCUMENTACAO_CENTRAL.md §17.
+GAP_RATINGS_FEATS = [
+    "gap_shots_home_att", "gap_shots_home_def", "gap_shots_away_att", "gap_shots_away_def",
+    "gap_shots_exp_home", "gap_shots_exp_away",
+    "gap_corners_home_att", "gap_corners_home_def", "gap_corners_away_att", "gap_corners_away_def",
+    "gap_corners_exp_home", "gap_corners_exp_away",
+]
 
 
 def per_team_bases(df):
@@ -137,6 +148,15 @@ def main():
     print(f"Base de clubes: {len(df)} jogos ({df['date'].min().date()} -> {df['date'].max().date()})")
 
     _, df = disambiguate_collisions(df)
+
+    # ---- 0. GAP ratings (chutes/escanteios) — feature validada, ver GAP_RATINGS_FEATS ----
+    print(">> GAP ratings (chutes/escanteios)...")
+    gap_shots_df, gap_shots_state = compute_gap_ratings(
+        df, "home_cur_sb_shots", "away_cur_sb_shots", prefix="gap_shots", return_state=True)
+    gap_corners_df, gap_corners_state = compute_gap_ratings(
+        df, "home_cur_sb_corners", "away_cur_sb_corners", prefix="gap_corners", return_state=True)
+    df = pd.concat([df, gap_shots_df, gap_corners_df], axis=1)
+    base_feats_list = base_feats_list + GAP_RATINGS_FEATS
 
     # ---- 1. Ortogonalização de estilo (fit na base inteira, é produção) ----
     print(">> Ortogonalização de estilo...")
@@ -235,6 +255,12 @@ def main():
         "snapshot": snapshot,
         "tournament_weights": tournament_weights,
         "team_ids": team_ids,
+        "gap_ratings_state": {
+            "shots": {k: {t: float(v) for t, v in d.items()} for k, d in gap_shots_state.items() if k != "running_mean"}
+                     | {"running_mean": float(gap_shots_state["running_mean"])},
+            "corners": {k: {t: float(v) for t, v in d.items()} for k, d in gap_corners_state.items() if k != "running_mean"}
+                       | {"running_mean": float(gap_corners_state["running_mean"])},
+        },
         "n_train": {
             # vencedor/BTTS/over_2_5 saem da mesma matriz conjunta do DC-NB (ver
             # predictor.py) -- mesmo tamanho de amostra que "goals". Preenchidos p/

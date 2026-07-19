@@ -5,8 +5,8 @@
 
 Plataforma de **previsão probabilística de partidas** — **produção: seleções E clubes**
 (mercados de clube lançados em 2026-07-18, mesmo menu de mercados de seleção, ver §14 do
-doc-mestre; coleta de clube em 60 competições, artefato hoje cobre 46 já processadas — retreino
-2026-07-18, ver §15).
+doc-mestre; coleta de clube em 68 competições — 60 completas, 8 novas ~92% coletadas, ver §17;
+artefato de produção cobre 52 torneios, DC-NB de clube com GAP ratings desde 2026-07-19, ver §17).
 Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/frontend`**
 (Next.js, deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 
@@ -22,9 +22,11 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   2026-07-15 — arquitetura atual venceu tudo, sem exceção de push)**, **§14 mercados de clubes em
   produção (2026-07-18 — `scope="selecao"|"clube"` ponta a ponta, gaps documentados)**, **§15
   partida agendada de clube + Elo histórico real + retreino 60 ligas (2026-07-18, mesmo dia —
-  fecha os gaps da §14)**, **§16 bateria de 12 hipóteses (dataset 60 ligas, nenhuma passou o
-  gate) + 3 mercados novos: 1º/2º tempo pra clube, cartões vermelhos, time a marcar primeiro
-  (2026-07-19)**.
+  fecha os gaps da §14)**, **§16 bateria de 12 hipóteses (dataset 60 ligas) + 3 mercados novos:
+  1º/2º tempo pra clube, cartões vermelhos, time a marcar primeiro (2026-07-19)**, **§17 fecha
+  as hipóteses pendentes do §16 — GAP ratings PASSOU o gate e foi promovido pro DC-NB de clube
+  (158→170 features); mercados novos: cartões amarelos, qualificação/agregado em mata-mata
+  ida-volta; +8 competições em coleta (mesmo dia, 2026-07-19)**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa
@@ -42,13 +44,19 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
 - `app/main.py` — **todas as rotas** (`/predict`, `/h2h`, `/api/*`, domínios montados). Rotas
   relevantes (predict/teams/team/h2h/team-ids/benchmark/pmf/scorers) aceitam
   `scope: "selecao"|"clube"` (default `"selecao"`, retrocompatível) — ver §14 do doc-mestre.
+  `GET /api/aggregate` (novo 2026-07-19, §17) — qualificação/agregado em mata-mata ida-volta
+  (`Predictor.predict_aggregate`), mesmo cálculo já anexado em `/predict` (`mata_mata_agregado`)
+  pras competições continentais de clube com 2 pernas.
 - `app/services/predictor_service.py` — leitores/endpoints de dados (recent/history/goal-timing/
   referee/benchmark/injuries/pmf/scorers). **Agregados lidos de tabelas pequenas** (ver abaixo).
   `_predictor_for(scope)` escolhe entre `get_predictor()`/`get_club_predictor()`; endpoints sem
   base de dado de clube ainda (recent/history/benchmark/goal-timing) degradam vazio p/ clube.
 - `scripts/build_clubs_production_artifacts.py` + `model_artifacts_clubes/*.joblib` — artefato de
-  produção de clube (1.197 times/54.072 jogos/13 competições), mesma arquitetura/hiperparâmetros
-  da §13. Nomes de time desambiguados por colisão real (`"Nome (Liga)"`); `team_ids` (p/ escudo)
+  produção de clube (2.326 times/191.580 jogos/52 torneios, retreino 2026-07-19 §17), mesma
+  arquitetura/hiperparâmetros da §13 **+ GAP ratings de chutes/escanteios no DC-NB** (158→170
+  `base_feats`, único achado que passou o gate na bateria do §16/§17 — `meta["gap_ratings_state"]`
+  guarda o rating final por time, servido em `predictor.py::build_row()` no mesmo padrão do Elo).
+  Nomes de time desambiguados por colisão real (`"Nome (Liga)"`); `team_ids` (p/ escudo)
   resolvido do próprio `meta.json`, não do Neon (que só tem seleção).
 - `app/services/aggregates.py` + `raw_cache.py` — **otimização do Neon**: precompute de agregados
   (tabelas `*_agg`) + espelho local SQLite do bruto (`data/raw_cache.sqlite`). Ver `ARCHITECTURE.md §3.1`.
@@ -67,23 +75,25 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
 - `model_artifacts/*.joblib` — modelos em produção (DC, NB/GP, `scorer_model`, `shots_prop_model`, calibradores).
   Opcionais (ausência = mercado não exposto, `Predictor.__init__` checa `os.path.exists`):
   `offsides_nb`, `gols_{1,2}t_nb`/`cartoes_{1,2}t_nb` (por-tempo — clube ganhou em 2026-07-19),
-  `cartoes_vermelhos_nb`, `first_scorer_clf` (novos 2026-07-19, ambos escopos — ver
-  DOCUMENTACAO_CENTRAL.md §16).
+  `cartoes_vermelhos_nb`, `first_scorer_clf` (2026-07-19, ambos escopos, §16), `cartoes_amarelos_nb`
+  (2026-07-19, ambos escopos, §17) — ver DOCUMENTACAO_CENTRAL.md.
 - **Dataset de treino:** `international_features_enriched_apifootball.csv` (gitignored; espelho `features_enriched`).
 
 ### Scripts (`/backend/scripts`)
-- **Coleta:** `prefetch_wc_data.py` (seleções, `--all-nations`), `prefetch_clubs.py` (clubes, **60
-  competições** — 26 originais (Brasil→Europa→SulAmérica + expansão 2026-07-15) + 34 de expansão
-  2026-07-18, `LEAGUES` no topo do arquivo — tabela `club_match_detail_cache` + espelho local
-  `data/club_raw_cache.sqlite`). `prefetch_clubs_parallel.py` (versão paralela p/ backfill grande —
-  ~380 req/min vs ~15-20/min do sequencial). `mirror_club_cache.py` (backfill único via API, zero
-  egress do Neon). `collect_club_odds_forward.py` (odds futuras de clubes, novo). **Cron:**
-  `prefetch_wc.cmd` (Task Scheduler `\PrevisaoJogos\`). **Checar cota/validade da assinatura antes
-  de coleta grande:** ver `ARCHITECTURE.md §7.2`.
+- **Coleta:** `prefetch_wc_data.py` (seleções, `--all-nations`), `prefetch_clubs.py` (clubes, **68
+  competições** — 60 completas (26 originais + 34 de expansão 2026-07-15/18) + 8 novas 2026-07-19
+  (copas dos "big five" + Índia/Tailândia, ~92% coletadas, ver §17.6), `LEAGUES` no topo do arquivo
+  — tabela `club_match_detail_cache` + espelho local `data/club_raw_cache.sqlite`).
+  `prefetch_clubs_parallel.py` (versão paralela p/ backfill grande — ~380 req/min vs ~15-20/min do
+  sequencial). `mirror_club_cache.py` (backfill único via API, zero egress do Neon).
+  `collect_club_odds_forward.py` (odds futuras de clubes, novo). **Cron:** `prefetch_wc.cmd` (Task
+  Scheduler `\PrevisaoJogos\`). **Checar cota/validade da assinatura antes de coleta grande:** ver
+  `ARCHITECTURE.md §7.2`.
 - **Modelos:** `build_scorer_model.py`, `build_shots_prop_model.py` (leem o espelho local).
-  **Mercados por-tempo/vermelhos/marcador-primeiro (novo 2026-07-19, §16):**
+  **Mercados por-tempo/vermelhos/marcador-primeiro (2026-07-19, §16):**
   `build_clubs_halftime_targets.py` + `train_clubs_halftime_markets.py` (1º/2º tempo pra clube),
   `train_redcards_market.py --scope {selecao,clube}` (cartões vermelhos isolados),
+  `train_yellowcards_market.py --scope {selecao,clube}` (cartões amarelos isolados, §17.3),
   `build_first_scorer_targets.py` + `train_first_scorer_market.py --scope {selecao,clube}` (time
   a marcar primeiro) — todos 100% locais (leem `data/{club_,}raw_cache.sqlite`), opcionais em
   `predictor.py`.
@@ -129,8 +139,8 @@ teste de UI autenticado.
 - **Promoção de modelo** exige o **gate §6** (CV temporal, reduzir log-loss sem piorar ECE, consistente).
   Pesquisa em branch (`clubs` ou nova) **não dá push para `main`** a menos que bata a produção real
   sob o gate — é a exceção documentada em §13.
-- **Coleta:** exaurir a cota diária (75k) com propósito; seleções saturaram, clubes em 60
-  competições coletadas (46 já no artefato treinado, ver §15 do doc-mestre).
+- **Coleta:** exaurir a cota diária (75k) com propósito; seleções saturaram, clubes em 68
+  competições (60 completas + 8 novas ~92%, ver §17.6), artefato treinado cobre 52 torneios.
   **Checar a validade da assinatura da API-Football** (`GET /status` → `subscription.end`) antes de
   planejar coleta de vários dias — ela tem prazo, não é indefinida.
 - **Neon:** não reintroduzir varredura de blobs (`SELECT raw FROM match_detail_cache`) em runtime — use

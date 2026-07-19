@@ -10,12 +10,12 @@ outros modelos do site (goleador: AUC ~0.74, lift claro e consistente). A bateri
 já indicou cartão de jogador fraco (~0.58, idiossincrático/árbitro) — este script
 confirma sob o gate antes de decidir.
 
-Uso: python scripts/test_player_cards.py
+Uso: python scripts/test_player_cards.py [--scope selecao|clube]
 """
-import sys, json, warnings
+import sys, json, argparse, warnings
 from pathlib import Path
 import numpy as np, pandas as pd
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import log_loss, roc_auc_score
 warnings.filterwarnings("ignore")
 try:
@@ -29,16 +29,11 @@ FEATS = ["base_carded", "form_carded_5", "form_carded_10", "form_fouls_5",
          "minutes_base", "is_home", "pos_def", "pos_mid", "ref_strictness"]
 
 
-def load_from_cache():
-    from app.db.connection import engine
-    from sqlalchemy import text
-    with engine.connect() as c:
-        rows = c.execute(text("SELECT raw FROM match_detail_cache")).fetchall()
+def load_from_cache(scope="selecao"):
+    from app.services import raw_cache
     pg = []
-    for (raw,) in rows:
-        try:
-            d = json.loads(raw)
-        except Exception:
+    for d in raw_cache.iter_all_raw(scope):
+        if not d:
             continue
         fx = d.get("fixture") or {}
         date = (fx.get("date") or "")[:10]
@@ -119,7 +114,7 @@ def temporal_validation(df):
         tr, te = d.iloc[:n], d.iloc[n:m]
         if len(te) < 300:
             continue
-        clf = GradientBoostingClassifier(n_estimators=200, max_depth=3, learning_rate=0.05, random_state=42)
+        clf = HistGradientBoostingClassifier(max_iter=200, max_depth=3, learning_rate=0.05, random_state=42)
         clf.fit(tr[FEATS], tr["carded"])
         p = clf.predict_proba(te[FEATS])[:, 1]
         pbase = te["base_carded"].clip(1e-4, 1 - 1e-4).values
@@ -136,8 +131,11 @@ def temporal_validation(df):
 
 
 def main():
-    print("Carregando cache...", flush=True)
-    pg = load_from_cache()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scope", choices=["selecao", "clube"], default="selecao")
+    a = ap.parse_args()
+    print(f"Carregando cache (scope={a.scope})...", flush=True)
+    pg = load_from_cache(a.scope)
     df, gc = build_features(pg)
     print(f"player-games: {len(df)} | levou cartao={df.carded.mean():.3f} | jogadores={df.player_id.nunique()}", flush=True)
     print("\n=== VALIDACAO TEMPORAL (jogador a levar cartao: modelo vs taxa-base) ===", flush=True)

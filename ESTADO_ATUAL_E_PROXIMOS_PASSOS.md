@@ -1,12 +1,53 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
-> está e o que fazer a seguir. Última atualização: **2026-07-19** (bateria de hipóteses + 3 mercados novos).
+> está e o que fazer a seguir. Última atualização: **2026-07-19** (GAP ratings promovido pra
+> produção + mercados amarelos/agregado + 8 competições novas).
 > Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
-> não repetir**, **§12 = monetização**, **§13 = pesquisa de clubes**), `ARCHITECTURE.md` (infra —
+> não repetir**, **§12 = monetização**, **§13 = pesquisa de clubes**, **§17 = sessão mais recente**),
+> `ARCHITECTURE.md` (infra —
 > **§3.1 Neon, §5 monetização, §6 e-mail, §7 ambiente de pesquisa reproduzível**),
 > `docs/ARQUITETURA_MONETIZACAO.md`, `backend/docs/PESQUISA_CLUBES.md` (diário completo),
 > `backend/docs/RELATORIO_FINAL_PESQUISA_CLUBES.md` (números consolidados).
+
+---
+
+## 0. Sessão (2026-07-19), parte 3 — GAP ratings promovido, cartões amarelos, mata-mata agregado, 8 ligas novas
+
+Pedido do dono: fechar as pendências do §16 (retest H12, rerun #1/#9), avaliar mercado de cartões
+amarelos (inclusive por jogador), usar o resto da cota diária em competições/dados novos, e não
+parar até exaurir tudo. Detalhe completo em `DOCUMENTACAO_CENTRAL.md` §17.
+
+**Promoção real de modelo** — a única desta sessão que muda a produção de fato: `gap_ratings`
+(ratings Wheatcroft de chutes/escanteios, ataque/defesa separados por casa/fora) passou o gate §6
+com folga (5/5 folds, delta -0,0022, >2x o limiar) no dataset de 191.580 jogos/60 ligas — confirma
+o achado da base de 13 ligas com 3,4x mais dado. DC-NB de clube retreinado com 170 `base_feats`
+(158+12), servido via snapshot de estado por-time (mesmo padrão do Elo). **2.326 times, 52
+torneios.** `blend_btts` ficou mais forte (5/5 folds, era 4/5) mas ainda abaixo do limiar de
+delta — não promovido, candidato a reteste futuro.
+
+**3 mercados/features novos:**
+- **Cartões amarelos isolados** (ambos escopos) — espelha cartões vermelhos.
+- **Qualificação/agregado em mata-mata ida-volta** (`predict_aggregate`, competições continentais
+  de clube) — fecha o gap deixado aberto no §16.4; convolução das duas matrizes conjuntas do
+  Dixon-Coles (pernas tratadas como independentes, dependência real já medida como fraca na
+  hipótese #5 do §16).
+- **Prop "jogador a levar cartão" em clube retestado — REPROVADO de novo** (AUC 0,634, abaixo do
+  gate 0,68), mesmo com 4x mais jogadores que o teste de seleção — confirma que é fraco por
+  natureza (idiossincrático/árbitro), não por falta de dado.
+
+**Coleta:** +8 competições (FA Cup Inglaterra/Escócia, Copa del Rey, DFB Pokal, Coppa Italia,
+Coupe de France, Indian Super League, Thai League 1) — 92% baixadas (19.875/21.547), resto
+amanhã (cota do dia esgotada, ~65k/75k usados). Ainda não entraram no dataset de treino/artefato
+(fast-follow).
+
+**Bugs de infra corrigidos:** `prefetch_clubs_parallel.py` importava função renomeada
+(`_local_put`→`_local_put_batch`, quebrado desde uma sessão anterior); `test_player_cards.py`
+usava `GradientBoostingClassifier` clássico (travava em datasets de milhões de linhas) → trocado
+por `HistGradientBoostingClassifier`; os dois reruns de hipóteses anteriores (§16, marcados "não
+executado") na verdade tinham sido tentados e falhado silenciosamente por engano de interpretador
+no worktree de pesquisa (sem `.venv` próprio) — corrigido usando o caminho absoluto do `.venv` do
+repo principal.
 
 ---
 

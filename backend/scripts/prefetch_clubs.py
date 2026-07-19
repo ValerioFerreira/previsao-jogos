@@ -108,6 +108,18 @@ LEAGUES = [
     (383, "Ligat Ha'al (Israel)"),
     (305, "Stars League (Catar)"),
     (301, "Pro League (Emirados Arabes)"),
+    # --- Expansão 2026-07-19: cota diária (Ultra, 75k) sobrando após backfill dos 60
+    # ligas anteriores completar ("FIM tudo coberto"). Prioriza copas domésticas dos
+    # "big five" europeus (fama alta, ainda não cobertas — só Copa do Brasil tinha
+    # copa doméstica) + 2 ligas de mercado grande na Ásia. IDs confirmados via /leagues.
+    (45, "FA Cup (Inglaterra)"),
+    (181, "FA Cup (Escocia)"),
+    (143, "Copa del Rey"),
+    (81, "DFB Pokal"),
+    (137, "Coppa Italia"),
+    (66, "Coupe de France"),
+    (323, "Indian Super League"),
+    (296, "Thai League 1"),
 ]
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"

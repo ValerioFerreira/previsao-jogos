@@ -1022,3 +1022,148 @@ renderizado em `page.tsx` desde sempre.
   nesta sessão.
 - Hipóteses #1/#9 (rerun completo da bateria §13 no dataset de 60 ligas) e #12 (momentum de
   goleiro) — não executadas, dado/infra prontos pro próximo round.
+
+## 17. Fecha pendências do §16: GAP ratings promovido, mercados amarelos/agregado, 8 ligas novas (2026-07-19, mesmo dia)
+
+Continuação direta da sessão do §16 — fecha os 3 itens que ficaram "não executado" lá
+(hipóteses #1/#9/#12) e os 2 mercados adiados em §16.4 (qualificação agregada, cartões
+amarelos não estava listado mas foi pedido nesta rodada). Trabalho de pesquisa 100% na
+worktree `../previsao-jogos-clubs-research` (branch `clubs`, commit `622080c`); promoção
+pra produção direto no `main`.
+
+### 17.1 Hipóteses #1/#9/#12 — fechadas
+
+Diário completo em `backend/docs/PESQUISA_CLUBES.md` §7 (branch `clubs`). Resumo:
+
+| Hipótese | Veredito | Nota |
+|---|---|---|
+| #12 momentum de goleiro (BTTS/clean-sheet) | REPROVADO/misto | 3 targets, nenhum bate o gate (btts 4/5 delta -0,0001; home_cs 3/5 delta -0,0004; away_cs 2/5 delta +0,0005) |
+| #1/#9 `gap_ratings` revisitado (60 ligas, 191.580 jogos) | **PASSA — PROMOVIDO** | 5/5 folds, delta -0,0022 (mesmo achado da base de 13 ligas, agora confirmado com 3,4x mais dado) |
+| #1 `blend_btts` revisitado | misto (mais forte) | 5/5 folds (era 4/5), mas delta -0,0005 — ainda abaixo do limiar -0,001. Candidato a reteste futuro, não promovido |
+| #1 `xg_feature`/`ensemble` revisitados | REPROVADO | 1/5 folds, delta ~0,0000 em ambos |
+| #1 `gap_counts` (finalizações) | inconclusivo | sem cascata GBM (fase 2) disponível pra comparar |
+
+**Bug de infra encontrado nas duas tentativas anteriores de rodar esta bateria** (por isso
+ficou "não executado" no §16 apesar de já ter sido tentado): o worktree de pesquisa não tem
+`.venv` próprio (não é versionado); os scripts foram lançados com `.venv/Scripts/python.exe`
+relativo, que falha silenciosamente (ou cai num Python312 global sem numpy/pandas
+instalados) — os logs ficavam com conteúdo real de uma tentativa anterior misturado com o
+erro da nova, parecendo "em andamento" sem nunca terminar. Corrigido lançando com o caminho
+absoluto do `.venv` do repo principal.
+
+### 17.2 GAP ratings promovido para produção (DC-NB de clube, 158→170 features)
+
+`gap_ratings` (Fase 5.6 — ratings Wheatcroft de ataque/defesa em casa/fora, separados para
+chutes e escanteios) passou o gate §6 com folga (delta -0,0022, mais que o dobro do limiar
+-0,001) em 5/5 folds temporais, no dataset de 191.580 jogos/60 ligas — o mesmo protocolo e
+hiperparâmetros exatos de produção (`DixonColesNBRegressor(n_estimators=100, max_depth=3,
+learning_rate=0.05, max_goals=12)`), então a promoção é direta (sem exceção nenhuma — bateu o
+gate normal).
+
+**Desafio de serving**: `compute_gap_ratings` (`research_clubs/ratings.py`) é um rating
+*sequencial com estado* (como Elo, mas 4 números por time — ataque/defesa em casa e fora),
+atualizado jogo a jogo; não dá pra recomputar a cada predição. Resolvido com o mesmo padrão
+já usado pro Elo (`elo_history.csv`, §15): snapshot do estado FINAL por time, servido junto
+do artefato.
+
+- `research_clubs/ratings.py::compute_gap_ratings` ganhou `return_state=True` — devolve
+  também os dicts finais `{Ha, Hd, Aa, Ad, running_mean}` (ataque-casa/defesa-casa/
+  ataque-fora/defesa-fora por time) após processar o histórico inteiro em ordem.
+- `scripts/build_clubs_production_artifacts.py`: computa `gap_shots_*`/`gap_corners_*` (12
+  colunas) pro dataset de treino inteiro, adiciona ao `base_feats` do DC-NB (só do DC-NB —
+  não entra na cascata de chutes/escanteios/cartões, que não foi testada com esse sinal), e
+  grava o estado final em `meta["gap_ratings_state"]` (`{"shots": {...}, "corners": {...}}`,
+  chaveado por nome de time).
+- `predictor.py::build_row()`: bloco novo, opcional (só roda se `self.meta.get(
+  "gap_ratings_state")` existir — seleção não tem a chave, zero impacto lá). Pra um novo
+  confronto, busca `Ha/Hd[home_team]` e `Aa/Ad[away_team]` no snapshot (fallback = média
+  corrente da liga se o time nunca jogou) e recalcula `exp_home`/`exp_away` na hora — mesma
+  fórmula do treino, só que pro par de times específico da predição.
+
+Retreino completo: **2.326 times, 52 torneios** (subiu de 46 no §16 — as 34 ligas de
+expansão do §16.1 já tinham dado suficiente pra algumas entrarem no `tournament_weights`
+desta vez). Build demorou ~2h (mais que o usual — cascata de chutes/escanteios/cartões
+continua em `GradientBoostingRegressor` clássico, não trocado; não é regressão, é só o
+dataset maior). Verificado ponta a ponta: `Predictor` isolado, `/predict` e `/api/aggregate`
+via `TestClient`, times obscuros aleatórios sem erro.
+
+### 17.3 Mercado novo: cartões amarelos isolados (ambos escopos)
+
+Espelha `cartoes_vermelhos` (§16.3) — hoje `cartoes` soma amarelo+vermelho, faltava isolar o
+lado amarelo (maioria dos cartões). `scripts/train_yellowcards_market.py --scope
+{selecao,clube}` (mesma arquitetura `CornersNB`, `max_corners=6`, alvo
+`home_cur_sb_yellow`/`away_cur_sb_yellow`, já existente no box-score de ambos os escopos).
+Artefato `cartoes_amarelos_nb.joblib` em `model_artifacts{,_clubes}/`. `predictor.py`:
+`YELLOWCARD_LINES = CARDS_LINES` (mesma grade do total). Frontend: card novo em `page.tsx`
+(padrão "Cartões Vermelhos"), tipo `cartoes_amarelos` em `api.ts`.
+
+### 17.4 Mercado novo: qualificação/agregado em mata-mata ida-volta (fecha o gap do §16.4)
+
+A hipótese #5 (§16.2) já tinha confirmado dependência fraca entre as pernas
+(corr(margem_leg1, margem_leg2)=-0,132, n=1.702) — fraca o suficiente pra servir o mercado
+com as duas pernas **independentes** (produto/convolução das duas matrizes conjuntas do
+Dixon-Coles), sem precisar de um modelo bivariado correlacionado dedicado.
+
+`Predictor.predict_aggregate(team_a, team_b, tournament)`: roda `predict()` duas vezes (perna
+1 = team_a mandante; perna 2 = team_b mandante, mando invertido), pega a matriz conjunta
+`P[gols_A, gols_B]` de cada perna via `dc.predict_proba_markets(...)["joint"]`, reindexação
++ `scipy.signal.fftconvolve` das duas pra obter a distribuição conjunta do **agregado**
+`P_agg[total_A, total_B]`. Daí: P(A classifica) = P(agregado_A > agregado_B) + 0,5·P(empate)
+(empate no agregado ⇒ prorrogação/pênaltis, sem sinal disponível pra pesar melhor que
+50/50 — documentado como simplificação), top-3 placares agregados mais prováveis, e
+O/U de gols agregados (linha maior, 2,5-6,5, cobre as 2 pernas).
+
+Anexado automaticamente em `predict()` (chave `mata_mata_agregado`) só quando
+`tournament` é uma das competições continentais de clube que realmente jogam ida-volta com
+mando invertido (`KNOCKOUT_TOURNAMENTS`: Champions/Europa/Conference League, Libertadores,
+Sul-Americana, Copa do Brasil, AFC/CAF/CONCACAF Champions League) — **não** entra pra
+seleção (Copa do Mundo/Euro/Copa América são mata-mata de jogo único). Overhead medido:
++12ms por predição (51ms→64ms), irrelevante. Novo endpoint `GET /api/aggregate` também
+exposto standalone (mesmo cálculo, pra uso fora do fluxo de análise normal). Frontend:
+`MataMataAgregadoCard` novo em `DerivedMarkets.tsx` + card de gols agregados reaproveitando
+`MarketCard`, ambos dentro de `CollapsibleMarket` "Mata-Mata (Ida e Volta)".
+
+### 17.5 Retestado: prop "jogador a levar cartão" em clube — REPROVADO de novo
+
+Já reprovado pra seleção (§9, AUC~0,58). Retestado agora em clube com o dataset de 60 ligas
+(`test_player_cards.py --scope clube`, adaptado pra ler do espelho local via `raw_cache`
+em vez de escanear o Neon — regra de ouro do `ARCHITECTURE.md` §3.1) — 3.566.167
+player-games, 57.037 jogadores. **AUC 0,634 (+0,017 sobre a taxa-base), abaixo do padrão do
+site (~0,74 do goleador) e do limiar do gate (0,68)** → NÃO PROMOVER, mesmo com 4x mais
+jogadores que o teste de seleção. Confirma: cartão de jogador é fraco por natureza
+(idiossincrático/dependente de árbitro), não por falta de dado.
+
+**Gotcha encontrado no processo**: o script original usava `GradientBoostingClassifier`
+clássico — em 3,5M linhas isso trava por 10+ minutos sem progresso visível (mesmo problema
+já visto nesta sessão nos scripts de prop de jogador de clube, §16). Trocado por
+`HistGradientBoostingClassifier` (mesmos hiperparâmetros/mesmo padrão dos outros scripts de
+prop) — terminou em minutos.
+
+### 17.6 Expansão de coleta: 8 competições novas (copas dos "big five" + Ásia)
+
+Cota do dia (Ultra, 75k) sobrando após os 60 ligas anteriores baterem "FIM (tudo coberto)"
+(0 jogos faltando). Adicionadas ao `LEAGUES` de `prefetch_clubs.py`, priorizando copas
+domésticas de grande fama que ainda não tinham entrado (só a Copa do Brasil tinha copa
+doméstica coberta) + 2 ligas de mercado grande na Ásia com boa cobertura de box-score:
+
+FA Cup (Inglaterra), FA Cup (Escócia), Copa del Rey, DFB Pokal, Coppa Italia, Coupe de
+France, Indian Super League, Thai League 1.
+
+Backfill via `prefetch_clubs_parallel.py --workers 16`: 19.875/21.547 fixtures baixadas
+(92%) antes de bater o teto de chamadas do dia (`--max 22000`) — restam ~1.672 fixtures pra
+completar amanhã (script idempotente, cota-first, resume sozinho). **Dados coletados ainda
+NÃO entraram no dataset de treino nem no artefato retreinado do §17.2** (que usa o parquet
+de antes desta coleta) — fast-follow: rebuildar `club_features_enriched.parquet` +
+retreinar quando a coleta destas 8 ligas completar.
+
+**Bug encontrado e corrigido em `prefetch_clubs_parallel.py`**: import de `_local_put`
+(função que não existe mais — foi renomeada pra `_local_put_batch` numa sessão anterior sem
+atualizar o script paralelo, que ficava sem uso há um tempo). Corrigido: import e chamada
+ajustados pra `_local_put_batch([(key, fid, lid, season, raw)])`.
+
+### 17.7 Cota do dia ao final da sessão
+
+~65.3k/75k chamadas usadas (assinatura Ultra ativa até 2026-08-19). Consumida por: expansão
+das 8 ligas novas (~22k chamadas), coleta diária automática de seleções (tarefa agendada
+`\PrevisaoJogos\`, floor 2010, rodando em paralelo o tempo todo), e checagens de `/status`.
+Retomar o backfill das 8 ligas novas amanhã, cota resetada.

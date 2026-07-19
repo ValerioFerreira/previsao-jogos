@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { DerivedMarkets, DerivedOutcome, teamLogoUrl, onImgError } from "@/lib/api";
+import { DerivedMarkets, DerivedOutcome, PredictionResponse, teamLogoUrl, onImgError } from "@/lib/api";
 import InfoTooltip from "@/components/platform/InfoTooltip";
 import { teamPt } from "@/lib/teamNames";
 
@@ -155,6 +155,45 @@ export function VitoriaSemSofrerCard({ d, home, away }: DProps) {
     { label: teamPt(home), o: d.vitoria_sem_sofrer[home], color: "text-emerald-400" },
     { label: teamPt(away), o: d.vitoria_sem_sofrer[away], color: "text-cyan-400" },
   ]} />;
+}
+
+// Qualificação/agregado em mata-mata ida-e-volta (só competições continentais de
+// clube que jogam em 2 pernas — ver KNOCKOUT_TOURNAMENTS no backend). Mandante da
+// análise = mandante da ida; visitante = mandante da volta (mando invertido).
+export function MataMataAgregadoCard({ d }: { d: NonNullable<PredictionResponse["mata_mata_agregado"]> }) {
+  const { leg1_mandante: a, leg2_mandante: b } = d;
+  return (
+    <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
+      <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
+        Qualificação (Ida e Volta)
+        <InfoTooltip text={d._nota} />
+      </h4>
+      <div className="flex-1 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-center mb-4">
+        {[a, b].map((team, i) => (
+          <div key={team}>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+              {teamPt(team)} {i === 0 ? "(manda a ida)" : "(manda a volta)"}
+            </p>
+            <p className={`text-2xl font-mono font-bold ${i === 0 ? "text-emerald-400" : "text-blue-400"}`}>
+              {d.qualifica[team]?.prob.toFixed(1)}%
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">odd justa: {d.qualifica[team]?.odd_justa.toFixed(2)}</p>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-border/20 pt-3">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2 text-center">Placar agregado mais provável</p>
+        <div className="flex items-center justify-center gap-4">
+          {d.placar_agregado_top.map((p, i) => (
+            <span key={i} className="font-mono text-xs text-muted-foreground">
+              {p[a]}-{p[b]} <span className="text-[10px]">({p.prob.toFixed(1)}%)</span>
+            </span>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground text-center mt-2">Empate no agregado: {d.empate_agregado_prob.toFixed(1)}% (prorrogação/pênaltis)</p>
+      </div>
+    </div>
+  );
 }
 
 // Bloco completo (compat p/ PredictionDisplay); a página de Análise usa os cards individuais.

@@ -22,7 +22,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { analysisApi } from '@/lib/monetizationApi';
 import BetLab from '@/components/platform/BetLab';
 import BetBuilder from '@/components/platform/BetBuilder';
-import { DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard, TimeAMarcarPrimeiroCard } from '@/components/platform/DerivedMarkets';
+import { DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard, TimeAMarcarPrimeiroCard, MataMataAgregadoCard } from '@/components/platform/DerivedMarkets';
 import H2HCard from '@/components/platform/H2HCard';
 import ScorersCard from '@/components/platform/ScorersCard';
 import ScreenshotGuard from '@/components/platform/ScreenshotGuard';
@@ -1022,6 +1022,27 @@ export default function Previsoes() {
                     <MarketCard title="Cartões Vermelhos" subtitle={teamPt(homeTeamId)} prediction={projection.cartoes_vermelhos[homeTeamId]} />
                     <MarketCard title="Cartões Vermelhos" subtitle="Totais (Partida)" prediction={projection.cartoes_vermelhos.total} />
                     <MarketCard title="Cartões Vermelhos" subtitle={teamPt(awayTeamId)} prediction={projection.cartoes_vermelhos[awayTeamId]} />
+                  </div>
+                </CollapsibleMarket>
+              )}
+
+              {/* Cartões amarelos isolados (mercado novo, exibido cru) */}
+              {projection.cartoes_amarelos && projection.cartoes_amarelos.total && (
+                <CollapsibleMarket title="Cartões Amarelos" tip="Cartões amarelos isolados (sem somar os vermelhos) — total e por equipe.">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <MarketCard title="Cartões Amarelos" subtitle={teamPt(homeTeamId)} prediction={projection.cartoes_amarelos[homeTeamId]} />
+                    <MarketCard title="Cartões Amarelos" subtitle="Totais (Partida)" prediction={projection.cartoes_amarelos.total} />
+                    <MarketCard title="Cartões Amarelos" subtitle={teamPt(awayTeamId)} prediction={projection.cartoes_amarelos[awayTeamId]} />
+                  </div>
+                </CollapsibleMarket>
+              )}
+
+              {/* Qualificação/agregado (mata-mata ida-volta) — só competições continentais de clube com 2 pernas */}
+              {projection.mata_mata_agregado && (
+                <CollapsibleMarket title="Mata-Mata (Ida e Volta)" tip="Probabilidade de classificação no agregado das duas pernas, assumindo mando invertido na volta e pernas independentes (sem regra do gol fora).">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <MataMataAgregadoCard d={projection.mata_mata_agregado} />
+                    <MarketCard title="Gols Agregados" subtitle="Total (2 pernas)" prediction={projection.mata_mata_agregado.gols_agregados} />
                   </div>
                 </CollapsibleMarket>
               )}

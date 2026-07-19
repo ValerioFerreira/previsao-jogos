@@ -32,7 +32,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import text
 from app.services.fixture_fetch import _get
-from scripts.prefetch_clubs import LEAGUES, FINISHED, TABLE, ensure_table, cached_ids, _local_put
+from scripts.prefetch_clubs import LEAGUES, FINISHED, TABLE, ensure_table, cached_ids, _local_put_batch
 
 MAX_RETRIES = 4
 
@@ -40,7 +40,7 @@ MAX_RETRIES = 4
 def neon_put(fixture_id, league_id, season, raw):
     """Só o Neon -- seguro em paralelo (pool de conexões do SQLAlchemy + ON CONFLICT
     idempotente). O espelho local (SQLite) fica só no escritor único (não gosta de
-    escrita concorrente) -- ver prefetch_clubs._local_put."""
+    escrita concorrente) -- ver prefetch_clubs._local_put_batch."""
     from app.db.connection import engine
     key = f"club|{league_id}|{fixture_id}"
     with engine.begin() as c:
@@ -192,7 +192,7 @@ def main():
         except queue.Empty:
             continue
         key = f"club|{lid}|{fid}"
-        _local_put(key, fid, lid, season, raw)  # só o espelho local; Neon já foi gravado no worker
+        _local_put_batch([(key, fid, lid, season, raw)])  # só o espelho local; Neon já foi gravado no worker
         done_since_log += 1
         if done_since_log >= 200:
             done_since_log = 0
