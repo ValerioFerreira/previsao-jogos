@@ -168,7 +168,7 @@ export function MatchModePicker({
 
       <MatchPickerModal open={futureOpen} onOpenChange={setFutureOpen} fixtures={upcoming} teamIds={teamIds} onSelect={pickFuture} title="Selecionar Partida Agendada" defaultScope={scope} allCompetitions={allCompetitions} />
       {onSelectPast && (
-        <MatchPickerModal open={pastOpen} onOpenChange={setPastOpen} fixtures={past} teamIds={teamIds} onSelect={pickPast} title="Selecionar Partida Passada" dateDefault="none" defaultScope={scope} />
+        <MatchPickerModal open={pastOpen} onOpenChange={setPastOpen} fixtures={past} teamIds={teamIds} onSelect={pickPast} title="Selecionar Partida Passada" dateDefault="none" defaultScope={scope} allCompetitions={allCompetitions} />
       )}
     </div>
   );

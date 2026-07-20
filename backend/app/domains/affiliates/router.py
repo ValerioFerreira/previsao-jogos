@@ -48,11 +48,11 @@ _ALLOWED_DISCOUNT_TIERS = (5, 10, 15, 20, 25)
 
 @router.get("/suggest-code", response_model=schemas.CodeSuggestionResponse)
 def suggest_code(full_name: str, discount_pct: int, db: Session = Depends(get_db)):
-    """Sugestão automática de código (ver regra em service.py::suggest_code_prefix) —
+    """Sugestão automática de código —
     chamada pelo formulário de solicitação a cada mudança de nome/tier de desconto."""
     if discount_pct not in _ALLOWED_DISCOUNT_TIERS:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Desconto deve ser 5, 10, 15, 20 ou 25.")
-    prefix = service.suggest_code_prefix(db, full_name or "parceiro", discount_pct)
+    prefix = service.suggest_code_prefix(db, full_name or "parceiro")
     return schemas.CodeSuggestionResponse(prefix=prefix, code=f"{prefix}{discount_pct}")
 
 

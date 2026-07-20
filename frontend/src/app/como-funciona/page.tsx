@@ -46,17 +46,17 @@ function ParcerIAHighlight() {
 
         <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
           Ao analisar uma <b className="text-foreground">partida oficial agendada</b>, você reserva <b className="text-foreground">1 crédito</b> e
-          monta uma seleção combinando os palpites da própria análise (odd máxima de <b className="text-foreground">2,00</b>).
+          monta uma equipe combinando os palpites da própria análise (odd máxima de <b className="text-foreground">2,00</b>).
           O sistema acompanha a partida para ver o resultado:
         </p>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><CheckCircle2 className="w-4 h-4" /> Se sua seleção for validada</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><CheckCircle2 className="w-4 h-4" /> Se sua equipe for validada</p>
             <p className="text-xs text-muted-foreground mt-1">O crédito é consumido — pô, a gente ajudou né! 😅</p>
           </div>
           <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-cyan-300"><RotateCcw className="w-4 h-4" /> Se sua seleção não for validada</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-cyan-300"><RotateCcw className="w-4 h-4" /> Se sua equipe não for validada</p>
             <p className="text-xs text-muted-foreground mt-1">Não fique triste, seu crédito é estornado e você pode fazer uma nova análise. A gente torce pra que dê mais sorte! 🍀🤞</p>
           </div>
         </div>
@@ -202,7 +202,7 @@ export default function ComoFunciona() {
         {/* ---------------- Começando ---------------- */}
         <Section id="visao-geral" title="Visão Geral">
           <p>Utilizar a plataforma é simples.</p>
-          <p>Primeiro, você escolhe duas seleções para analisar. Elas podem fazer parte de uma partida oficial futura ou apenas representar um confronto hipotético para estudo.</p>
+          <p>Primeiro, você escolhe duas equipes para analisar. Elas podem fazer parte de uma partida oficial futura ou apenas representar um confronto hipotético para estudo.</p>
           <p>Depois disso, a Inteligência Artificial processa centenas de informações e gera uma análise completa da partida.</p>
           <p>Você recebe:</p>
           <ul className="list-disc pl-5 space-y-1">
@@ -212,11 +212,11 @@ export default function ComoFunciona() {
             <li>análise de valor esperado (Value Betting);</li>
             <li>diversas ferramentas para interpretar melhor o confronto.</li>
           </ul>
-          <p>Quando a partida for oficial e ainda não tiver acontecido, você também poderá participar da promoção &quot;ParcerIA&quot;, montando sua própria seleção dentro da plataforma.</p>
+          <p>Quando a partida for oficial e ainda não tiver acontecido, você também poderá participar da promoção &quot;ParcerIA&quot;, montando sua própria equipe dentro da plataforma.</p>
         </Section>
 
         <Section id="analise-independente" title="Análise Independente">
-          <p>A Análise Independente permite comparar quaisquer duas seleções, mesmo que elas nunca venham a se enfrentar oficialmente.</p>
+          <p>A Análise Independente permite comparar quaisquer duas equipes, mesmo que elas nunca venham a se enfrentar oficialmente.</p>
           <p>É ideal para responder perguntas como:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>Quem seria favorito hoje entre Brasil e Alemanha?</li>
@@ -231,7 +231,7 @@ export default function ComoFunciona() {
           <p>Aqui você analisa uma partida oficial que já está marcada e ainda será disputada.</p>
           <p>O funcionamento é um pouco diferente.</p>
           <p>Ao gerar a análise, o sistema não consome imediatamente o crédito. Ele apenas o reserva até que a partida termine.</p>
-          <p>Enquanto isso, você pode utilizar todos os recursos da análise e ainda montar sua seleção para participar da promoção &quot;ParcerIA&quot;.</p>
+          <p>Enquanto isso, você pode utilizar todos os recursos da análise e ainda montar sua equipe para participar da promoção &quot;ParcerIA&quot;.</p>
           <p>Depois do encerramento da partida, o sistema verifica automaticamente o resultado e decide se o crédito será consumido ou devolvido à sua carteira.</p>
         </Section>
 
@@ -251,19 +251,19 @@ export default function ComoFunciona() {
         <Section id="promocao" title='Promoção "ParcerIA"'>
           <p>Essa promoção foi criada para tornar o uso da plataforma ainda mais interessante.</p>
           <p>Ao gerar uma análise para uma partida oficial futura, o sistema apenas reserva um crédito.</p>
-          <p>Depois disso, você monta uma seleção utilizando os mercados disponíveis na própria plataforma.</p>
+          <p>Depois disso, você monta uma equipe utilizando os mercados disponíveis na própria plataforma.</p>
           <p>Quando a partida termina:</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li>se sua seleção for validada, o crédito reservado é consumido normalmente;</li>
+            <li>se sua equipe for validada, o crédito reservado é consumido normalmente;</li>
             <li>se ela não for validada, ou não puder ser apurada, o crédito retorna integralmente para sua carteira.</li>
           </ul>
-          <p>Na prática, você só utiliza o crédito quando a seleção é validada.</p>
+          <p>Na prática, você só utiliza o crédito quando a equipe é validada.</p>
           <p>Essa é uma campanha promocional da ApostaInfo. Ela não representa uma aposta ou jogo de azar, e não envolve pagamento de prêmios em dinheiro.</p>
         </Section>
 
         <Section id="monte-sua-selecao" title="Monte sua Seleção">
-          <p>Após gerar uma análise para uma partida oficial, você pode montar sua própria seleção utilizando os mercados disponíveis.</p>
-          <p>Basta escolher as seleções desejadas.</p>
+          <p>Após gerar uma análise para uma partida oficial, você pode montar sua própria equipe utilizando os mercados disponíveis.</p>
+          <p>Basta escolher as equipes desejadas.</p>
           <p>Nos mercados de linha, como Over/Under, as opções aparecem organizadas em duas colunas:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>Acima de</li>
@@ -271,8 +271,8 @@ export default function ComoFunciona() {
           </ul>
           <p>À medida que você adiciona mercados, a odd combinada é atualizada automaticamente.</p>
           <p>Para manter o equilíbrio da promoção, a odd total não pode ultrapassar 2,00.</p>
-          <p>Caso você não queira montar manualmente sua seleção, não há problema: a plataforma seleciona automaticamente uma combinação cuja odd fique próxima desse limite.</p>
-          <p>Depois da confirmação, a seleção fica registrada e não poderá mais ser alterada.</p>
+          <p>Caso você não queira montar manualmente sua equipe, não há problema: a plataforma seleciona automaticamente uma combinação cuja odd fique próxima desse limite.</p>
+          <p>Depois da confirmação, a equipe fica registrada e não poderá mais ser alterada.</p>
         </Section>
 
         {/* ---------------- Mercados ---------------- */}
@@ -295,7 +295,7 @@ export default function ComoFunciona() {
         </Section>
 
         <Section id="mercado-btts" title="Ambas Marcam (BTTS)">
-          <p>O mercado Ambas Marcam (BTTS - Both Teams To Score) estima a probabilidade de que as duas seleções façam pelo menos um gol durante a partida.</p>
+          <p>O mercado Ambas Marcam (BTTS - Both Teams To Score) estima a probabilidade de que as duas equipes façam pelo menos um gol durante a partida.</p>
           <p>Exemplos:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>✅ Brasil 2 × 1 França</li>
@@ -304,7 +304,7 @@ export default function ComoFunciona() {
             <li>❌ Portugal 2 × 0 México</li>
           </ul>
           <p>Mesmo uma equipe vencendo com facilidade, basta que o adversário não marque para que o mercado seja perdido.</p>
-          <p>Esse mercado costuma ser bastante influenciado pelo equilíbrio ofensivo das equipes e pela qualidade defensiva de cada seleção.</p>
+          <p>Esse mercado costuma ser bastante influenciado pelo equilíbrio ofensivo das equipes e pela qualidade defensiva de cada equipe.</p>
         </Section>
 
         <Section id="mercado-over25" title="Mais/Menos de 2,5 Gols">
@@ -369,7 +369,7 @@ export default function ComoFunciona() {
           </ul>
           <p>Exemplo: uma equipe pode terminar a partida com 18 finalizações, apenas 7 delas no alvo.</p>
           <p>Isso mostra que volume ofensivo não significa necessariamente eficiência.</p>
-          <p>Esse mercado costuma refletir o ritmo ofensivo esperado de cada seleção.</p>
+          <p>Esse mercado costuma refletir o ritmo ofensivo esperado de cada equipe.</p>
         </Section>
 
         <Section id="mercado-finalizacoes-gol" title="Finalizações a Gol">
@@ -380,14 +380,14 @@ export default function ComoFunciona() {
         </Section>
 
         <Section id="mercado-escanteios" title="Escanteios">
-          <p>Aqui estimamos quantos escanteios cada seleção deverá cobrar ao longo da partida.</p>
+          <p>Aqui estimamos quantos escanteios cada equipe deverá cobrar ao longo da partida.</p>
           <p>Também calculamos o total esperado do jogo.</p>
           <p>Exemplos:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>Brasil Over 5,5 escanteios</li>
             <li>Total Over 9,5 escanteios</li>
           </ul>
-          <p>Escanteios normalmente estão relacionados ao volume ofensivo, à pressão exercida pelas equipes e ao estilo de jogo de cada seleção.</p>
+          <p>Escanteios normalmente estão relacionados ao volume ofensivo, à pressão exercida pelas equipes e ao estilo de jogo de cada equipe.</p>
           <p>Equipes que atacam bastante costumam gerar mais escanteios ao longo da partida.</p>
         </Section>
 
@@ -400,7 +400,7 @@ export default function ComoFunciona() {
             <li>primeiro tempo;</li>
             <li>segundo tempo.</li>
           </ul>
-          <p>Além do histórico disciplinar das seleções, fatores como equilíbrio da partida, importância do confronto e intensidade esperada também influenciam essa previsão.</p>
+          <p>Além do histórico disciplinar das equipes, fatores como equilíbrio da partida, importância do confronto e intensidade esperada também influenciam essa previsão.</p>
           <p>Jogos eliminatórios, por exemplo, costumam apresentar comportamentos diferentes de amistosos.</p>
         </Section>
 
@@ -414,7 +414,7 @@ export default function ComoFunciona() {
         {/* ---------------- Como os modelos funcionam ---------------- */}
         <Section id="modelo-dixon-coles" title="Dixon-Coles + Binomial Negativa (Resultado e Gols)">
           <p>Este é o principal modelo da ApostaInfo e o responsável por calcular praticamente todos os mercados relacionados aos gols da partida.</p>
-          <p>Antes de estimar qualquer probabilidade, a Inteligência Artificial avalia centenas de informações sobre as duas seleções, como:</p>
+          <p>Antes de estimar qualquer probabilidade, a Inteligência Artificial avalia centenas de informações sobre as duas equipes, como:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>força das equipes (Elo Rating);</li>
             <li>desempenho recente;</li>
@@ -423,7 +423,7 @@ export default function ComoFunciona() {
             <li>mando de campo;</li>
             <li>tempo de descanso;</li>
             <li>momento da equipe na competição;</li>
-            <li>histórico entre as seleções;</li>
+            <li>histórico entre as equipes;</li>
             <li>e muitas outras variáveis.</li>
           </ul>
           <p>A partir dessas informações, o modelo estima quantos gols cada equipe tende a marcar e combina todos os placares possíveis para calcular as probabilidades de vitória, empate, derrota, gols, placar exato e diversos outros mercados.</p>
@@ -449,7 +449,7 @@ export default function ComoFunciona() {
             <li>importância da partida;</li>
             <li>fase da competição;</li>
             <li>equilíbrio esperado do confronto;</li>
-            <li>estilo de jogo das seleções.</li>
+            <li>estilo de jogo das equipes.</li>
           </ul>
           <p>Tudo isso contribui para uma estimativa mais realista do comportamento disciplinar da partida.</p>
         </Section>
@@ -492,9 +492,9 @@ export default function ComoFunciona() {
 
         <Section id="modelo-aprendizado" title="Inteligência Artificial e Aprendizado Contínuo">
           <p>Os modelos da ApostaInfo são constantemente reavaliados.</p>
-          <p>Novos jogos, novas estatísticas e novas variáveis são incorporados periodicamente para que as previsões reflitam o momento atual das seleções.</p>
+          <p>Novos jogos, novas estatísticas e novas variáveis são incorporados periodicamente para que as previsões reflitam o momento atual das equipes.</p>
           <p>Além do histórico de longo prazo, nossos modelos também dão grande importância ao desempenho recente das equipes, identificando tendências, mudanças de comportamento e evolução ao longo da competição.</p>
-          <p>Isso significa que uma seleção não é avaliada apenas pelo que fez anos atrás, mas principalmente pela forma como vem jogando atualmente.</p>
+          <p>Isso significa que uma equipe não é avaliada apenas pelo que fez anos atrás, mas principalmente pela forma como vem jogando atualmente.</p>
         </Section>
 
         {/* ---------------- Ferramentas e Recursos ---------------- */}
@@ -513,7 +513,7 @@ export default function ComoFunciona() {
         </Section>
 
         <Section id="metrica-confiabilidade" title="Confiabilidade dos Dados">
-          <p>Nem todas as seleções possuem o mesmo volume de informações disponíveis.</p>
+          <p>Nem todas as equipes possuem o mesmo volume de informações disponíveis.</p>
           <p>Algumas disputam competições frequentemente e possuem estatísticas extremamente detalhadas. Outras jogam poucas partidas ou têm cobertura estatística limitada.</p>
           <p>Por isso exibimos um selo de confiabilidade dos dados utilizados na análise.</p>
           <ul className="list-disc pl-5 space-y-1">
@@ -521,7 +521,7 @@ export default function ComoFunciona() {
             <li><b>Média:</b> boa quantidade de dados, mas com algumas limitações. Ainda é possível gerar análises consistentes.</li>
             <li><b>Baixa:</b> poucos dados disponíveis. As probabilidades continuam sendo calculadas normalmente, mas apresentam um nível maior de incerteza.</li>
           </ul>
-          <p>Esse indicador não mede a qualidade da seleção, e sim a qualidade da informação disponível para analisá-la.</p>
+          <p>Esse indicador não mede a qualidade da equipe, e sim a qualidade da informação disponível para analisá-la.</p>
         </Section>
 
         <Section id="explorador-de-linha" title="Explorador de Linha">
@@ -585,7 +585,7 @@ export default function ComoFunciona() {
         </Section>
 
         <Section id="radar-anomalias" title="Radar de Anomalias">
-          <p>Nem sempre uma seleção está jogando da forma que costuma jogar.</p>
+          <p>Nem sempre uma equipe está jogando da forma que costuma jogar.</p>
           <p>O Radar de Anomalias identifica justamente essas mudanças recentes de comportamento.</p>
           <p>Por exemplo, ele pode mostrar que uma equipe:</p>
           <ul className="list-disc pl-5 space-y-1">
@@ -604,7 +604,7 @@ export default function ComoFunciona() {
           <p>Esse aviso indica que existe uma probabilidade maior do que o normal de ocorrer um placar fora dos resultados mais tradicionais.</p>
           <p>Isso pode acontecer, por exemplo, quando:</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li>uma seleção é muito superior à outra;</li>
+            <li>uma equipe é muito superior à outra;</li>
             <li>o modelo prevê uma partida com muitos gols;</li>
             <li>existe grande desequilíbrio entre ataque e defesa;</li>
             <li>há maior probabilidade de placares elásticos.</li>
@@ -621,7 +621,7 @@ export default function ComoFunciona() {
             <li>O favoritismo apontado no mercado Resultado (1X2) está coerente com a expectativa de gols?</li>
             <li>A previsão de escanteios faz sentido considerando o estilo ofensivo das equipes?</li>
             <li>A odd oferecida pela casa está acima da odd justa calculada pela plataforma?</li>
-            <li>Existe algum desvio recente no comportamento de uma das seleções?</li>
+            <li>Existe algum desvio recente no comportamento de uma das equipes?</li>
             <li>O nível de confiabilidade dos dados é alto?</li>
           </ul>
           <p>Quanto mais mercados apontarem para a mesma direção, maior tende a ser a consistência da análise.</p>
@@ -629,7 +629,7 @@ export default function ComoFunciona() {
         </Section>
 
         <Section id="consideracoes-finais" title="Considerações Finais">
-          <p>O objetivo da ApostaInfo não é prever o futuro com certeza absoluta, mas transformar grandes volumes de dados em informações claras, objetivas e úteis para a análise de partidas entre seleções.</p>
+          <p>O objetivo da ApostaInfo não é prever o futuro com certeza absoluta, mas transformar grandes volumes de dados em informações claras, objetivas e úteis para a análise de partidas entre equipes.</p>
           <p>Nossos modelos utilizam Inteligência Artificial, estatística avançada e centenas de variáveis para estimar probabilidades de diversos mercados. Ainda assim, o futebol continua sendo um esporte cheio de imprevisibilidades.</p>
           <p>Por isso, utilize as análises como uma ferramenta de apoio à decisão, compare-as com sua própria leitura da partida e, sempre que possível, avalie as odds oferecidas pelo mercado antes de tomar qualquer decisão.</p>
         </Section>

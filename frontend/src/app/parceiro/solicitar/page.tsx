@@ -47,27 +47,27 @@ export default function SolicitarParceriaPage() {
 
   const [form, setForm] = useState({ full_name: "", email: "", cpf: "", phone: "" });
   const [paymentType, setPaymentType] = useState<"pf" | "pj">("pf");
-  const [discountPct, setDiscountPct] = useState(15);
+  const [discountPcts, setDiscountPcts] = useState<number[]>([15]);
 
   const [codePrefix, setCodePrefix] = useState("");
   const [codeTouched, setCodeTouched] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sugestão automática de código (nome + desconto) enquanto o parceiro não editar o
-  // prefixo manualmente — o sufixo numérico do desconto nunca é editável (ver backend).
+  // Sugestão automática de código (nome) enquanto o parceiro não editar o
+  // prefixo manualmente.
   useEffect(() => {
     if (codeTouched || !form.full_name.trim()) return;
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
     suggestTimer.current = setTimeout(() => {
       setSuggesting(true);
-      affiliatesApi.suggestCode(form.full_name.trim(), discountPct)
+      affiliatesApi.suggestCode(form.full_name.trim())
         .then((s) => setCodePrefix(s.prefix))
         .catch(() => {})
         .finally(() => setSuggesting(false));
     }, 400);
     return () => { if (suggestTimer.current) clearTimeout(suggestTimer.current); };
-  }, [form.full_name, discountPct, codeTouched]);
+  }, [form.full_name, codeTouched]);
 
   const updName = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, full_name: e.target.value.toUpperCase() }));
@@ -89,7 +89,7 @@ export default function SolicitarParceriaPage() {
         cpf: form.cpf.replace(/\D/g, ""),
         phone: form.phone.replace(/\D/g, ""),
         payment_type: paymentType,
-        discount_pct: discountPct,
+        discount_pcts: discountPcts,
         code_prefix: codePrefix.trim() || undefined,
       });
       setDone(true);
@@ -186,63 +186,91 @@ export default function SolicitarParceriaPage() {
 
             <div className="space-y-2">
               <Label className="flex items-center">
-                Desconto que você quer oferecer
-                <InfoTooltip text="Você escolhe o desconto dado ao usuário; o restante de um orçamento de 30 pontos percentuais vira sua comissão sobre o valor pago. Quanto menor o desconto, maior sua comissão." />
+                Descontos que você quer oferecer (até 3 opções)
+                <InfoTooltip text="Você escolhe até 3 descontos dados aos usuários. O sistema irá gerar um cupom para cada escolha." />
               </Label>
               <div className="grid grid-cols-5 gap-1.5">
-                {DISCOUNT_TIERS.map((tier) => (
-                  <button
-                    key={tier}
-                    type="button"
-                    onClick={() => setDiscountPct(tier)}
-                    className={`py-2 text-sm font-semibold rounded-md border transition-colors ${
-                      discountPct === tier
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted text-muted-foreground border-transparent hover:text-foreground"
-                    }`}
-                  >
-                    {tier}%
-                  </button>
-                ))}
+                {DISCOUNT_TIERS.map((tier) => {
+                  const isSelected = discountPcts.includes(tier);
+                  return (
+                    <button
+                      key={tier}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          if (discountPcts.length > 1) {
+                            setDiscountPcts(discountPcts.filter((t) => t !== tier));
+                          }
+                        } else if (discountPcts.length < 3) {
+                          setDiscountPcts([...discountPcts, tier].sort((a, b) => a - b));
+                        }
+                      }}
+                      className={`py-2 text-sm font-semibold rounded-md border transition-colors ${
+                        isSelected
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-muted-foreground border-transparent hover:text-foreground"
+                      } ${!isSelected && discountPcts.length >= 3 ? "opacity-50 cursor-not-allowed" : ""}`}
+                      disabled={!isSelected && discountPcts.length >= 3}
+                    >
+                      {tier}%
+                    </button>
+                  );
+                })}
               </div>
 
               <motion.div
                 animate={{ opacity: 1 }}
                 initial={false}
-                className="grid grid-cols-2 gap-3 bg-muted/50 rounded-lg p-4 mt-1"
+                className="grid gap-3 bg-muted/50 rounded-lg p-4 mt-1"
               >
-                <div>
-                  <div className="text-xs text-muted-foreground">Desconto ao usuário</div>
-                  <div className="text-lg font-bold font-mono text-foreground">{discountPct}%</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">A cada R$100 em compras no site com seu código, você recebe:</div>
-                  <div className="text-lg font-bold font-mono text-emerald-500">R$ {commissionPer100(discountPct)}</div>
-                </div>
+                {discountPcts.map((pct) => (
+                  <div key={pct} className="flex justify-between items-center border-b border-border/30 pb-2 last:border-0 last:pb-0">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Desconto</div>
+                      <div className="text-sm font-bold font-mono text-foreground">{pct}%</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-muted-foreground">Comissão (R$100 em compras)</div>
+                      <div className="text-sm font-bold font-mono text-emerald-500">R$ {commissionPer100(pct)}</div>
+                    </div>
+                  </div>
+                ))}
               </motion.div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="flex items-center" htmlFor="code_prefix">
-                Seu código de desconto
-                <InfoTooltip text="Sugerimos automaticamente a partir do seu nome. Você pode editar a parte em texto, mas o número do final é sempre o seu desconto e não pode ser alterado." />
-              </Label>
-              <div className="flex items-center gap-0 rounded-md border border-input bg-transparent overflow-hidden focus-within:ring-1 focus-within:ring-ring">
-                <input
-                  id="code_prefix"
-                  value={codePrefix}
-                  onChange={(e) => { setCodeTouched(true); setCodePrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")); }}
-                  placeholder="SEUNOME"
-                  maxLength={20}
-                  className="flex-1 h-9 px-3 py-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/40 font-mono uppercase"
-                />
-                <span className="h-9 px-3 flex items-center text-sm font-mono font-semibold bg-muted text-muted-foreground shrink-0">
-                  {discountPct}
-                </span>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="flex items-center" htmlFor="code_prefix">
+                  Seu código
+                  <InfoTooltip text="Sugerimos automaticamente a partir do seu nome. Você pode editar o texto base do cupom." />
+                </Label>
+                <div className="flex items-center gap-0 rounded-md border border-input bg-transparent overflow-hidden focus-within:ring-1 focus-within:ring-ring">
+                  <input
+                    id="code_prefix"
+                    value={codePrefix}
+                    onChange={(e) => { setCodeTouched(true); setCodePrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")); }}
+                    placeholder="SEUNOME"
+                    maxLength={20}
+                    className="flex-1 h-9 px-3 py-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/40 font-mono uppercase"
+                  />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {suggesting ? "Gerando sugestão…" : `Código final: ${(codePrefix || "SEUNOME").toUpperCase()}${discountPct}`}
-              </p>
+              <div className="space-y-1.5">
+                <Label className="flex items-center text-muted-foreground">
+                  Prévia {discountPcts.length > 1 ? "dos cupons" : "do cupom"}
+                </Label>
+                <div className="flex flex-col gap-1.5">
+                  {suggesting ? (
+                    <span className="text-xs text-muted-foreground h-9 flex items-center">Gerando sugestão…</span>
+                  ) : (
+                    discountPcts.map((pct) => (
+                      <div key={pct} className="h-9 px-3 flex items-center justify-center text-sm font-mono font-semibold bg-primary/10 text-primary border border-primary/20 rounded-md">
+                        {(codePrefix || "SEUNOME").toUpperCase()}{pct}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={busy}>

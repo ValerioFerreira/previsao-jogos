@@ -176,6 +176,16 @@ def get_past_fixtures() -> list[dict[str, Any]]:
     for f in raw:
         f["home"] = _norm(f.get("home"))
         f["away"] = _norm(f.get("away"))
+        if not f.get("scope"):
+            t = str(f.get("tournament") or f.get("league_name") or "").lower()
+            is_club = any(x in t for x in [
+                "serie a", "serie b", "brasileirao", "copa do brasil", 
+                "premier league", "championship", "la liga", "champions league", 
+                "libertadores", "sul-americana", "sudamericana", "bundesliga", 
+                "ligue 1", "serie a italia", "copa del rey", "dfb pokal", 
+                "fa cup", "primeira liga", "eredivisie"
+            ])
+            f["scope"] = "clube" if is_club else "selecao"
     return raw
 
 

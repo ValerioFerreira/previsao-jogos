@@ -74,17 +74,14 @@ def code_in_use(db: Session, code: str, exclude_affiliate_id: uuid.UUID | None =
     return False
 
 
-def suggest_code_prefix(db: Session, full_name: str, discount_pct: Decimal | int) -> str:
-    """Sugestão de PREFIXO (sem o sufixo do desconto): primeiro nome; se colidir (prefixo +
-    desconto já em uso), soma letra a letra do(s) sobrenome(s) até desempatar — ex.
-    VALERIO15 -> VALERIOF15 -> VALERIOFE15... Esgotados os sobrenomes, cai num contador."""
-    discount_str = str(int(discount_pct))
+def suggest_code_prefix(db: Session, full_name: str) -> str:
+    """Sugestão de PREFIXO: primeiro nome; se colidir, soma letra a letra do(s) sobrenome(s)."""
     parts = [_ascii_upper_alnum(p) for p in full_name.split() if _ascii_upper_alnum(p)]
     if not parts:
         parts = ["PARCEIRO"]
 
     def taken(prefix: str) -> bool:
-        return code_in_use(db, f"{prefix}{discount_str}")
+        return code_in_use(db, prefix)
 
     base = parts[0]
     if not taken(base):
@@ -105,21 +102,18 @@ def suggest_code_prefix(db: Session, full_name: str, discount_pct: Decimal | int
     raise RuntimeError("Não foi possível sugerir um código de parceiro único.")
 
 
-def resolve_partner_code(db: Session, full_name: str, discount_pct: Decimal | int,
-                         requested_prefix: str | None) -> str:
-    """O sufixo numérico (desconto) é SEMPRE anexado pelo servidor — o parceiro só edita o
-    prefixo de texto, nunca o número (regra do pedido: o desconto não pode ser mudado
-    editando o código)."""
-    discount_str = str(int(discount_pct))
+def resolve_partner_code(db: Session, full_name: str, requested_prefix: str | None) -> str:
+    """O código base do parceiro agora é apenas o prefixo (o sufixo do desconto será anexado
+    nos Coupons gerados na aprovação)."""
     if requested_prefix and requested_prefix.strip():
         prefix = _ascii_upper_alnum(requested_prefix)[:20]
         if not prefix:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Código inválido.")
-        code = f"{prefix}{discount_str}"
+        code = prefix
         if code_in_use(db, code):
             raise HTTPException(status.HTTP_409_CONFLICT, detail="Esse código já está em uso. Escolha outro.")
         return code
-    return f"{suggest_code_prefix(db, full_name, discount_pct)}{discount_str}"
+    return suggest_code_prefix(db, full_name)
 
 
 def set_affiliate_code(db: Session, affiliate: Affiliate, code: str) -> None:
@@ -148,10 +142,14 @@ def apply_for_partnership(db: Session, data: "schemas.PartnerApplicationRequest"
         if a.status in ("pending", "active", "paused"):
             raise HTTPException(status.HTTP_409_CONFLICT,
                                 detail="Já existe uma solicitação ou parceria com este CPF/e-mail.")
-    code = resolve_partner_code(db, data.full_name, data.discount_pct, data.code_prefix)
+    code = resolve_partner_code(db, data.full_name, data.code_prefix)
+    pcts_str = ",".join(str(int(p)) for p in data.discount_pcts)
+    # A comissão base (para o primeiro/principal cupom) será usada caso necessário,
+    # mas o real cálculo acontece por pedido/cupom no sistema de pagamento.
+    main_pct = data.discount_pcts[0]
     affiliate = Affiliate(
         name=data.full_name, code=code, status="pending",
-        commission_pct=COMMISSION_BUDGET_PCT - data.discount_pct, discount_pct=data.discount_pct,
+        commission_pct=COMMISSION_BUDGET_PCT - main_pct, discount_pcts=pcts_str,
         payment_type=PartnerPaymentType(data.payment_type),
         cpf=data.cpf, contact_email=data.email.lower(), contact_phone=data.phone,
     )
@@ -161,10 +159,19 @@ def apply_for_partnership(db: Session, data: "schemas.PartnerApplicationRequest"
 
 
 def track_click(db: Session, code: str, anon_id: str, user_id: uuid.UUID | None = None) -> AffiliateAttribution | None:
-    affiliate = db.execute(select(Affiliate).where(
-        func.upper(Affiliate.code) == code.strip().upper(), Affiliate.status == "active")).scalar_one_or_none()
-    if affiliate is None:
+    from app.domains.promotions.models import Coupon
+    # Primeiro tenta achar o afiliado pelo código exato do cupom gerado (ex: VALERIO15)
+    coupon = db.execute(select(Coupon).where(func.upper(Coupon.code) == code.strip().upper())).scalar_one_or_none()
+    if coupon and coupon.affiliate_id:
+        affiliate = db.get(Affiliate, coupon.affiliate_id)
+    else:
+        # Fallback: busca pelo código base do afiliado
+        affiliate = db.execute(select(Affiliate).where(
+            func.upper(Affiliate.code) == code.strip().upper(), Affiliate.status == "active")).scalar_one_or_none()
+            
+    if affiliate is None or affiliate.status != "active":
         return None
+        
     now = datetime.now(timezone.utc)
     days = _attribution_window_days(db)
     attr = AffiliateAttribution(

@@ -14,7 +14,8 @@ const OLD_MATCH_CUTOFF = '2019-01-01';
 const isOldMatch = (iso?: string) => !!iso && iso.slice(0, 10) < OLD_MATCH_CUTOFF;
 
 const COUNTRY_FLAGS: Record<string, string> = {
-  "Brasil": "🇧🇷", "Competições Internacionais": "🌍", "Inglaterra": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  "Brasil": "🇧🇷", "Mundo (Internacional)": "🌍", "Europa": "🇪🇺", "Américas": "🌎",
+  "África": "🌍", "Ásia": "🌏", "Oceania": "🌏", "Inglaterra": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
   "Espanha": "🇪🇸", "Itália": "🇮🇹", "Alemanha": "🇩🇪", "França": "🇫🇷",
   "Holanda": "🇳🇱", "Portugal": "🇵🇹", "México": "🇲🇽", "Estados Unidos": "🇺🇸",
   "Argentina": "🇦🇷", "Turquia": "🇹🇷", "Bélgica": "🇧🇪", "Suécia": "🇸🇪",
@@ -24,22 +25,23 @@ const COUNTRY_FLAGS: Record<string, string> = {
 };
 
 function getCountry(compName: string, scope: 'selecao' | 'clube'): string {
-  if (scope === 'selecao') return "Competições Internacionais";
   const name = compName.toLowerCase();
+  if (scope === 'selecao') {
+    if (name.includes("eurocopa") || name.includes("euro championship") || name.includes("nations league") || name.includes("uefa") || name.includes("qualifiers - europe") || name.includes("eliminatórias da uefa")) return "Europa";
+    if (name.includes("copa américa") || name.includes("copa america") || name.includes("concacaf") || name.includes("conmebol") || name.includes("gold cup") || name.includes("eliminatórias da américa") || name.includes("eliminatórias da conmebol") || name.includes("eliminatórias da concacaf")) return "Américas";
+    if (name.includes("african cup") || name.includes("copa africana") || name.includes("caf") || name.includes("eliminatórias da caf")) return "África";
+    if (name.includes("asian cup") || name.includes("copa da ásia") || name.includes("afc") || name.includes("asean") || name.includes("eliminatórias da ásia")) return "Ásia";
+    if (name.includes("ofc") || name.includes("eliminatórias da oceania")) return "Oceania";
+    return "Mundo (Internacional)";
+  }
   if (name.includes("brasileirao") || name.includes("copa do brasil") || name.includes("brasileirão")) return "Brasil";
   
   if (
     name.includes("champions league") || name.includes("libertadores") || name.includes("sul-americana") || 
     name.includes("sudamericana") || name.includes("europa league") || name.includes("conference league") || 
-    name.includes("recopa") || name.includes("world cup") || name.includes("copa do mundo") || 
-    name.includes("eurocopa") || name.includes("euro championship") || name.includes("copa america") || 
-    name.includes("copa américa") || name.includes("african cup") || name.includes("copa africana") || 
-    name.includes("asian cup") || name.includes("copa da ásia") || name.includes("nations league") || 
-    name.includes("eliminatórias") || name.includes("amistoso") || name.includes("friendlies") || 
-    name.includes("friendly") || name.includes("olympics") || name.includes("olimpíadas") || 
-    name.includes("asean") || name.includes("cecafa") || name.includes("mundial")
+    name.includes("recopa") || name.includes("mundial")
   ) {
-    return "Competições Internacionais";
+    return "Mundo (Internacional)";
   }
 
   if (name.includes("premier league") || name.includes("championship") || name.includes("fa cup") || name.includes("league cup")) return "Inglaterra";
@@ -117,6 +119,7 @@ const Flag = ({ name, ids }: { name: string; ids: Record<string, number> }) => {
 // no grid, nessa ordem fixa; o restante entra depois, ordenado pela quantidade de
 // jogos em aberto (mais jogos primeiro).
 const PRIORITY_COMPS = [
+  'Copa do Mundo FIFA', 'Liga das Nações da UEFA', 'Copa América', 'Eurocopa',
   'Brasileirao Serie A', 'Brasileirao Serie B', 'Copa do Brasil',
   'Champions League', 'Premier League', 'La Liga',
 ];
@@ -215,7 +218,7 @@ export function MatchPickerModal({
     return Object.entries(groups).map(([country, comps]) => ({
       country,
       comps,
-      rank: country === "Brasil" ? 0 : country === "Competições Internacionais" ? 1 : country === "Outras Competições" ? 999 : 2
+      rank: country === "Brasil" ? 0 : country === "Mundo (Internacional)" ? 1 : country === "Europa" ? 2 : country === "Américas" ? 3 : country === "África" ? 4 : country === "Ásia" ? 5 : country === "Outras Competições" ? 999 : 6
     })).sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
       return a.country.localeCompare(b.country);
@@ -284,7 +287,16 @@ export function MatchPickerModal({
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                     {g.comps.map(c => {
-                      const logo = leagueLogoUrl(c.leagueId);
+                      let logo = leagueLogoUrl(c.leagueId);
+                      if (!logo && scope === 'selecao') {
+                        const lname = c.label.toLowerCase();
+                        if (lname.includes("copa do mundo fifa") || lname.includes("world cup")) logo = leagueLogoUrl(1);
+                        else if (lname.includes("eurocopa") || lname.includes("euro championship")) logo = leagueLogoUrl(4);
+                        else if (lname.includes("copa américa") || lname.includes("copa america")) logo = leagueLogoUrl(9);
+                        else if (lname.includes("nations league")) logo = leagueLogoUrl(66);
+                        else if (lname.includes("african cup") || lname.includes("copa africana")) logo = leagueLogoUrl(6);
+                        else if (lname.includes("asian cup") || lname.includes("copa da ásia")) logo = leagueLogoUrl(7);
+                      }
                       const empty = c.fixtures.length === 0;
                       return (
                         <button key={c.label} onClick={() => { if (!empty) setComp(c.label); }}

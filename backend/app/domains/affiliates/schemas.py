@@ -20,7 +20,7 @@ class PartnerApplicationRequest(BaseModel):
     email: EmailStr
     phone: str
     payment_type: str  # pf | pj
-    discount_pct: Decimal
+    discount_pcts: list[Decimal]
     # Prefixo de texto do código (ex. "VALERIO" em "VALERIO15") — o sufixo numérico do
     # desconto é sempre calculado pelo servidor, nunca vem do cliente (ver
     # affiliates/service.py::resolve_partner_code). None/vazio = sistema sugere sozinho.
@@ -55,12 +55,15 @@ class PartnerApplicationRequest(BaseModel):
             raise ValueError("Forma de pagamento deve ser 'pf' ou 'pj'.")
         return v
 
-    @field_validator("discount_pct")
+    @field_validator("discount_pcts")
     @classmethod
-    def _discount_pct(cls, v: Decimal) -> Decimal:
-        if v not in _ALLOWED_DISCOUNT_TIERS:
-            raise ValueError("Desconto deve ser 5, 10, 15, 20 ou 25.")
-        return v
+    def _discount_pcts(cls, v: list[Decimal]) -> list[Decimal]:
+        if not v or len(v) > 3:
+            raise ValueError("Escolha de 1 a 3 opções de desconto.")
+        for tier in v:
+            if tier not in _ALLOWED_DISCOUNT_TIERS:
+                raise ValueError("Desconto deve ser 5, 10, 15, 20 ou 25.")
+        return list(set(v))
 
 
 class PartnerApplicationResponse(BaseModel):

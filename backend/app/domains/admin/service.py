@@ -383,22 +383,33 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
         db.add(user)
         db.flush()
     else:
-        user.role = UserRole.partner
+        if user.role not in (UserRole.admin, UserRole.superadmin):
+            user.role = UserRole.partner
     affiliate.user_id = user.id
 
-    if affiliate.discount_pct is not None:
+    # Cria até 3 cupons baseados nos descontos solicitados
+    if getattr(affiliate, "discount_pcts", None):
         promo = _get_or_create_partner_promotion(db)
-        coupon = db.execute(select(Coupon).where(Coupon.affiliate_id == affiliate.id)).scalar_one_or_none()
-        if coupon is None:
-            db.add(Coupon(
-                promotion_id=promo.id, code=affiliate.code.strip().upper(),
-                discount_type=CouponDiscountType.percentage, discount_value=affiliate.discount_pct,
-                affiliate_id=affiliate.id, active=True,
-            ))
-        else:
-            coupon.discount_value = affiliate.discount_pct
-            coupon.active = True
-
+        pcts = [int(p) for p in affiliate.discount_pcts.split(",") if p.strip()]
+        
+        # Desativa os antigos para recriar ou atualizar
+        existing_coupons = db.execute(select(Coupon).where(Coupon.affiliate_id == affiliate.id)).scalars().all()
+        for c in existing_coupons:
+            c.active = False
+            
+        for pct in pcts:
+            code = f"{affiliate.code.strip().upper()}{pct}"
+            # Procura um cupom existente com esse código exato
+            coupon = next((c for c in existing_coupons if c.code == code), None)
+            if coupon is None:
+                db.add(Coupon(
+                    promotion_id=promo.id, code=code,
+                    discount_type=CouponDiscountType.percentage, discount_value=pct,
+                    affiliate_id=affiliate.id, active=True,
+                ))
+            else:
+                coupon.discount_value = pct
+                coupon.active = True
     token = security.create_access_token(str(user.id), extra={"scope": "partner_invite"})
     link = f"{settings.frontend_base_url}/parceiro/definir-senha?token={token}"
     try:

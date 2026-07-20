@@ -40,8 +40,8 @@ class Affiliate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Forma de remuneração do parceiro (informativo, negociação de pagamento é externa).
     payment_type: Mapped[PartnerPaymentType | None] = mapped_column(enum_type(PartnerPaymentType), nullable=True)
     # Tier de desconto escolhido na solicitação (5/10/15/20/25) — orçamento de 30 pontos
-    # percentuais: comission_pct é derivado como (30 - discount_pct) na aprovação.
-    discount_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    # percentuais: comission_pct é derivado como (30 - desconto) na aprovação. Agora suporta até 3 (CSV).
+    discount_pcts: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Permite ao admin revogar o acesso deste parceiro específico à conta demo
     # compartilhada, sem precisar bloquear a conta demo inteira.
     demo_access_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

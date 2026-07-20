@@ -67,7 +67,7 @@ export type PartnerApplication = {
   email: string;
   phone: string;
   payment_type: "pf" | "pj";
-  discount_pct: number;
+  discount_pcts: number[];
   code_prefix?: string;
 };
 
@@ -85,8 +85,8 @@ export const affiliatesApi = {
       }
       return res.json() as Promise<{ ok: boolean; message: string }>;
     }),
-  suggestCode: (full_name: string, discount_pct: number) =>
-    fetch(`${API_URL}/affiliates/suggest-code?${new URLSearchParams({ full_name, discount_pct: String(discount_pct) })}`)
+  suggestCode: (full_name: string) =>
+    fetch(`${API_URL}/affiliates/suggest-code?${new URLSearchParams({ full_name, discount_pct: "15" })}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`Erro ${res.status}`);
         return res.json() as Promise<CodeSuggestion>;
