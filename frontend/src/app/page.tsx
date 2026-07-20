@@ -1069,7 +1069,7 @@ export default function Previsoes() {
 
             {/* MONTE SUA SELEÇÃO — oferta "ParcerIA" (Só Paga se Acertar) */}
             <SectionDivider>MONTE SUA SELEÇÃO</SectionDivider>
-            {analysis?.type === 'future_match' ? (
+            {analysis?.type === 'future_match' && !analysis?.is_free ? (
               <div className="max-w-3xl mx-auto mb-2">
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 mb-4 text-sm text-muted-foreground leading-relaxed">
                   <p className="mb-2">

@@ -333,7 +333,7 @@ def _affiliate_out(a: Affiliate, db: Session) -> dict:
            "status": a.status, "notes": a.notes,
            "contact_email": a.contact_email, "contact_phone": a.contact_phone,
            "payment_type": a.payment_type.value if a.payment_type else None,
-           "discount_pct": str(a.discount_pct) if a.discount_pct is not None else None,
+           "discount_pcts": a.discount_pcts if a.discount_pcts else None,
            "demo_access_enabled": a.demo_access_enabled, "account_status": account_status,
            "commission_due_brl": str(due), "commission_paid_brl": str(paid)}
 
@@ -429,7 +429,7 @@ def create_affiliate(db: Session, admin: User, data: schemas.AffiliateRequest, i
                  contact_email=data.contact_email, contact_phone=data.contact_phone,
                  cpf=data.cpf, notes=data.notes,
                  payment_type=PartnerPaymentType(data.payment_type) if data.payment_type else None,
-                 discount_pct=data.discount_pct, status="active")
+                 discount_pcts=data.discount_pcts, status="active")
     db.add(a); db.flush()
     audit(db, admin, "affiliate_create", "affiliate", a.id, after={"code": a.code}, ip=ip)
     # Recrutamento direto pelo admin (sem passar pela fila de solicitação): já provisiona
@@ -454,17 +454,23 @@ def patch_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.A
     if data.cpf is not None: a.cpf = data.cpf
     if data.notes is not None: a.notes = data.notes
     if data.payment_type is not None: a.payment_type = PartnerPaymentType(data.payment_type)
-    if data.discount_pct is not None:
-        a.discount_pct = data.discount_pct
-        coupon = db.execute(select(Coupon).where(Coupon.affiliate_id == a.id)).scalar_one_or_none()
-        if coupon is not None:
-            coupon.discount_value = data.discount_pct
+    if data.discount_pcts is not None:
+        a.discount_pcts = data.discount_pcts
+        # Update first coupon if exists (legacy compatibility)
+        pcts = [int(p) for p in data.discount_pcts.split(",") if p.strip()]
+        if pcts:
+            main_pct = pcts[0]
+            coupon = db.execute(select(Coupon).where(Coupon.affiliate_id == a.id)).scalar_one_or_none()
+            if coupon is not None:
+                coupon.discount_value = main_pct
     # commission_pct explícito sempre vence; senão, se o tier de desconto mudou, deriva
     # da fórmula (30 - desconto) — mesma regra usada na aprovação da solicitação.
     if data.commission_pct is not None:
         a.commission_pct = data.commission_pct
-    elif data.discount_pct is not None:
-        a.commission_pct = affiliates_service.COMMISSION_BUDGET_PCT - data.discount_pct
+    elif data.discount_pcts is not None:
+        pcts = [int(p) for p in data.discount_pcts.split(",") if p.strip()]
+        if pcts:
+            a.commission_pct = affiliates_service.COMMISSION_BUDGET_PCT - pcts[0]
     audit(db, admin, "affiliate_update", "affiliate", a.id, before=before,
           after={"status": a.status}, ip=ip)
     db.commit()

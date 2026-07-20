@@ -46,7 +46,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 type EditForm = {
   name: string; code: string; commission_pct: string; commission_fixed_brl: string;
   status: string; contact_email: string; contact_phone: string; cpf: string;
-  payment_type: string; discount_pct: string; notes: string;
+  payment_type: string; discount_pcts: string; notes: string;
 };
 
 export default function PartnerDetailPage() {
@@ -93,7 +93,7 @@ export default function PartnerDetailPage() {
       status: String(detail!.status ?? "active"),
       contact_email: String(detail!.contact_email ?? ""), contact_phone: String(detail!.contact_phone ?? ""),
       cpf: String(detail!.cpf ?? ""), payment_type: String(detail!.payment_type ?? ""),
-      discount_pct: detail!.discount_pct != null ? String(detail!.discount_pct) : "",
+      discount_pcts: detail!.discount_pcts != null ? String(detail!.discount_pcts) : "",
       notes: String(detail!.notes ?? ""),
     });
     setEditOpen(true);
@@ -112,7 +112,7 @@ export default function PartnerDetailPage() {
         status: form.status,
         contact_email: form.contact_email || null, contact_phone: form.contact_phone || null,
         cpf: form.cpf || null, payment_type: form.payment_type || null,
-        discount_pct: form.discount_pct === "" ? null : form.discount_pct,
+        discount_pcts: form.discount_pcts === "" ? null : form.discount_pcts,
         notes: form.notes || null,
       });
       setEditOpen(false);
@@ -156,7 +156,7 @@ export default function PartnerDetailPage() {
           <div><div className="text-xs text-muted-foreground">E-mail</div><div>{String(detail.contact_email ?? "—")}</div></div>
           <div><div className="text-xs text-muted-foreground">Telefone</div><div>{String(detail.contact_phone ?? "—")}</div></div>
           <div><div className="text-xs text-muted-foreground">CPF</div><div>{String(detail.cpf ?? "—")}</div></div>
-          <div><div className="text-xs text-muted-foreground">Desconto do cupom</div><div>{detail.discount_pct ? `${String(detail.discount_pct)}%` : "—"}</div></div>
+          <div><div className="text-xs text-muted-foreground">Desconto do cupom</div><div>{detail.discount_pcts ? `${String(detail.discount_pcts)}%` : "—"}</div></div>
           <div><div className="text-xs text-muted-foreground">Comissão</div><div>{detail.commission_pct ? `${String(detail.commission_pct)}%` : "—"}</div></div>
           <div><div className="text-xs text-muted-foreground">Comissão fixa</div><div>{detail.commission_fixed_brl ? `R$ ${String(detail.commission_fixed_brl)}` : "—"}</div></div>
           <div><div className="text-xs text-muted-foreground">Status da conta</div><div>{String(detail.account_status ?? "sem conta")}</div></div>
@@ -249,7 +249,7 @@ export default function PartnerDetailPage() {
               <Field label="Comissão (%)"><Input type="number" value={form.commission_pct} onChange={(e) => setForm({ ...form, commission_pct: e.target.value })} /></Field>
               <Field label="Comissão fixa (R$)"><Input type="number" value={form.commission_fixed_brl} onChange={(e) => setForm({ ...form, commission_fixed_brl: e.target.value })} /></Field>
               <Field label="Desconto do cupom (%)">
-                <select className="border rounded-md px-2 py-2 text-sm bg-background w-full" value={form.discount_pct} onChange={(e) => setForm({ ...form, discount_pct: e.target.value })}>
+                <select className="border rounded-md px-2 py-2 text-sm bg-background w-full" value={form.discount_pcts} onChange={(e) => setForm({ ...form, discount_pcts: e.target.value })}>
                   <option value="">—</option>
                   {[5, 10, 15, 20, 25].map((d) => <option key={d} value={d}>{d}%</option>)}
                 </select>

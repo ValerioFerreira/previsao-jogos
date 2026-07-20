@@ -191,7 +191,7 @@ export default function AdminPage() {
   const [newPackage, setNewPackage] = useState({ name: "", credits: "10", price_brl: "10.00", bonus_credits: "0" });
   const [newAffiliate, setNewAffiliate] = useState({
     name: "", code: "", commission_pct: "10", contact_email: "", contact_phone: "",
-    cpf: "", payment_type: "", discount_pct: "",
+    cpf: "", payment_type: "", discount_pcts: "",
   });
   const [promoSection, setPromoSection] = useState<"promocoes" | "cupons" | "pacotes" | "banners" | "campanhas">("promocoes");
   const [partnerFilter, setPartnerFilter] = useState("");
@@ -390,9 +390,9 @@ export default function AdminPage() {
       await adminApi.createAffiliate({
         ...newAffiliate, commission_pct: Number(newAffiliate.commission_pct),
         payment_type: newAffiliate.payment_type || undefined,
-        discount_pct: newAffiliate.discount_pct ? Number(newAffiliate.discount_pct) : undefined,
+        discount_pcts: newAffiliate.discount_pcts ? Number(newAffiliate.discount_pcts) : undefined,
       });
-      setNewAffiliate({ name: "", code: "", commission_pct: "10", contact_email: "", contact_phone: "", cpf: "", payment_type: "", discount_pct: "" });
+      setNewAffiliate({ name: "", code: "", commission_pct: "10", contact_email: "", contact_phone: "", cpf: "", payment_type: "", discount_pcts: "" });
       await loadAffiliates();
     } catch (e) { setErr((e as Error).message); }
   }
@@ -997,7 +997,7 @@ export default function AdminPage() {
                   </select>
                 </Field>
                 <Field label="Desconto do cupom (%)">
-                  <select className="border rounded-md px-2 py-2 text-sm bg-background w-28" value={newAffiliate.discount_pct} onChange={(e) => setNewAffiliate({ ...newAffiliate, discount_pct: e.target.value })}>
+                  <select className="border rounded-md px-2 py-2 text-sm bg-background w-28" value={newAffiliate.discount_pcts} onChange={(e) => setNewAffiliate({ ...newAffiliate, discount_pcts: e.target.value })}>
                     <option value="">—</option>
                     {[5, 10, 15, 20, 25].map((d) => <option key={d} value={d}>{d}%</option>)}
                   </select>
