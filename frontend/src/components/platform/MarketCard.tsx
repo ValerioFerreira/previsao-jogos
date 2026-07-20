@@ -15,6 +15,18 @@ type MarketCardProps = {
   // Quando há recortes por tempo, passe um mapa rótulo->distribuição; vira um seletor.
   periods?: Record<string, Distrib | undefined>;
   icon?: React.ReactNode;
+  // Quando há variantes por tipo de cartão (amarelo/ambos/vermelho), cada uma com seu
+  // próprio mapa de períodos; vira um seletor independente no topo do card.
+  cardKinds?: Partial<Record<CardKind, Record<string, Distrib | undefined>>>;
+};
+
+type CardKind = 'amarelo' | 'ambos' | 'vermelho';
+const CARD_KIND_ORDER: CardKind[] = ['amarelo', 'ambos', 'vermelho'];
+const CARD_KIND_LABEL: Record<CardKind, string> = { amarelo: '🟨', ambos: 'Ambos', vermelho: '🟥' };
+const CARD_KIND_TITLE: Record<CardKind, string> = {
+  amarelo: 'Cartões amarelos',
+  ambos: 'Cartões amarelos e vermelhos',
+  vermelho: 'Cartões vermelhos',
 };
 
 // Faixa de "odd justa": da odd com margem de 7% para menos até a odd prevista (1/p).
@@ -36,13 +48,22 @@ function overProb(dist: number[], line: number): number {
   return Math.min(1, Math.max(0, s));
 }
 
-export function MarketCard({ title, subtitle, prediction, periods, icon }: MarketCardProps) {
+export function MarketCard({ title, subtitle, prediction, periods, icon, cardKinds }: MarketCardProps) {
   const [viewMode, setViewMode] = useState<'prob' | 'odd'>('prob');
   const [isExpanded, setIsExpanded] = useState(false);
-  const periodKeys = periods ? Object.keys(periods).filter(k => periods[k]) : [];
-  const [period, setPeriod] = useState<string>(periodKeys[0] ?? '');
 
-  const active: Distrib | undefined = periods ? periods[period] : prediction;
+  const availableKinds = cardKinds ? CARD_KIND_ORDER.filter(k => cardKinds[k]) : [];
+  const [kind, setKind] = useState<CardKind | ''>('');
+  const effectiveKind: CardKind | '' = availableKinds.includes(kind as CardKind)
+    ? (kind as CardKind)
+    : (availableKinds.includes('ambos') ? 'ambos' : availableKinds[0]) ?? '';
+
+  const effectivePeriods = cardKinds ? (effectiveKind ? cardKinds[effectiveKind] : undefined) : periods;
+  const periodKeys = effectivePeriods ? Object.keys(effectivePeriods).filter(k => effectivePeriods[k]) : [];
+  const [period, setPeriod] = useState<string>('');
+  const effectivePeriod = periodKeys.includes(period) ? period : (periodKeys[0] ?? '');
+
+  const active: Distrib | undefined = effectivePeriods ? effectivePeriods[effectivePeriod] : prediction;
   const dist = active?.distribuicao ?? [];
   const mean = active?.estimativa ?? 0;
 
@@ -74,10 +95,22 @@ export function MarketCard({ title, subtitle, prediction, periods, icon }: Marke
           {subtitle ?? title}
           <InfoTooltip text="Quantidade prevista é o valor esperado. A linha em destaque é a mais próxima dela. A faixa de odd justa vai da odd com 7% de margem até a odd prevista (1/probabilidade)." />
         </h3>
-        <div className="flex justify-between items-center gap-2 mt-1.5">
+        <div className="flex justify-between items-center gap-2 mt-1.5 flex-wrap">
           <p className="text-xs text-muted-foreground">
             Quantidade prevista: <span className="font-bold text-foreground">{mean.toFixed(1)}</span>
           </p>
+          {availableKinds.length > 1 && (
+            <div className="bg-muted p-1 rounded-md flex text-[10px] font-medium shrink-0">
+              {availableKinds.map(k => (
+                <button
+                  key={k}
+                  onClick={() => setKind(k)}
+                  title={CARD_KIND_TITLE[k]}
+                  className={`px-2.5 py-1.5 sm:px-2 sm:py-1 rounded transition-colors text-xs sm:text-[10px] min-h-[28px] sm:min-h-0 ${effectiveKind === k ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >{CARD_KIND_LABEL[k]}</button>
+              ))}
+            </div>
+          )}
           <div className="bg-muted p-1 rounded-md flex text-[10px] font-medium shrink-0">
             <button
               onClick={() => setViewMode('prob')}

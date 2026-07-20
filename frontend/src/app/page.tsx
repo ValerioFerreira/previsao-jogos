@@ -198,6 +198,18 @@ function cardPeriods(p: PredictionResponse, side: string) {
     '2º tempo': p.tempos?.cartoes_2t?.[side],
   };
 }
+// Variantes por tipo de cartão (amarelo isolado / ambos / vermelho isolado) para o
+// seletor 🟨-Ambos-🟥 do card de Cartões. Amarelo e vermelho isolados não têm recorte
+// por tempo, então entram como um único período ("Partida inteira").
+function cardKindsFor(p: PredictionResponse, side: string) {
+  const amarelo = p.cartoes_amarelos?.[side];
+  const vermelho = p.cartoes_vermelhos?.[side];
+  return {
+    amarelo: amarelo ? { 'Partida inteira': amarelo } : undefined,
+    ambos: cardPeriods(p, side),
+    vermelho: vermelho ? { 'Partida inteira': vermelho } : undefined,
+  };
+}
 
 // Placar Exato: 3 placares mais prováveis + alerta de potencial de desvio (placar
 // fora do padrão), no mesmo estilo do Radar de Anomalias.
@@ -993,13 +1005,13 @@ export default function Previsoes() {
                 </CollapsibleMarket>
               )}
 
-              {/* Cartões (com seletor de tempo) */}
+              {/* Cartões (com seletor de tempo + seletor 🟨/Ambos/🟥 por tipo) */}
               {projection.cartoes && projection.cartoes.total && (
-                <CollapsibleMarket title="Cartões" tip="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." tipHref="/como-funciona#mercado-cartoes">
+                <CollapsibleMarket title="Cartões" tip="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Use o seletor 🟨/Ambos/🟥 em cada card para ver amarelos e vermelhos isolados. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." tipHref="/como-funciona#mercado-cartoes">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <MarketCard title="Cartões" subtitle={teamPt(homeTeamId)} periods={cardPeriods(projection, homeTeamId)} />
-                    <MarketCard title="Cartões" subtitle="Totais (Partida)" periods={cardPeriods(projection, 'total')} />
-                    <MarketCard title="Cartões" subtitle={teamPt(awayTeamId)} periods={cardPeriods(projection, awayTeamId)} />
+                    <MarketCard title="Cartões" subtitle={teamPt(homeTeamId)} cardKinds={cardKindsFor(projection, homeTeamId)} />
+                    <MarketCard title="Cartões" subtitle="Totais (Partida)" cardKinds={cardKindsFor(projection, 'total')} />
+                    <MarketCard title="Cartões" subtitle={teamPt(awayTeamId)} cardKinds={cardKindsFor(projection, awayTeamId)} />
                   </div>
                 </CollapsibleMarket>
               )}
@@ -1011,28 +1023,6 @@ export default function Previsoes() {
                     <MarketCard title="Impedimentos" subtitle={teamPt(homeTeamId)} prediction={projection.impedimentos[homeTeamId]} />
                     <MarketCard title="Impedimentos" subtitle="Totais (Partida)" prediction={projection.impedimentos.total} />
                     <MarketCard title="Impedimentos" subtitle={teamPt(awayTeamId)} prediction={projection.impedimentos[awayTeamId]} />
-                  </div>
-                </CollapsibleMarket>
-              )}
-
-              {/* Cartões vermelhos isolados (mercado novo, exibido cru) */}
-              {projection.cartoes_vermelhos && projection.cartoes_vermelhos.total && (
-                <CollapsibleMarket title="Cartões Vermelhos" tip="Cartões vermelhos diretos ou por segundo amarelo — mercado raro, evento binário na maioria dos jogos.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <MarketCard title="Cartões Vermelhos" subtitle={teamPt(homeTeamId)} prediction={projection.cartoes_vermelhos[homeTeamId]} />
-                    <MarketCard title="Cartões Vermelhos" subtitle="Totais (Partida)" prediction={projection.cartoes_vermelhos.total} />
-                    <MarketCard title="Cartões Vermelhos" subtitle={teamPt(awayTeamId)} prediction={projection.cartoes_vermelhos[awayTeamId]} />
-                  </div>
-                </CollapsibleMarket>
-              )}
-
-              {/* Cartões amarelos isolados (mercado novo, exibido cru) */}
-              {projection.cartoes_amarelos && projection.cartoes_amarelos.total && (
-                <CollapsibleMarket title="Cartões Amarelos" tip="Cartões amarelos isolados (sem somar os vermelhos) — total e por equipe.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <MarketCard title="Cartões Amarelos" subtitle={teamPt(homeTeamId)} prediction={projection.cartoes_amarelos[homeTeamId]} />
-                    <MarketCard title="Cartões Amarelos" subtitle="Totais (Partida)" prediction={projection.cartoes_amarelos.total} />
-                    <MarketCard title="Cartões Amarelos" subtitle={teamPt(awayTeamId)} prediction={projection.cartoes_amarelos[awayTeamId]} />
                   </div>
                 </CollapsibleMarket>
               )}
