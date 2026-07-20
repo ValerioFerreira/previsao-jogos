@@ -1141,4 +1141,8 @@ def allowed_origins() -> list[str]:
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
     if "http://localhost:3000" not in origins:
         origins.append("http://localhost:3000")
+    if "https://www.apostainfo.com.br" not in origins:
+        origins.append("https://www.apostainfo.com.br")
+    if "https://apostainfo.com.br" not in origins:
+        origins.append("https://apostainfo.com.br")
     return origins
