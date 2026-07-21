@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { CreditCard, Loader2, QrCode, Tag } from "lucide-react";
 import { paymentsApi, promotionsApi, type CreditPackage, type CouponPreview } from "@/lib/monetizationApi";
+import { affiliatesApi, getStoredRefCode } from "@/lib/affiliatesApi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,15 @@ export function CheckoutModal({
   // reseta o estado do cupom sempre que o modal é reaberto para um novo pacote
   React.useEffect(() => {
     if (open) {
-      setCouponCode(""); setCouponPreview(null); setCouponErr(null); setErr(null);
+      setCouponPreview(null); setCouponErr(null); setErr(null);
+      // pré-preenche o cupom do parceiro a partir do ?ref= guardado (só vale na 1ª compra;
+      // o backend revalida com first_purchase_only). Não aplica sozinho — o usuário confirma.
+      const ref = getStoredRefCode();
+      if (ref) {
+        affiliatesApi.resolveCoupon(ref).then((code) => { if (code) setCouponCode(code); });
+      } else {
+        setCouponCode("");
+      }
     }
   }, [open, pkg?.id]);
 

@@ -183,6 +183,7 @@ export default function CarteiraPage() {
 
   const available = wallet ? Number(wallet.available_balance) : 0;
   const reserved = wallet ? Number(wallet.reserved_balance) : 0;
+  const promo = wallet ? Number(wallet.promo_balance || 0) : 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -192,7 +193,7 @@ export default function CarteiraPage() {
       </div>
 
       {/* Resumo da carteira — primeiro, antes de vendas/banners */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className={`grid gap-4 ${promo > 0 ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2"}`}>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Créditos disponíveis</div>
@@ -201,6 +202,17 @@ export default function CarteiraPage() {
             </div>
           </CardContent>
         </Card>
+        {promo > 0 && (
+          <Card className="border-sky-500/30 bg-sky-500/[0.03]">
+            <CardContent className="pt-6">
+              <div className="text-sm text-muted-foreground flex items-center gap-1">
+                Promocionais
+                <span title="Consumidos automaticamente em qualquer análise (antes dos pagos). Não participam da Aposta Escolhida." className="cursor-help text-sky-500">ⓘ</span>
+              </div>
+              <div className="text-3xl font-bold mt-1 text-sky-500">{Math.floor(promo)}</div>
+            </CardContent>
+          </Card>
+        )}
         <Card className="cursor-pointer hover:border-amber-500/50 hover:bg-amber-500/[0.02] transition-all select-none group" onClick={() => router.push('/perfil?tab=selecoes')}>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground flex items-center justify-between">

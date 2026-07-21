@@ -35,6 +35,7 @@ export type TokenResponse = {
 export type Wallet = {
   available_balance: string;
   reserved_balance: string;
+  promo_balance: string;
   currency: string;
 };
 

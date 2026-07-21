@@ -1167,3 +1167,61 @@ ajustados pra `_local_put_batch([(key, fid, lid, season, raw)])`.
 das 8 ligas novas (~22k chamadas), coleta diária automática de seleções (tarefa agendada
 `\PrevisaoJogos\`, floor 2010, rodando em paralelo o tempo todo), e checagens de `/status`.
 Retomar o backfill das 8 ligas novas amanhã, cota resetada.
+
+## 18. Créditos promocionais + 2 tipos de cupom de parceiro + indicação de parceiros (2026-07-21)
+
+Reforma da camada de monetização (parceiros/cupons/créditos). Backend testado (unit + smoke
+runtime), frontend typecheck limpo. **Migrations são Postgres (produção); o SQLite de dev usa
+`create_all`, não roda estas migrations.** Rodar `alembic upgrade head` no Neon ao promover.
+
+### 18.1 Créditos promocionais (novo saldo, não-fungível)
+- `Wallet.promo_balance` + `CreditTransaction.promo_delta`/`promo_after` (mesmo padrão de
+  `reserved_*`). `post_transaction` ganhou `promo_delta` com guarda de negativo.
+- **Boas-vindas = 0** (`auth/service.WELCOME_CREDITS` era 8). Novo usuário nasce com 0; conta com
+  o crédito diário promocional + eventual código de indicação (bônus de 5, inalterado).
+- **Crédito diário promocional = a cota `FreeDailyUse`** (1/dia, não acumula) — decisão do dono.
+- **Prioridade de consumo** em `analysis/service.create_analysis`: grátis-diária → `promo_balance`
+  → pago. `free`/`promo` são consumidos **na hora, nunca reservados** (mesmo em partida futura),
+  logo **não habilitam a Aposta Escolhida**; só crédito PAGO em partida futura reserva.
+- `credit_tx_id` da análise agora só é setado numa RESERVA real; `bets/service._load_reserved_analysis`
+  passou a exigir `status == reserved` (fecha bug latente: aposta sobre análise sem reserva
+  quebrava a liquidação ao tentar estornar reserva inexistente).
+
+### 18.2 Dois tipos de cupom de parceiro
+- **Convite** (criado na aprovação, `admin/service._create_partner_invite`): agora
+  `first_purchase_only=True` + `promo_credits=5` + `commission_pct` **por-cupom** (= 30 − desconto,
+  fecha a inconsistência de um `commission_pct` global com múltiplos tiers). Os 5 créditos vão pro
+  `promo_balance` na 1ª compra (`payments/service._credit_if_paid`, key `coupon-promo:{order}`).
+- **Promocional** (novo, `PartnerCouponRequest`): parceiro solicita (nome ≤12, % desconto), **1
+  pendente por vez**; admin aprova com prazo (dias) OU teto de faturamento **pré-desconto**
+  (`Coupon.revenue_limit_brl`, checado em `validate_coupon` e desativado em `deactivate_if_cap_reached`),
+  ou rejeita com motivo. **E-mail ao parceiro nos dois casos** (`email.send_partner_coupon_decision_email`).
+- `Coupon` novos: `promo_credits`, `commission_pct`, `revenue_limit_brl`. `compute_benefit` retorna
+  `(amount, bonus, promo)`; `CouponPreview.promo_credits`.
+- `commission_for_order` usa `coupon.commission_pct` quando a ordem usou cupom do próprio parceiro
+  (fallback `affiliate.commission_pct`).
+
+### 18.3 Indicação de parceiros (um nível) + override 5%
+- `Affiliate.parent_affiliate_id` (self-ref). `apply_for_partnership` aceita `ref_partner` (código
+  do indicador via link `/parceiro/solicitar?ref_partner=CODE`). O indicado **não vê** o vínculo.
+- `AffiliateCommission` ganhou `kind (direct|override)` + `source_affiliate_id`; unique passou de
+  `order_id` para composto `(order_id, affiliate_id)` (1 direta + 1 override por ordem).
+- `_override_commission_for_parent`: 5% (PlatformSetting `partner_override_pct`, default 5) da
+  comissão direta ao indicador, **custo extra do sistema** (não descontado do indicado), **um nível
+  só**, idempotente por `(order_id, parent_id)`.
+- `referred_partners_stats` (portal + admin detalhe); `compute_portal_stats` separa buyers/revenue
+  (só `direct`) de due/paid (direct+override).
+
+### 18.4 UI + observabilidade
+- Dashboard do parceiro: 2 links (usuários / indicar parceiros), "Solicitar cupom promocional"
+  (modal, bloqueado com pendente), aba "Parceiros indicados". Carteira mostra saldo Promocionais.
+- Admin: **badge** de pendências acima da aba Parceiros (`/admin/pending-counts`), seção de
+  solicitações de cupom (aprovar dias/faturamento, recusar com motivo), detalhe do parceiro com
+  indicados + override devido. Checkout pré-preenche o cupom do parceiro via `?ref=` (`resolve-coupon`).
+- Endpoints novos: `/affiliates/{coupon-requests,portal/referred-partners,resolve-coupon}`,
+  `/admin/{coupon-requests[/{id}/approve|reject],pending-counts}`.
+
+### 18.5 Migrations (head anterior `3549706daeb8`)
+`d1f0a1b2c3d4` (wallet promo) → `d2f1b2c3d4e5` (coupon cols + `app_partner_coupon_requests`) →
+`d3f2c3d4e5f6` (affiliate parent + commission kind/source + unique composto). Validadas por SQL
+offline p/ Postgres + `create_all` no SQLite.

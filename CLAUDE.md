@@ -26,7 +26,11 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   1º/2º tempo pra clube, cartões vermelhos, time a marcar primeiro (2026-07-19)**, **§17 fecha
   as hipóteses pendentes do §16 — GAP ratings PASSOU o gate e foi promovido pro DC-NB de clube
   (158→170 features); mercados novos: cartões amarelos, qualificação/agregado em mata-mata
-  ida-volta; +8 competições em coleta (mesmo dia, 2026-07-19)**.
+  ida-volta; +8 competições em coleta (mesmo dia, 2026-07-19)**, **§18 reforma da monetização
+  (2026-07-21): créditos promocionais (boas-vindas 0 + saldo `promo_balance` consumido antes do
+  pago e nunca reservado), 2 tipos de cupom de parceiro (convite 1ª-compra+5 promo; promocional
+  solicitado→aprovado pelo admin com prazo/faturamento), indicação de parceiros (`parent_affiliate_id`
+  + override 5%, um nível) e badge de pendências no admin — backend testado, migrations Postgres**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa

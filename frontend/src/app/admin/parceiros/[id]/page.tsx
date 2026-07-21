@@ -83,6 +83,7 @@ export default function PartnerDetailPage() {
 
   const payments = (detail.payments as Record<string, unknown>[]) || [];
   const demoLogs = (detail.demo_access_logs as Record<string, unknown>[]) || [];
+  const referredPartners = (detail.referred_partners as Record<string, unknown>[]) || [];
 
   function openEdit() {
     setSaveErr(null);
@@ -195,6 +196,30 @@ export default function PartnerDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {referredPartners.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Parceiros indicados por este parceiro</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Override devido a este parceiro pelas indicações:{" "}
+              <span className="text-emerald-600 font-semibold">R$ {Number(detail.referred_override_due_brl || 0).toFixed(2)}</span>
+            </p>
+          </CardHeader>
+          <CardContent>
+            {referredPartners.map((p) => (
+              <div key={String(p.id)} className="flex items-center justify-between py-2 border-b last:border-0 text-sm">
+                <div>
+                  <span className="font-semibold">{String(p.name)}</span>
+                  <span className="text-muted-foreground"> ({String(p.code)}) · {STATUS_LABEL[String(p.status)] || String(p.status)}</span>
+                  <div className="text-xs text-muted-foreground">{Number(p.users_count)} compradores · R$ {Number(p.revenue_brl).toFixed(2)} gerados</div>
+                </div>
+                <span className="text-emerald-600 text-xs font-semibold">+R$ {Number(p.override_due_brl).toFixed(2)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader><CardTitle className="text-lg">Histórico de pagamentos</CardTitle></CardHeader>

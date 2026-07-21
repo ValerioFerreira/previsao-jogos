@@ -54,6 +54,14 @@ export default function SolicitarParceriaPage() {
   const [suggesting, setSuggesting] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Indicação de parceiros: captura ?ref_partner= (o candidato NÃO vê o vínculo — só é
+  // atrelado ao indicador no backend, ver affiliates/service.py::apply_for_partnership).
+  const [refPartner, setRefPartner] = useState<string | null>(null);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("ref_partner");
+    if (p) setRefPartner(p);
+  }, []);
+
   // Sugestão automática de código (nome) enquanto o parceiro não editar o
   // prefixo manualmente.
   useEffect(() => {
@@ -91,6 +99,7 @@ export default function SolicitarParceriaPage() {
         payment_type: paymentType,
         discount_pcts: discountPcts,
         code_prefix: codePrefix.trim() || undefined,
+        ref_partner: refPartner || undefined,
       });
       setDone(true);
     } catch (e) {

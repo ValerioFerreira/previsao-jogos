@@ -72,6 +72,16 @@ export const adminApi = {
   demoUsage: () =>
     authFetch<{ items: { cpf: string; affiliate_name: string | null; logins: number; analyses: number; last_login_at: string }[] }>("/admin/demo-usage"),
 
+  // Solicitações de cupom promocional (parceiros) + badge de pendências
+  couponRequests: (status?: string) =>
+    authFetch<{ items: Record<string, unknown>[] }>(`/admin/coupon-requests${status ? `?status=${status}` : ""}`),
+  approveCouponRequest: (id: string, body: { limit_type: "days" | "revenue"; limit_days?: number; limit_revenue_brl?: string }) =>
+    authFetch(`/admin/coupon-requests/${id}/approve`, { method: "POST", body: JSON.stringify(body) }),
+  rejectCouponRequest: (id: string, reason: string) =>
+    authFetch(`/admin/coupon-requests/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+  pendingCounts: () =>
+    authFetch<{ partner_applications: number; coupon_requests: number; total: number }>("/admin/pending-counts"),
+
   banners: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/banners"),
   createBanner: (body: Record<string, unknown>) =>
     authFetch("/admin/banners", { method: "POST", body: JSON.stringify(body) }),

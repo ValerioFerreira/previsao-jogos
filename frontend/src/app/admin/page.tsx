@@ -197,6 +197,8 @@ export default function AdminPage() {
   const [partnerFilter, setPartnerFilter] = useState("");
   const [partnerSortByCommission, setPartnerSortByCommission] = useState(false);
   const [approveCodeDrafts, setApproveCodeDrafts] = useState<Record<string, string>>({});
+  const [couponRequests, setCouponRequests] = useState<Record<string, unknown>[]>([]);
+  const [pendingCounts, setPendingCounts] = useState<{ partner_applications: number; coupon_requests: number; total: number } | null>(null);
   const [newBanner, setNewBanner] = useState({ title: "", body: "", image_url: "", priority: "0", sort_order: "0" });
   const [newCampaign, setNewCampaign] = useState({ name: "", priority: "0" });
   const [newDeepAnalysis, setNewDeepAnalysis] = useState({ fixture_id: "", analyst_name: "", markdown_content: "" });
@@ -247,7 +249,8 @@ export default function AdminPage() {
         adminApi.banners().then(r => setBanners(r.items)),
         api.upcomingFixtures().then(r => setUpcoming(r.fixtures)),
         Promise.all([api.teamIds("selecao"), api.teamIds("clube")]).then(([sel, clu]) => setTeamIds({ ...sel, ...clu })),
-        Promise.all([api.teams("selecao"), api.teams("clube")]).then(([sel, clu]) => setAllCompetitions({ selecao: sel.tournaments, clube: clu.tournaments }))
+        Promise.all([api.teams("selecao"), api.teams("clube")]).then(([sel, clu]) => setAllCompetitions({ selecao: sel.tournaments, clube: clu.tournaments })),
+        loadPartnerRequests(),
       ]);
       setPayments(p.items); setPromos(pr.items); setAudit(a.items); setDashboard(d);
       setCoupons(cp.items); setCouponAnalytics(ca.items); setPackages(pk.items); setAffiliates(af.items);
@@ -382,6 +385,36 @@ export default function AdminPage() {
 
   async function loadAffiliates(status = partnerFilter) {
     try { setAffiliates((await adminApi.affiliates(status || undefined)).items); } catch (e) { setErr((e as Error).message); }
+  }
+
+  async function loadPartnerRequests() {
+    try {
+      const [cr, pc] = await Promise.all([adminApi.couponRequests("pending"), adminApi.pendingCounts()]);
+      setCouponRequests(cr.items); setPendingCounts(pc);
+    } catch { /* silencioso — badge/aba são auxiliares */ }
+  }
+
+  async function decideCouponRequest(id: string, action: "approve" | "reject") {
+    try {
+      if (action === "reject") {
+        const reason = window.prompt("Motivo da recusa (será enviado por e-mail ao parceiro):") || "";
+        if (!reason.trim()) return;
+        await adminApi.rejectCouponRequest(id, reason.trim());
+      } else {
+        const kind = window.prompt("Limite por 'dias' ou 'faturamento'? Digite: dias / faturamento", "dias");
+        if (kind === null) return;
+        if (kind.toLowerCase().startsWith("fat")) {
+          const v = window.prompt("Teto de faturamento pré-desconto (R$):", "500");
+          if (!v) return;
+          await adminApi.approveCouponRequest(id, { limit_type: "revenue", limit_revenue_brl: v });
+        } else {
+          const d = window.prompt("Prazo em dias:", "30");
+          if (!d) return;
+          await adminApi.approveCouponRequest(id, { limit_type: "days", limit_days: Number(d) });
+        }
+      }
+      await loadPartnerRequests();
+    } catch (e) { setErr((e as Error).message); }
   }
 
   async function createAffiliate(e: React.FormEvent) {
@@ -662,7 +695,15 @@ export default function AdminPage() {
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="promocoes">Promoções</TabsTrigger>
-          <TabsTrigger value="afiliados">Parceiros</TabsTrigger>
+          <TabsTrigger value="afiliados" className="relative">
+            Parceiros
+            {pendingCounts && pendingCounts.total > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none"
+                title={`${pendingCounts.partner_applications} solicitações de parceria, ${pendingCounts.coupon_requests} de cupom`}>
+                {pendingCounts.total}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="config">Configurações</TabsTrigger>
           <TabsTrigger value="deep">Análise Aprofundada</TabsTrigger>
@@ -978,7 +1019,34 @@ export default function AdminPage() {
         </TabsContent>
 
         {/* ---------------- Parceiros (afiliados) ---------------- */}
-        <TabsContent value="afiliados">
+        <TabsContent value="afiliados" className="space-y-4">
+          {couponRequests.length > 0 && (
+            <Card className="border-amber-500/40">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  Solicitações de cupom promocional
+                  <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold">{couponRequests.length}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {couponRequests.map((r) => (
+                  <div key={String(r.id)} className="flex flex-wrap items-center justify-between gap-2 text-sm border rounded-md px-3 py-2">
+                    <div>
+                      <span className="font-semibold">{String(r.affiliate_name)}</span>
+                      <span className="text-muted-foreground"> ({String(r.affiliate_code)})</span>
+                      {" · "}
+                      <span className="font-mono uppercase font-semibold">{String(r.requested_code)}</span>
+                      <span className="text-muted-foreground"> · {Number(r.discount_pct)}% desconto / {30 - Number(r.discount_pct)}% comissão</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => decideCouponRequest(String(r.id), "approve")}>Aprovar</Button>
+                      <Button size="sm" variant="outline" onClick={() => decideCouponRequest(String(r.id), "reject")}>Recusar</Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader><CardTitle className="text-lg">Parceiros</CardTitle></CardHeader>
             <CardContent className="space-y-4">

@@ -1,8 +1,33 @@
 # Estado atual e próximos passos (handoff)
 
 > **Leia isto primeiro** (o índice de caminhos é o **`CLAUDE.md`** na raiz). Resume onde o projeto
-> está e o que fazer a seguir. Última atualização: **2026-07-19** (GAP ratings promovido pra
-> produção + mercados amarelos/agregado + 8 competições novas).
+> está e o que fazer a seguir. Última atualização: **2026-07-21** (reforma da monetização —
+> créditos promocionais, 2 tipos de cupom de parceiro, indicação de parceiros; ver §0 abaixo).
+
+---
+
+## 0. Sessão (2026-07-21) — créditos promocionais + 2 tipos de cupom de parceiro + indicação de parceiros
+
+Reforma da camada de monetização. **Detalhes completos em `DOCUMENTACAO_CENTRAL.md §18`.** Resumo:
+- **Créditos promocionais** (`Wallet.promo_balance`): boas-vindas = **0**; crédito diário
+  promocional = cota `FreeDailyUse`; consumo na ordem grátis→promo→pago; promo/grátis nunca
+  reservam (não habilitam Aposta Escolhida — só crédito pago em partida futura).
+- **Cupom de convite**: agora 1ª-compra + 5 créditos promocionais + comissão por-cupom.
+- **Cupom promocional** (novo): parceiro solicita (1 pendente por vez), admin aprova com
+  prazo/faturamento ou recusa com motivo; **e-mail nos dois casos**.
+- **Indicação de parceiros**: `parent_affiliate_id` (um nível) + override 5% (custo extra do
+  sistema). Badge de pendências no admin.
+- Backend **testado** (unit + smoke runtime), frontend **typecheck limpo**.
+
+**PENDÊNCIA DO DONO antes de valer em produção:**
+1. **Rodar `alembic upgrade head` no Neon** (3 migrations novas: `d1f0a1b2c3d4` → `d2f1b2c3d4e5`
+   → `d3f2c3d4e5f6`). São **Postgres**; o SQLite de dev usa `create_all` e não roda elas.
+2. (Opcional) `PlatformSetting partner_override_pct` se quiser override ≠ 5%.
+3. Verificação de UI autenticada (portal do parceiro / admin) num ambiente com o schema aplicado
+   — não deu pra fazer aqui (SQLite de dev não roda as migrations; classificador bloqueia criar
+   usuário local, ver memória `browser-verify-precisa-credencial-conhecida`).
+
+---
 > Docs de apoio: `CLAUDE.md` (índice), `DOCUMENTACAO_CENTRAL.md` (doc-mestre; **§9 = testes já feitos,
 > não repetir**, **§12 = monetização**, **§13 = pesquisa de clubes**, **§17 = sessão mais recente**),
 > `ARCHITECTURE.md` (infra —
