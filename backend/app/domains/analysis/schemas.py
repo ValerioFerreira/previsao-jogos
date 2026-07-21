@@ -39,7 +39,11 @@ class AnalysisResponse(BaseModel):
     credits_consumed: int
     credits_reserved: int
     available_balance: Decimal
+    promo_balance: Decimal = Decimal("0")     # saldo de créditos promocionais restante
     is_free: bool = False
+    # True só quando a análise tem crédito PAGO reservado — habilita a "Aposta Escolhida".
+    # Grátis (cota diária/promo) => False.
+    eligible_bet: bool = False
     snapshot: dict
 
 

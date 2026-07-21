@@ -119,31 +119,43 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
 
     wallet = get_or_create_wallet(db, user.id)
 
-    # Copa do Mundo é grátis ilimitada; senão, tenta consumir a cota diária grátis (1x/dia
-    # por usuário) ANTES de checar saldo — só se a análise realmente for gerada com sucesso
-    # (snapshot abaixo) é que o crédito/gratuidade é efetivado, evitando gastar a cota do
-    # dia numa requisição que ia falhar de qualquer forma.
+    # Prioridade de consumo (decidida aqui; efetivada só APÓS o snapshot, para não gastar
+    # crédito/cota numa requisição que ia falhar de qualquer forma):
+    #   1) grátis  — Copa do Mundo / conta demo / CRÉDITO DIÁRIO PROMOCIONAL (cota 1x/dia)
+    #   2) promo   — saldo promocional (promo_balance, ex.: 5 do cupom de convite)
+    #   3) pago    — available_balance
+    # 'free' e 'promo' são SEMPRE consumidos na hora (mesmo em partida futura) e NUNCA
+    # reservados, logo não habilitam a "Aposta Escolhida". Só o crédito pago em partida
+    # futura é reservado (elegível à aposta).
+    atype = AnalysisType(req.type)
     is_wc_free = req.tournament == FREE_TOURNAMENT
     used_daily_free = False
     if is_wc_free or user.is_demo:
         # Conta demo compartilhada (créditos ilimitados p/ parceiros divulgarem a
         # plataforma) — tratada como gratuita: nunca debita nem toca no ledger da carteira.
-        is_free = True
+        is_free, pay_method = True, "free"
     else:
         used_daily_free = _try_claim_daily_free(db, user.id)
-        is_free = used_daily_free
-        if not is_free and Decimal(wallet.available_balance) < 1:
+        if used_daily_free:
+            is_free, pay_method = True, "free"
+        elif Decimal(wallet.promo_balance) >= 1:
+            is_free, pay_method = False, "promo"
+        elif Decimal(wallet.available_balance) >= 1:
+            is_free = False
+            pay_method = "reserve" if atype == AnalysisType.future_match else "consume"
+        else:
             raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
                                 detail="Créditos insuficientes. Compre créditos para gerar a análise.")
 
     analytics_service.track(db, "analysis_started", user_id=user.id, type=req.type, tournament=req.tournament)
     snapshot, home, away = _generate_snapshot(req)
     data_version, model_hash = _model_fingerprint()
-    atype = AnalysisType(req.type)
 
     analysis = Analysis(
         user_id=user.id, type=atype,
-        status=AnalysisStatus.consumed if atype == AnalysisType.independent else AnalysisStatus.reserved,
+        # 'reserved' só quando há reserva de crédito PAGO (elegível à Aposta Escolhida);
+        # grátis/promo (mesmo em partida futura) são consumidos na hora.
+        status=AnalysisStatus.reserved if pay_method == "reserve" else AnalysisStatus.consumed,
         home_team=home, away_team=away, tournament=req.tournament, fixture_id=req.fixture_id,
         algo_version=ANALYSIS_ALGO_VERSION, data_version=data_version, model_hash=model_hash,
         snapshot=snapshot, is_free=is_free,
@@ -160,16 +172,23 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
             claim.analysis_id = analysis.id
 
     tx = None
-    if is_free:
-        consumed, reserved = 0, 0
-    elif atype == AnalysisType.independent:
+    if pay_method == "promo":
+        # crédito promocional: consumo imediato do promo_balance (nunca reservado)
+        tx = post_transaction(
+            db, wallet=wallet, tx_type=CreditTxType.promo_credit, amount=Decimal("0"),
+            promo_delta=Decimal("-1"), idempotency_key=f"analysis-promo:{analysis.id}",
+            reference_type="analysis", reference_id=analysis.id,
+            description=f"Crédito promocional — análise {home} x {away}",
+        )
+        consumed, reserved = 1, 0
+    elif pay_method == "consume":
         tx = post_transaction(
             db, wallet=wallet, tx_type=CreditTxType.consumption, amount=Decimal("-1"),
             idempotency_key=f"analysis-consume:{analysis.id}", reference_type="analysis",
             reference_id=analysis.id, description=f"Análise {home} x {away}",
         )
         consumed, reserved = 1, 0
-    else:  # future_match — reserva
+    elif pay_method == "reserve":  # partida futura paga — reserva (elegível à Aposta Escolhida)
         tx = post_transaction(
             db, wallet=wallet, tx_type=CreditTxType.reservation, amount=Decimal("-1"),
             reserved_delta=Decimal("1"), idempotency_key=f"analysis-reserve:{analysis.id}",
@@ -177,8 +196,13 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
             description=f"Reserva — análise {home} x {away}",
         )
         consumed, reserved = 0, 1
+    else:  # free
+        consumed, reserved = 0, 0
 
-    if tx is not None:
+    # credit_tx_id só aponta para uma RESERVA de verdade (base da aposta). Consumo imediato
+    # (promo/independente) não deve virar reserva, senão a liquidação tentaria estornar algo
+    # que não está reservado.
+    if pay_method == "reserve" and tx is not None:
         analysis.credit_tx_id = tx.id
     analytics_service.track(db, "analysis_finished", user_id=user.id, analysis_id=str(analysis.id))
     db.commit()
@@ -194,7 +218,9 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
         home_team=home, away_team=away, tournament=req.tournament, fixture_id=req.fixture_id,
         algo_version=ANALYSIS_ALGO_VERSION, data_version=data_version, model_hash=model_hash,
         created_at=analysis.created_at, credits_consumed=consumed, credits_reserved=reserved,
-        is_free=is_free, available_balance=wallet.available_balance, snapshot=res_snapshot,
+        is_free=is_free, available_balance=wallet.available_balance,
+        promo_balance=wallet.promo_balance, eligible_bet=(pay_method == "reserve"),
+        snapshot=res_snapshot,
     )
 
 

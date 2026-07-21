@@ -78,10 +78,10 @@ def main() -> int:
 
     import app.core.rate_limit as rate_limit
     from app.db.base import Base, SessionLocal, engine
-    # importa todos os modelos para o create_all enxergar as tabelas app_*
-    import app.domains.users.models, app.domains.wallet.models, app.domains.legal.models      # noqa: F401,E401
-    import app.domains.payments.models, app.domains.analysis.models, app.domains.bets.models  # noqa: F401,E401
-    import app.domains.promotions.models, app.domains.admin.models                            # noqa: F401,E401
+    # importa TODOS os modelos (registro central) para o create_all enxergar todas as
+    # tabelas app_* e resolver as FKs entre domínios (ex.: app_coupons.affiliate_id ->
+    # app_affiliates). Importar um subconjunto quebra a resolução de FK no create_all.
+    import app.db.models  # noqa: F401
     from app.domains.auth.router import router as auth_router
     from app.domains.users.models import User
 

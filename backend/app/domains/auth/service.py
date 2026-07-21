@@ -28,9 +28,11 @@ logger = logging.getLogger("app.auth")
 _SETUP_SCOPE = "pw_setup"
 _PARTNER_INVITE_SCOPE = "partner_invite"
 
-# Bônus de boas-vindas: toda conta nova nasce com créditos grátis. Idempotente pela
-# idempotency_key (welcome-bonus:<user_id>) — reativar/repetir não credita de novo.
-WELCOME_CREDITS = Decimal("8")
+# Bônus de boas-vindas. A partir de 2026-07-21 toda conta nova nasce com 0 crédito: o
+# usuário passa a contar com o CRÉDITO DIÁRIO PROMOCIONAL (1/dia, cota FreeDailyUse) e com
+# eventuais créditos de um código promocional de indicação (ver _grant_referral_bonus_if_pending).
+# O bloco de concessão é guardado por `if WELCOME_CREDITS > 0`, então isto vira no-op.
+WELCOME_CREDITS = Decimal("0")
 
 # Config default do bônus de indicação, sobrescrita pelo PlatformSetting "referral_bonus"
 # (chave configurável pelo painel admin — nenhum valor de negócio fica só hardcoded aqui).

@@ -21,7 +21,8 @@ def get_wallet(user: User = Depends(get_current_user), db: Session = Depends(get
     wallet = get_or_create_wallet(db, user.id)
     db.commit()
     return schemas.WalletResponse(
-        available_balance=wallet.available_balance, reserved_balance=wallet.reserved_balance
+        available_balance=wallet.available_balance, reserved_balance=wallet.reserved_balance,
+        promo_balance=wallet.promo_balance,
     )
 
 
@@ -85,8 +86,8 @@ def transactions(
             home_team, away_team = teams_by_bet_id[t.reference_id]
         items.append(schemas.TransactionItem(
             id=str(t.id), type=t.type.value, status=t.status.value, amount=t.amount,
-            reserved_delta=t.reserved_delta, balance_after=t.balance_after,
-            reserved_after=t.reserved_after, description=t.description,
+            reserved_delta=t.reserved_delta, promo_delta=t.promo_delta, balance_after=t.balance_after,
+            reserved_after=t.reserved_after, promo_after=t.promo_after, description=t.description,
             reference_type=t.reference_type, home_team=home_team, away_team=away_team,
             created_at=t.created_at,
         ))

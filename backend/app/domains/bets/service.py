@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.domains.analysis.models import Analysis
 from app.domains.bets import markets, schemas
 from app.domains.bets.models import Bet, BetSelection
-from app.domains.enums import AnalysisType, BetStatus
+from app.domains.enums import AnalysisStatus, AnalysisType, BetStatus
 from app.domains.users.models import User
 
 CAP = float(settings.max_combined_odd)
@@ -52,6 +52,16 @@ def _load_reserved_analysis(db: Session, user: User, analysis_id: str) -> Analys
     if a.type != AnalysisType.future_match:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             detail="Seleções só em análises de partida futura.")
+    # A Aposta Escolhida exige um crédito PAGO reservado. Análises grátis (cota diária/Copa
+    # do Mundo/demo) ou pagas com crédito PROMOCIONAL são consumidas na hora (status=consumed,
+    # sem reserva) e não são elegíveis — sem esta guarda, a liquidação tentaria estornar uma
+    # reserva inexistente.
+    if a.status != AnalysisStatus.reserved:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Esta análise foi paga com crédito grátis/promocional e não participa da "
+                   "Aposta Escolhida. Use um crédito comum para habilitar a promoção.",
+        )
     return a
 
 

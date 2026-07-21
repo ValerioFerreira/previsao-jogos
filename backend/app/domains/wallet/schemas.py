@@ -10,6 +10,7 @@ from pydantic import BaseModel
 class WalletResponse(BaseModel):
     available_balance: Decimal
     reserved_balance: Decimal
+    promo_balance: Decimal = Decimal("0")   # créditos promocionais (consumidos antes do pago)
     currency: str = "credits"
 
 
@@ -19,8 +20,10 @@ class TransactionItem(BaseModel):
     status: str
     amount: Decimal
     reserved_delta: Decimal
+    promo_delta: Decimal = Decimal("0")
     balance_after: Decimal
     reserved_after: Decimal
+    promo_after: Decimal = Decimal("0")
     description: str | None
     reference_type: str | None
     home_team: str | None = None
