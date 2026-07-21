@@ -142,3 +142,23 @@ class PromotionType(str, enum.Enum):
 class PartnerPaymentType(str, enum.Enum):
     pf = "pf"
     pj = "pj"
+
+
+class CouponRequestStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class CouponLimitType(str, enum.Enum):
+    """Como o cupom promocional de parceiro expira: por prazo (dias) ou por teto de
+    faturamento pré-desconto acumulado."""
+    days = "days"
+    revenue = "revenue"
+
+
+class CommissionKind(str, enum.Enum):
+    """direct = comissão do parceiro dono do cupom; override = 5% extra ao parceiro que
+    indicou o dono do cupom (custo adicional do sistema, um nível só)."""
+    direct = "direct"
+    override = "override"

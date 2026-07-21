@@ -11,7 +11,12 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, 
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, JSONB, TimestampMixin, UUIDPrimaryKeyMixin, enum_type
-from app.domains.enums import CouponDiscountType, PromotionType
+from app.domains.enums import (
+    CouponDiscountType,
+    CouponLimitType,
+    CouponRequestStatus,
+    PromotionType,
+)
 
 
 class Promotion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -64,7 +69,16 @@ class Coupon(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         enum_type(CouponDiscountType), nullable=True
     )
     discount_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
-    bonus_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bonus_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)  # créditos NORMAIS de bônus
+    # créditos PROMOCIONAIS concedidos no resgate (5 no cupom de convite) — vão para
+    # wallet.promo_balance, consumidos imediatamente e nunca reservados (ver wallet/models.py)
+    promo_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # comissão POR-CUPOM do parceiro (= 30 - desconto). Preenchido nos cupons de parceiro para
+    # permitir splits diferentes por cupom (convite vs promocional); fallback = affiliate.commission_pct.
+    commission_pct: Mapped[Decimal | None] = mapped_column(Numeric(6, 3), nullable=True)
+    # teto de faturamento PRÉ-DESCONTO (soma dos valores cheios das compras que usaram o cupom).
+    # Só nos cupons promocionais limitados por faturamento; atingido o teto, o cupom é desativado.
+    revenue_limit_brl: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     min_purchase_brl: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     package_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_credit_packages.id", ondelete="SET NULL"), nullable=True
@@ -98,3 +112,36 @@ class Referral(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     signup_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
     signup_source: Mapped[str | None] = mapped_column(String(40), nullable=True)  # link|manual
+
+
+class PartnerCouponRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Solicitação de CUPOM PROMOCIONAL feita pelo parceiro e analisada pelo admin.
+
+    O parceiro escolhe um nome (≤12 chars) e a % de desconto/ganho (mesmo orçamento de 30
+    pontos dos cupons de convite). Só pode haver UMA solicitação `pending` por parceiro por
+    vez. O admin aprova definindo prazo (dias) OU teto de faturamento pré-desconto, ou
+    rejeita com um motivo — e-mail enviado ao parceiro nos dois casos. Ao aprovar, um
+    `Coupon` é criado e referenciado em `coupon_id`."""
+    __tablename__ = "app_partner_coupon_requests"
+
+    affiliate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("app_affiliates.id", ondelete="CASCADE"), index=True
+    )
+    requested_code: Mapped[str] = mapped_column(String(12), nullable=False)
+    discount_pct: Mapped[Decimal] = mapped_column(Numeric(6, 3), nullable=False)
+    status: Mapped[CouponRequestStatus] = mapped_column(
+        enum_type(CouponRequestStatus), default=CouponRequestStatus.pending, nullable=False, index=True
+    )
+    # decisão do admin (aprovação)
+    limit_type: Mapped[CouponLimitType | None] = mapped_column(enum_type(CouponLimitType), nullable=True)
+    limit_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    limit_revenue_brl: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    # decisão do admin (rejeição)
+    rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True
+    )
+    coupon_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_coupons.id", ondelete="SET NULL"), nullable=True
+    )

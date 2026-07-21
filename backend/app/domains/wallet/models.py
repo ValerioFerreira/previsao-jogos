@@ -27,6 +27,11 @@ class Wallet(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # saldos cacheados, derivados do ledger (atualizados na mesma transação do lançamento)
     available_balance: Mapped[Decimal] = mapped_column(_MONEY, default=0, nullable=False)
     reserved_balance: Mapped[Decimal] = mapped_column(_MONEY, default=0, nullable=False)
+    # saldo de créditos PROMOCIONAIS (ex.: 5 do cupom de convite). Consumidos SEMPRE antes
+    # do saldo pago e SEMPRE de forma imediata — nunca entram em reserva, logo não habilitam
+    # a "Aposta Escolhida". O crédito diário promocional (1/dia, não acumula) é servido pela
+    # cota FreeDailyUse e não passa por aqui.
+    promo_balance: Mapped[Decimal] = mapped_column(_MONEY, default=0, nullable=False)
 
     transactions: Mapped[list["CreditTransaction"]] = relationship(
         back_populates="wallet", cascade="all, delete-orphan"
@@ -43,11 +48,14 @@ class CreditTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[CreditTxStatus] = mapped_column(
         enum_type(CreditTxStatus), default=CreditTxStatus.completed, nullable=False
     )
-    # valores assinados; reserved_delta move entre disponível e reservado
+    # valores assinados; reserved_delta move entre disponível e reservado; promo_delta move
+    # o saldo promocional (independente de available/reserved)
     amount: Mapped[Decimal] = mapped_column(_MONEY, nullable=False)
     reserved_delta: Mapped[Decimal] = mapped_column(_MONEY, default=0, nullable=False)
+    promo_delta: Mapped[Decimal] = mapped_column(_MONEY, default=0, nullable=False)
     balance_after: Mapped[Decimal] = mapped_column(_MONEY, nullable=False)
     reserved_after: Mapped[Decimal] = mapped_column(_MONEY, nullable=False)
+    promo_after: Mapped[Decimal] = mapped_column(_MONEY, default=0, nullable=False)
 
     # rastreabilidade / origem
     reference_type: Mapped[str | None] = mapped_column(String(40), nullable=True)  # payment_order|bet|analysis|promotion|admin

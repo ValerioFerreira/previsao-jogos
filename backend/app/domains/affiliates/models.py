@@ -11,11 +11,11 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_type
-from app.domains.enums import PartnerPaymentType
+from app.domains.enums import CommissionKind, PartnerPaymentType
 
 
 class Affiliate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -45,6 +45,11 @@ class Affiliate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Permite ao admin revogar o acesso deste parceiro específico à conta demo
     # compartilhada, sem precisar bloquear a conta demo inteira.
     demo_access_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Parceiro que INDICOU este parceiro (um nível só). O indicado não vê o vínculo; o
+    # indicador ganha +5% da comissão do indicado (override, custo extra do sistema).
+    parent_affiliate_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_affiliates.id", ondelete="SET NULL"), index=True, nullable=True
+    )
 
 
 class DemoAccessLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -77,15 +82,26 @@ class AffiliateAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class AffiliateCommission(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "app_affiliate_commissions"
+    # Uma ordem pode gerar até 2 comissões: a DIRETA (parceiro dono do cupom) e o OVERRIDE
+    # (parceiro que o indicou). Por isso o unique agora é composto (order_id, affiliate_id).
+    __table_args__ = (UniqueConstraint("order_id", "affiliate_id", name="uq_commission_order_affiliate"),)
 
     affiliate_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("app_affiliates.id", ondelete="CASCADE"), index=True
     )
     order_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("app_payment_orders.id", ondelete="CASCADE"), unique=True
+        ForeignKey("app_payment_orders.id", ondelete="CASCADE"), index=True
     )
     amount_brl: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="devida", nullable=False)  # devida|paga
+    # direct = comissão do dono do cupom; override = 5% extra ao parceiro que indicou o dono.
+    kind: Mapped[CommissionKind] = mapped_column(
+        enum_type(CommissionKind), default=CommissionKind.direct, nullable=False
+    )
+    # no override, o parceiro-filho que gerou a comissão-base (para o admin rastrear a origem).
+    source_affiliate_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("app_affiliates.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("app_affiliate_payments.id", ondelete="SET NULL"), index=True, nullable=True

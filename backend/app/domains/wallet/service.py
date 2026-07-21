@@ -19,7 +19,10 @@ from app.domains.wallet.models import CreditTransaction, Wallet
 def get_or_create_wallet(db: Session, user_id: uuid.UUID) -> Wallet:
     wallet = db.execute(select(Wallet).where(Wallet.user_id == user_id)).scalar_one_or_none()
     if wallet is None:
-        wallet = Wallet(user_id=user_id, available_balance=Decimal("0"), reserved_balance=Decimal("0"))
+        wallet = Wallet(
+            user_id=user_id, available_balance=Decimal("0"),
+            reserved_balance=Decimal("0"), promo_balance=Decimal("0"),
+        )
         db.add(wallet)
         db.flush()
     return wallet
@@ -32,6 +35,7 @@ def post_transaction(
     tx_type: CreditTxType,
     amount: Decimal,
     reserved_delta: Decimal = Decimal("0"),
+    promo_delta: Decimal = Decimal("0"),
     idempotency_key: str,
     reference_type: str | None = None,
     reference_id: uuid.UUID | None = None,
@@ -41,7 +45,8 @@ def post_transaction(
     """Aplica um lançamento ao ledger e atualiza os saldos cacheados na mesma transação.
 
     `amount`: variação do saldo DISPONÍVEL (assinado). `reserved_delta`: variação do
-    saldo RESERVADO (assinado). Ex.: reservar 1 crédito = amount -1, reserved_delta +1.
+    saldo RESERVADO (assinado). `promo_delta`: variação do saldo PROMOCIONAL (assinado).
+    Ex.: reservar 1 crédito = amount -1, reserved_delta +1; consumir 1 promo = promo_delta -1.
     """
     existing = db.execute(
         select(CreditTransaction).where(CreditTransaction.idempotency_key == idempotency_key)
@@ -51,11 +56,13 @@ def post_transaction(
 
     new_available = Decimal(wallet.available_balance) + amount
     new_reserved = Decimal(wallet.reserved_balance) + reserved_delta
-    if new_available < 0 or new_reserved < 0:
+    new_promo = Decimal(wallet.promo_balance) + promo_delta
+    if new_available < 0 or new_reserved < 0 or new_promo < 0:
         raise ValueError("Saldo insuficiente para o lançamento.")
 
     wallet.available_balance = new_available
     wallet.reserved_balance = new_reserved
+    wallet.promo_balance = new_promo
 
     tx = CreditTransaction(
         wallet_id=wallet.id,
@@ -63,8 +70,10 @@ def post_transaction(
         status=CreditTxStatus.completed,
         amount=amount,
         reserved_delta=reserved_delta,
+        promo_delta=promo_delta,
         balance_after=new_available,
         reserved_after=new_reserved,
+        promo_after=new_promo,
         reference_type=reference_type,
         reference_id=reference_id,
         description=description,
