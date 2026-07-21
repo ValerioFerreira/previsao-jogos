@@ -46,17 +46,17 @@ function ParcerIAHighlight() {
 
         <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
           Ao analisar uma <b className="text-foreground">partida oficial agendada</b>, você reserva <b className="text-foreground">1 crédito</b> e
-          monta uma equipe combinando os palpites da própria análise (odd máxima de <b className="text-foreground">2,00</b>).
+          monta uma escolha combinando os palpites da própria análise (odd máxima de <b className="text-foreground">2,00</b>).
           O sistema acompanha a partida para ver o resultado:
         </p>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><CheckCircle2 className="w-4 h-4" /> Se sua equipe for validada</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><CheckCircle2 className="w-4 h-4" /> Se sua escolha for validada</p>
             <p className="text-xs text-muted-foreground mt-1">O crédito é consumido — pô, a gente ajudou né! 😅</p>
           </div>
           <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-cyan-300"><RotateCcw className="w-4 h-4" /> Se sua equipe não for validada</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-cyan-300"><RotateCcw className="w-4 h-4" /> Se sua escolha não for validada</p>
             <p className="text-xs text-muted-foreground mt-1">Não fique triste, seu crédito é estornado e você pode fazer uma nova análise. A gente torce pra que dê mais sorte! 🍀🤞</p>
           </div>
         </div>
@@ -251,18 +251,18 @@ export default function ComoFunciona() {
         <Section id="promocao" title='Promoção "ParcerIA"'>
           <p>Essa promoção foi criada para tornar o uso da plataforma ainda mais interessante.</p>
           <p>Ao gerar uma análise para uma partida oficial futura, o sistema apenas reserva um crédito.</p>
-          <p>Depois disso, você monta uma equipe utilizando os mercados disponíveis na própria plataforma.</p>
+          <p>Depois disso, você monta uma escolha utilizando os mercados disponíveis na própria plataforma.</p>
           <p>Quando a partida termina:</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li>se sua equipe for validada, o crédito reservado é consumido normalmente;</li>
+            <li>se sua escolha for validada, o crédito reservado é consumido normalmente;</li>
             <li>se ela não for validada, ou não puder ser apurada, o crédito retorna integralmente para sua carteira.</li>
           </ul>
-          <p>Na prática, você só utiliza o crédito quando a equipe é validada.</p>
+          <p>Na prática, você só utiliza o crédito quando a escolha é validada.</p>
           <p>Essa é uma campanha promocional da ApostaInfo. Ela não representa uma aposta ou jogo de azar, e não envolve pagamento de prêmios em dinheiro.</p>
         </Section>
 
         <Section id="monte-sua-selecao" title="Monte sua Seleção">
-          <p>Após gerar uma análise para uma partida oficial, você pode montar sua própria equipe utilizando os mercados disponíveis.</p>
+          <p>Após gerar uma análise para uma partida oficial, você pode montar sua própria escolha utilizando os mercados disponíveis.</p>
           <p>Basta escolher as equipes desejadas.</p>
           <p>Nos mercados de linha, como Over/Under, as opções aparecem organizadas em duas colunas:</p>
           <ul className="list-disc pl-5 space-y-1">
@@ -271,8 +271,8 @@ export default function ComoFunciona() {
           </ul>
           <p>À medida que você adiciona mercados, a odd combinada é atualizada automaticamente.</p>
           <p>Para manter o equilíbrio da promoção, a odd total não pode ultrapassar 2,00.</p>
-          <p>Caso você não queira montar manualmente sua equipe, não há problema: a plataforma seleciona automaticamente uma combinação cuja odd fique próxima desse limite.</p>
-          <p>Depois da confirmação, a equipe fica registrada e não poderá mais ser alterada.</p>
+          <p>Caso você não queira montar manualmente sua escolha, não há problema: a plataforma seleciona automaticamente uma combinação cuja odd fique próxima desse limite.</p>
+          <p>Depois da confirmação, a escolha fica registrada e não poderá mais ser alterada.</p>
         </Section>
 
         {/* ---------------- Mercados ---------------- */}

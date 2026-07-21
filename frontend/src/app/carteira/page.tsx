@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   AlertTriangle, Coins, Copy, FileCheck2, Gift, Loader2, Plus, Receipt, Share2, ShoppingBag,
   Sparkles, Wallet as WalletIcon, X,
@@ -58,6 +59,9 @@ export default function CarteiraPage() {
   const [legalGateOpen, setLegalGateOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [invoiceModalOrder, setInvoiceModalOrder] = useState<OrderListItem | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (!loading && !user) router.replace("/entrar");
@@ -197,9 +201,12 @@ export default function CarteiraPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer hover:border-amber-500/50 hover:bg-amber-500/[0.02] transition-all select-none group" onClick={() => router.push('/perfil?tab=selecoes')}>
           <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground">Reservados</div>
+            <div className="text-sm text-muted-foreground flex items-center justify-between">
+              <span>Reservados</span>
+              <span className="text-[10px] text-amber-500 font-semibold uppercase tracking-wider group-hover:translate-x-1 transition-transform">Ver seleções ➜</span>
+            </div>
             <div className="text-3xl font-bold mt-1 text-amber-500">{Math.floor(reserved)}</div>
           </CardContent>
         </Card>
@@ -236,44 +243,55 @@ export default function CarteiraPage() {
       {err && <div className="text-sm rounded-md bg-red-500/10 text-red-600 p-3">{err}</div>}
 
       {/* Pacotes de créditos (com selos de destaque) */}
-      <Card>
-        <CardHeader><CardTitle className="text-lg">Comprar créditos</CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-xs text-muted-foreground mb-4">
-            Cada crédito custa R$ 1,00 e remunera o uso da Inteligência Artificial.
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {packages.map((p) => {
-              const badge = p.featured_badge ? BADGE_LABEL[p.featured_badge] : null;
-              const isRecommended = !badge && p.id === recommendedId;
-              const pct = savingsPct(p);
-              return (
-                <div key={p.id} className={`relative rounded-lg border p-4 flex flex-col items-center text-center gap-2 ${badge ? "border-emerald-500 shadow-md" : isRecommended ? "border-primary shadow-sm" : ""}`}>
-                  {badge && (
-                    <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${badge.className}`}>
-                      {badge.label}
-                    </span>
-                  )}
-                  {isRecommended && (
-                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-primary text-primary-foreground">
-                      Recomendado para você
-                    </span>
-                  )}
-                  <div className="text-sm font-semibold mt-2">{p.name}</div>
-                  <div className="text-2xl font-bold">{p.total_credits}</div>
-                  <div className="text-xs text-muted-foreground">créditos{p.bonus_credits ? ` (+${p.bonus_credits} bônus)` : ""}</div>
-                  <div className="text-sm font-semibold">R$ {Number(p.price_brl).toFixed(2)}</div>
-                  <div className="text-[11px] text-muted-foreground">R$ {pricePerCredit(p).toFixed(2)} por crédito</div>
-                  {pct > 0 && <div className="text-[11px] font-medium text-emerald-600">Economize {pct}%</div>}
-                  <Button size="sm" className="w-full mt-1" onClick={() => startBuy(p)}>
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Comprar
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center justify-center pt-6 pb-2">
+        <h2 className="text-2xl font-black tracking-widest bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 bg-clip-text text-transparent uppercase">
+          PACOTES
+        </h2>
+        <div className="h-1 w-16 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full mt-1.5 mb-2" />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {packages.map((p) => {
+          const badge = p.featured_badge ? BADGE_LABEL[p.featured_badge] : null;
+          const isRecommended = !badge && p.id === recommendedId;
+          const pct = savingsPct(p);
+          const cleanName = p.name.replace(/pacote\s*/i, "");
+          return (
+            <motion.div
+              key={p.id}
+              whileHover={{ y: -6, scale: 1.02, boxShadow: "0px 10px 25px rgba(0, 0, 0, 0.3)" }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              className={`relative rounded-xl border p-5 flex flex-col items-center text-center gap-2.5 transition-all bg-slate-900/60 backdrop-blur-md select-none ${
+                badge
+                  ? "border-emerald-500/50 shadow-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.05)] bg-gradient-to-b from-slate-900/80 to-emerald-950/20"
+                  : isRecommended
+                  ? "border-violet-500/50 shadow-violet-500/10 shadow-[0_0_15px_rgba(139,92,246,0.05)] bg-gradient-to-b from-slate-900/80 to-violet-950/20"
+                  : "border-border/60 hover:border-muted-foreground/40 bg-slate-900/40"
+              }`}
+            >
+              {badge && (
+                <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm ${badge.className}`}>
+                  {badge.label}
+                </span>
+              )}
+              {isRecommended && (
+                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-primary text-primary-foreground shadow-sm">
+                  Recomendado
+                </span>
+              )}
+              <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mt-2">{cleanName}</div>
+              <div className="text-4xl font-black font-mono tracking-tight bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent my-1">{p.total_credits}</div>
+              <div className="text-[11px] text-muted-foreground">créditos{p.bonus_credits ? ` (+${p.bonus_credits} bônus)` : ""}</div>
+              <div className="text-base font-bold text-foreground">R$ {Number(p.price_brl).toFixed(2)}</div>
+              <div className="text-[10px] text-muted-foreground opacity-80">R$ {pricePerCredit(p).toFixed(2)} / crédito</div>
+              {pct > 0 && <div className="text-[11px] font-semibold text-emerald-400 animate-pulse">Economize {pct}%</div>}
+              <Button size="sm" className="w-full mt-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 border-0 text-white font-semibold shadow-md shadow-emerald-500/10" onClick={() => startBuy(p)}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Adquirir
+              </Button>
+            </motion.div>
+          );
+        })}
+      </div>
 
       {/* Convide seus amigos (indicação — independente do programa de afiliados) */}
       {referral?.referral_code && (
@@ -336,38 +354,91 @@ export default function CarteiraPage() {
         <CardContent>
           {txs.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma movimentação ainda.</p>
-          ) : (
-            <div className="space-y-2">
-              {txs.map((t) => {
-                const isCredit = Number(t.amount) >= 0;
-                const matchLabel = t.home_team && t.away_team ? `${teamPt(t.home_team)} × ${teamPt(t.away_team)}` : null;
-                return (
-                  <div key={t.id} className="rounded-lg border border-border/50 p-3 flex items-center justify-between gap-3 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="font-medium flex items-center gap-2">
-                        {TX_LABEL[t.type] || t.type}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${t.status === "completed" ? "bg-emerald-500/10 text-emerald-600" : t.status === "reversed" ? "bg-red-500/10 text-red-600" : "bg-amber-500/10 text-amber-600"}`}>
-                          {t.status === "completed" ? "Concluído" : t.status === "reversed" ? "Estornado" : "Pendente"}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(t.created_at).toLocaleString("pt-BR")}
-                        {matchLabel ? ` · ${matchLabel}` : (t.description ? ` · ${t.description}` : "")}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className={`font-mono font-semibold ${isCredit ? "text-emerald-600" : "text-red-600"}`}>
-                        {isCredit ? "+" : ""}{Number(t.amount).toFixed(0)}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">saldo: {Number(t.balance_after).toFixed(0)}
-                        {Number(t.reserved_after) > 0 ? ` (+${Number(t.reserved_after).toFixed(0)} reservado)` : ""}
-                      </div>
+          ) : (() => {
+            const totalPages = Math.ceil(txs.length / itemsPerPage);
+            const start = (currentPage - 1) * itemsPerPage;
+            const paginatedTxs = txs.slice(start, start + itemsPerPage);
+            return (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="text-left text-xs text-muted-foreground border-b border-border/50">
+                        <th className="py-2 px-3 font-semibold">Data / Hora</th>
+                        <th className="py-2 px-3 font-semibold">Operação</th>
+                        <th className="py-2 px-3 font-semibold">Detalhes</th>
+                        <th className="py-2 px-3 font-semibold text-center">Créditos</th>
+                        <th className="py-2 px-3 font-semibold text-right">Saldo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedTxs.map((t) => {
+                        const isCredit = Number(t.amount) >= 0;
+                        const matchLabel = t.home_team && t.away_team ? `${teamPt(t.home_team)} × ${teamPt(t.away_team)}` : null;
+                        return (
+                          <tr key={t.id} className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors">
+                            <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                              {new Date(t.created_at).toLocaleString("pt-BR")}
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="font-medium flex items-center gap-1.5 flex-wrap">
+                                <span>{TX_LABEL[t.type] || t.type}</span>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${t.status === "completed" ? "bg-emerald-500/10 text-emerald-600" : t.status === "reversed" ? "bg-red-500/10 text-red-600" : "bg-amber-500/10 text-amber-600"}`}>
+                                  {t.status === "completed" ? "Concluído" : t.status === "reversed" ? "Estornado" : "Pendente"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-xs text-muted-foreground">
+                              {matchLabel ? matchLabel : (t.description || "—")}
+                            </td>
+                            <td className={`py-3 px-3 text-center font-mono font-bold ${isCredit ? "text-emerald-500" : "text-red-500"}`}>
+                              {isCredit ? "+" : ""}{Number(t.amount).toFixed(0)}
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              <span className="font-mono text-foreground font-medium">{Number(t.balance_after).toFixed(0)}</span>
+                              {Number(t.reserved_after) > 0 && (
+                                <span className="text-[10px] text-muted-foreground block">
+                                  (+{Number(t.reserved_after).toFixed(0)} reservado)
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-2 border-t border-border/50 text-xs">
+                    <span className="text-muted-foreground">
+                      Página <strong>{currentPage}</strong> de {totalPages} ({txs.length} registros)
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        className="h-7 text-[11px]"
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        className="h-7 text-[11px]"
+                      >
+                        Próximo
+                      </Button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
 

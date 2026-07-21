@@ -53,23 +53,46 @@ function loadPersisted(): Partial<Persisted> {
 }
 
 export function PredictionProvider({ children }: { children: ReactNode }) {
-  // Lazy init a partir do localStorage (só no cliente; no SSR cai nos defaults).
-  const init = loadPersisted();
-  const [homeTeamId, setHomeTeamId] = useState(init.homeTeamId ?? "");
-  const [awayTeamId, setAwayTeamId] = useState(init.awayTeamId ?? "");
-  const [competition, setCompetition] = useState(init.competition ?? "Copa do Mundo");
-  const [neutralField, setNeutralField] = useState(init.neutralField ?? false);
-  const [scope, setScope] = useState<"selecao" | "clube">(init.scope ?? "selecao");
+  // Init sempre com os defaults (iguais ao SSR) para não divergir na hidratação.
+  // Os valores persistidos são aplicados depois do mount (useEffect abaixo).
+  const [homeTeamId, setHomeTeamId] = useState("");
+  const [awayTeamId, setAwayTeamId] = useState("");
+  const [competition, setCompetition] = useState("Copa do Mundo");
+  const [neutralField, setNeutralField] = useState(false);
+  const [scope, setScope] = useState<"selecao" | "clube">("selecao");
 
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(init.analysis ?? null);
+  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [h2hData, setH2hData] = useState<any>(null);
-  const [mode, setMode] = useState<"independente" | "futura">(init.mode ?? "futura");
-  const [fixtureId, setFixtureId] = useState<number | null>(init.fixtureId ?? null);
-  const [matchDate, setMatchDate] = useState<string | undefined>(init.matchDate ?? undefined);
+  const [mode, setMode] = useState<"independente" | "futura">("futura");
+  const [fixtureId, setFixtureId] = useState<number | null>(null);
+  const [matchDate, setMatchDate] = useState<string | undefined>(undefined);
+
+  // Só passa a persistir depois que a carga inicial (efeito abaixo) rodar —
+  // sem isso, o efeito de gravação dispara no mount com os defaults e
+  // sobrescreve o localStorage antes da leitura acontecer.
+  const hydratedRef = React.useRef(false);
+
+  // Aplica o localStorage só depois do mount — no SSR/primeira pintura do
+  // cliente o estado é sempre o default acima, evitando hydration mismatch
+  // (React error #418) quando a análise salva diverge dos defaults.
+  useEffect(() => {
+    const init = loadPersisted();
+    if (init.homeTeamId !== undefined) setHomeTeamId(init.homeTeamId);
+    if (init.awayTeamId !== undefined) setAwayTeamId(init.awayTeamId);
+    if (init.competition !== undefined) setCompetition(init.competition);
+    if (init.neutralField !== undefined) setNeutralField(init.neutralField);
+    if (init.scope !== undefined) setScope(init.scope);
+    if (init.analysis !== undefined) setAnalysis(init.analysis);
+    if (init.mode !== undefined) setMode(init.mode);
+    if (init.fixtureId !== undefined) setFixtureId(init.fixtureId);
+    if (init.matchDate !== undefined) setMatchDate(init.matchDate);
+    hydratedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Grava o subconjunto persistível sempre que algo relevante muda.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !hydratedRef.current) return;
     try {
       const payload: Persisted = {
         homeTeamId, awayTeamId, competition, neutralField, analysis, mode, fixtureId, matchDate, scope,

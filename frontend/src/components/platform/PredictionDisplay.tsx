@@ -37,11 +37,12 @@ function cardPeriods(p: PredictionResponse, side: string) {
 
 function PlacarExatoCard({ data, home, away, teamIds }: { data: NonNullable<PredictionResponse["placar_exato"]>; home: string; away: string; teamIds: Record<string, number> }) {
   const alerta = data.alerta;
-  const isAlert = alerta.nivel !== "normal";
+  if (alerta.nivel === "normal") return null;
+
+  const isAlert = true;
   const alertStyles =
     alerta.nivel === "alto" ? "bg-amber-500/10 border-amber-500/30"
-    : alerta.nivel === "moderado" ? "bg-amber-500/5 border-amber-500/20"
-    : "bg-muted/50 border-border/50";
+    : "bg-amber-500/5 border-amber-500/20";
   const motivoTexto = (m: PlacarMotivo): string => {
     if (m.tipo === "favoritismo") {
       const fav = m.favorito_lado === "mandante" ? teamPt(home) : teamPt(away);
@@ -51,11 +52,11 @@ function PlacarExatoCard({ data, home, away, teamIds }: { data: NonNullable<Pred
   };
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5">
-      <h4 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
+      <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
         <Target className="w-4 h-4 text-purple-500" /> Placar Exato
         <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols (Dixon-Coles)." />
       </h4>
-      <div className="grid grid-cols-3 gap-2 mb-4 mt-2">
+      <div className="grid grid-cols-3 gap-2 mb-4">
         {data.top.map((s, i) => (
           <div key={i} className={`text-center rounded-lg p-2 border ${i === 0 ? "bg-purple-500/10 border-purple-500/30" : "bg-muted/30 border-border/30"}`}>
             <div className="flex items-center justify-center gap-1.5 mb-0.5">

@@ -213,17 +213,19 @@ function cardKindsFor(p: PredictionResponse, side: string) {
 
 // Placar Exato: 3 placares mais prováveis + alerta de potencial de desvio (placar
 // fora do padrão), no mesmo estilo do Radar de Anomalias.
-function PlacarExatoCard({ data, home, away }: {
+function PlacarExatoCard({ data, home, away, teamIds }: {
   data: NonNullable<PredictionResponse['placar_exato']>;
   home: string;
   away: string;
+  teamIds: Record<string, number>;
 }) {
   const alerta = data.alerta;
-  const isAlert = alerta.nivel !== 'normal';
+  if (alerta.nivel === 'normal') return null;
+
+  const isAlert = true;
   const alertStyles =
     alerta.nivel === 'alto' ? 'bg-amber-500/10 border-amber-500/30'
-    : alerta.nivel === 'moderado' ? 'bg-amber-500/5 border-amber-500/20'
-    : 'bg-muted/50 border-border/50';
+    : 'bg-amber-500/5 border-amber-500/20';
   // Texto do motivo em PT-BR: o lado favorito vira o nome traduzido (teamPt).
   const motivoTexto = (m: PlacarMotivo): string => {
     if (m.tipo === 'favoritismo') {
@@ -234,18 +236,23 @@ function PlacarExatoCard({ data, home, away }: {
   };
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5">
-      <h4 className="text-sm font-semibold mb-1 flex items-center justify-center gap-1.5">
+      <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
         <Target className="w-4 h-4 text-purple-500" />
         Placar Exato
         <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." href="/como-funciona#mercado-placar" />
       </h4>
-      <p className="text-[10px] text-muted-foreground mb-3">
-        {teamPt(home)} <span className="opacity-60">(mandante)</span> × {teamPt(away)} <span className="opacity-60">(visitante)</span>
-      </p>
       <div className="grid grid-cols-3 gap-2 mb-4">
         {data.top.map((s, i) => (
           <div key={i} className={`text-center rounded-lg p-2 border ${i === 0 ? 'bg-purple-500/10 border-purple-500/30' : 'bg-muted/30 border-border/30'}`}>
-            <p className="text-xl font-mono font-bold text-foreground">{s.mandante}<span className="text-muted-foreground mx-0.5">–</span>{s.visitante}</p>
+            <div className="flex items-center justify-center gap-1.5 mb-0.5">
+              {teamLogoUrl(teamIds[home]) && (
+                <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-4 h-4 object-contain" onError={onImgError} />
+              )}
+              <p className="text-xl font-mono font-bold text-foreground leading-none">{s.mandante}<span className="text-muted-foreground mx-0.5">–</span>{s.visitante}</p>
+              {teamLogoUrl(teamIds[away]) && (
+                <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-4 h-4 object-contain" onError={onImgError} />
+              )}
+            </div>
             <p className="text-[11px] font-mono text-cyan-400 mt-0.5">{s.prob.toFixed(1)}%</p>
             <p className="text-[9px] text-muted-foreground mt-0.5">odd {oddRangeStr(s.prob)}</p>
           </div>
@@ -801,9 +808,20 @@ export default function Previsoes() {
         
         {/* Badge Análise Aprofundada (Antes de Gerar) */}
         {!loading && fixtureId && !analysis && upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-2 bg-slate-900 border border-indigo-500/50 text-indigo-200 text-xs px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.2)]">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            Esta partida possui uma <strong className="text-white">Análise Aprofundada Detalhada</strong> feita pelo analista <strong className="text-white">{upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst}</strong>
+          <motion.div
+            initial={{ opacity: 0, scale: 4, rotate: -25, filter: "blur(4px)" }}
+            whileInView={{ opacity: 1, scale: 1, rotate: -6, filter: "blur(0px)" }}
+            viewport={{ once: true, amount: 0.5 }}
+            transition={{ type: "spring", stiffness: 350, damping: 14, delay: 0.1 }}
+            className="mb-4 mx-auto border-4 border-double border-red-500 bg-red-950/20 text-red-500 uppercase tracking-widest font-black text-xs md:text-sm px-6 py-3.5 rounded-lg flex flex-col items-center gap-1 select-none shadow-[6px_6px_0px_rgba(239,68,68,0.25),_inset_0_0_15px_rgba(239,68,68,0.15)] w-fit"
+          >
+            <div className="flex items-center gap-1.5 font-extrabold text-[13px] tracking-widest leading-none">
+              <Sparkles className="w-4 h-4 animate-pulse text-red-400" />
+              ANÁLISE DETALHADA DISPONÍVEL
+            </div>
+            <div className="text-[10px] text-red-400/90 font-medium normal-case tracking-normal mt-0.5">
+              Produzida pelo analista: <strong className="font-semibold text-white">{upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst}</strong>
+            </div>
           </motion.div>
         )}
         {user && competition === 'Copa do Mundo' && !loading && (
@@ -941,7 +959,7 @@ export default function Previsoes() {
               {/* Placar Exato — card detalhado em largura total */}
               {projection.placar_exato && (
                 <div className="md:col-span-2">
-                  <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} />
+                  <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
                 </div>
               )}
             </div>
