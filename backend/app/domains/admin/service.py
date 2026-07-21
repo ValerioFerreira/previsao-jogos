@@ -412,6 +412,12 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
             # PROMOCIONAIS (consumidos na hora, não reservados — ver wallet/models.py).
             coupon = next((c for c in existing_coupons if c.code == code), None)
             if coupon is None:
+                # Coupon.code é globalmente único; um parceiro excluído anteriormente pode
+                # ter deixado um cupom órfão (affiliate_id=NULL, ver delete_affiliate) com
+                # este mesmo código — reaproveita em vez de tentar inserir um duplicado
+                # (o que antes estourava IntegrityError sem tratamento e virava 500).
+                coupon = db.execute(select(Coupon).where(Coupon.code == code)).scalar_one_or_none()
+            if coupon is None:
                 db.add(Coupon(
                     promotion_id=promo.id, code=code,
                     discount_type=CouponDiscountType.percentage, discount_value=pct,
@@ -420,11 +426,18 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
                     affiliate_id=affiliate.id, active=True,
                 ))
             else:
+                coupon.promotion_id = promo.id
+                coupon.discount_type = CouponDiscountType.percentage
                 coupon.discount_value = pct
                 coupon.commission_pct = commission_pct
                 coupon.first_purchase_only = True
                 coupon.promo_credits = _INVITE_PROMO_CREDITS
+                coupon.affiliate_id = affiliate.id
                 coupon.active = True
+                # limpa eventuais restrições de um cupom PROMOCIONAL reaproveitado (o
+                # código órfão pode ter vindo de um cupom com prazo/teto de faturamento).
+                coupon.valid_to = None
+                coupon.revenue_limit_brl = None
     token = security.create_access_token(str(user.id), extra={"scope": "partner_invite"})
     link = f"{settings.frontend_base_url}/parceiro/definir-senha?token={token}"
     try:
@@ -740,10 +753,16 @@ def demo_usage_by_cpf(db: Session) -> dict:
 
 def delete_affiliate(db: Session, admin: User, affiliate_id: str, ip) -> None:
     """Exclui o parceiro (cascade já cobre atribuições/comissões/pagamentos/logs de conta
-    demo/vínculo com campanhas; o cupom do parceiro, se houver, só perde o vínculo —
-    Coupon.affiliate_id vira NULL, ver promotions/models.py)."""
+    demo/vínculo com campanhas). O cupom do parceiro, se houver, perde o vínculo —
+    Coupon.affiliate_id vira NULL (ver promotions/models.py) — e é DESATIVADO aqui: sem
+    isso ele continuaria concedendo desconto pra qualquer um sem gerar comissão pra
+    ninguém, e seu código ficaria travado (Coupon.code é globalmente único) impedindo um
+    futuro parceiro de reusá-lo — ver reaproveitamento em _create_partner_invite."""
     a = _get_affiliate(db, affiliate_id)
     audit(db, admin, "affiliate_delete", "affiliate", a.id, before=_affiliate_out(a, db), ip=ip)
+    coupons = db.execute(select(Coupon).where(Coupon.affiliate_id == a.id)).scalars().all()
+    for c in coupons:
+        c.active = False
     db.delete(a)
     db.commit()
 
