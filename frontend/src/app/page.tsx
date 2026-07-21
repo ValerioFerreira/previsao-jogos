@@ -440,7 +440,10 @@ export default function Previsoes() {
   const projection = analysis ? (analysis.snapshot as unknown as PredictionResponse) : null;
   const setProjection = (_: PredictionResponse | null) => { if (_ === null) setAnalysis(null); };
   const [errMsg, setErrMsg] = useState<string | null>(null);
-  const credits = wallet ? Math.floor(Number(wallet.available_balance)) : 0;
+  // available + promo: ambos são gastáveis em análise (ver analysis/service.py::create_analysis).
+  // Não conta o crédito diário grátis nem a conta demo — esses não passam pelo saldo,
+  // então o botão nunca deve travar por causa deles (ver `disabled` abaixo).
+  const credits = wallet ? Math.floor(Number(wallet.available_balance) + Number(wallet.promo_balance || 0)) : 0;
   
   const [homeForm, setHomeForm] = useState<{matches: RecentMatch[], total: number}>({matches: [], total: 0});
   const [awayForm, setAwayForm] = useState<{matches: RecentMatch[], total: number}>({matches: [], total: 0});
@@ -839,7 +842,12 @@ export default function Previsoes() {
           <motion.button
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
             onClick={handleGenerate}
-            disabled={!canGenerate || loading || (!!user && credits < 1 && competition !== 'Copa do Mundo')}
+            // Não bloqueia por saldo: o backend decide a prioridade real de consumo
+            // (crédito diário grátis → conta demo → promo_balance → available_balance —
+            // ver analysis/service.py::create_analysis) e o front não tem como prever se o
+            // grátis diário já foi usado hoje. Se realmente não houver crédito, o erro 402
+            // aparece abaixo com o link "Comprar créditos" (não trava o clique à toa).
+            disabled={!canGenerate || loading}
             className="px-8 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
           >
           {loading
@@ -851,7 +859,7 @@ export default function Previsoes() {
                   ? (
                     <span className="flex items-center gap-1.5">
                       Gerar análise{" "}
-                      {competition === 'Copa do Mundo'
+                      {competition === 'Copa do Mundo' || user.is_demo
                         ? (
                           <span className="relative inline-block">
                             (1 crédito)
@@ -868,7 +876,10 @@ export default function Previsoes() {
         </div>
         {user && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Coins className="w-3.5 h-3.5 text-emerald-500" /> {credits} créditos · <Link href="/carteira" className="underline font-medium text-primary">Ir para a Carteira ➜</Link>
+            <Coins className="w-3.5 h-3.5 text-emerald-500" />
+            {user.is_demo
+              ? 'Conta demo — análises sempre grátis'
+              : <>{credits} créditos · <Link href="/carteira" className="underline font-medium text-primary">Ir para a Carteira ➜</Link></>}
           </p>
         )}
       </div>

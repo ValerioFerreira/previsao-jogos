@@ -95,7 +95,7 @@ def me(user: User = Depends(get_current_user)):
     return schemas.UserPublic(
         id=str(user.id), full_name=user.full_name, email=user.email, cpf=user.cpf,
         phone=user.phone, status=user.status.value, role=user.role.value,
-        referral_code=user.referral_code,
+        referral_code=user.referral_code, is_demo=user.is_demo,
     )
 
 

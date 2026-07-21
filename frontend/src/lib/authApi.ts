@@ -15,6 +15,7 @@ export type UserPublic = {
   status: string;
   role: string;
   referral_code?: string | null;
+  is_demo?: boolean;
 };
 
 export type ReferralInfo = {

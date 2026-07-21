@@ -113,6 +113,7 @@ class UserPublic(BaseModel):
     status: str
     role: str
     referral_code: str | None = None
+    is_demo: bool = False
 
 
 class ReferralInfo(BaseModel):
