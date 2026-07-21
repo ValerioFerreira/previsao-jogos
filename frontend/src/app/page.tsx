@@ -806,38 +806,42 @@ export default function Previsoes() {
           </div>
         )}
         
-        {/* Badge Análise Aprofundada (Antes de Gerar) */}
-        {!loading && fixtureId && !analysis && upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst && (
-          <motion.div
-            initial={{ opacity: 0, scale: 4, rotate: -25, filter: "blur(4px)" }}
-            whileInView={{ opacity: 1, scale: 1, rotate: -6, filter: "blur(0px)" }}
-            viewport={{ once: true, amount: 0.5 }}
-            transition={{ type: "spring", stiffness: 350, damping: 14, delay: 0.1 }}
-            className="mb-4 mx-auto border-4 border-double border-red-500 bg-red-950/20 text-red-500 uppercase tracking-widest font-black text-xs md:text-sm px-6 py-3.5 rounded-lg flex flex-col items-center gap-1 select-none shadow-[6px_6px_0px_rgba(239,68,68,0.25),_inset_0_0_15px_rgba(239,68,68,0.15)] w-fit"
+        <div className="relative mt-2">
+          {/* Badge Análise Aprofundada (Carimbo Pulsante) */}
+          {!loading && fixtureId && !analysis && upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, rotate: -6 }}
+              animate={{
+                opacity: 1,
+                scale: [1, 1.05, 1],
+                rotate: -6
+              }}
+              transition={{
+                scale: {
+                  repeat: Infinity,
+                  duration: 1.5,
+                  ease: "easeInOut"
+                },
+                default: { duration: 0.3 }
+              }}
+              className="absolute -top-10 -right-2 translate-x-1/3 -translate-y-1/3 z-10 border-4 border-double border-red-500 bg-red-950 text-red-500 uppercase tracking-widest font-black text-[9px] px-3 py-1 rounded-lg flex flex-col items-center select-none shadow-[4px_4px_0px_rgba(239,68,68,0.25),_inset_0_0_10px_rgba(239,68,68,0.15)] whitespace-nowrap pointer-events-none"
+            >
+              <div className="flex items-center gap-1 font-extrabold text-[9px] tracking-widest leading-none">
+                <Sparkles className="w-2.5 h-2.5 text-red-400" />
+                ANÁLISE DETALHADA
+              </div>
+              <div className="text-[8px] text-red-400/90 font-medium normal-case tracking-normal mt-0.5">
+                Por: <strong className="font-semibold text-white">{upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst}</strong>
+              </div>
+            </motion.div>
+          )}
+
+          <motion.button
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={handleGenerate}
+            disabled={!canGenerate || loading || (!!user && credits < 1 && competition !== 'Copa do Mundo')}
+            className="px-8 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
           >
-            <div className="flex items-center gap-1.5 font-extrabold text-[13px] tracking-widest leading-none">
-              <Sparkles className="w-4 h-4 animate-pulse text-red-400" />
-              ANÁLISE DETALHADA DISPONÍVEL
-            </div>
-            <div className="text-[10px] text-red-400/90 font-medium normal-case tracking-normal mt-0.5">
-              Produzida pelo analista: <strong className="font-semibold text-white">{upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst}</strong>
-            </div>
-          </motion.div>
-        )}
-        {user && competition === 'Copa do Mundo' && !loading && (
-          <motion.p
-            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-            className="text-xs sm:text-sm font-bold text-amber-500 flex items-center gap-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5" /> É Copa? Então, é de graça! 🎉
-          </motion.p>
-        )}
-        <motion.button
-          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          onClick={handleGenerate}
-          disabled={!canGenerate || loading || (!!user && credits < 1 && competition !== 'Copa do Mundo')}
-          className="px-8 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
-        >
           {loading
             ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processando...</span>
             : (
@@ -861,6 +865,7 @@ export default function Previsoes() {
               </span>
             )}
         </motion.button>
+        </div>
         {user && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Coins className="w-3.5 h-3.5 text-emerald-500" /> {credits} créditos · <Link href="/carteira" className="underline font-medium text-primary">Ir para a Carteira ➜</Link>
