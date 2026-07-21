@@ -52,18 +52,23 @@ def _user_redemption_count(db: Session, coupon_id, user_id) -> int:
     )).scalar_one()
 
 
-def compute_benefit(coupon: Coupon, amount_brl: Decimal, credits: int) -> tuple[Decimal, int]:
-    """Retorna (novo_amount_brl, bonus_credits) aplicando o benefício do cupom."""
+def compute_benefit(coupon: Coupon, amount_brl: Decimal, credits: int) -> tuple[Decimal, int, int]:
+    """Retorna (novo_amount_brl, bonus_credits, promo_credits) aplicando o benefício do cupom.
+
+    `bonus_credits` = créditos NORMAIS de bônus (só no discount_type=bonus_credits).
+    `promo_credits` = créditos PROMOCIONAIS (campo próprio, independente do discount_type —
+    ex.: cupom de convite = percentage + 5 promo_credits), concedidos no resgate."""
+    promo = int(coupon.promo_credits or 0)
     if coupon.discount_type == CouponDiscountType.percentage and coupon.discount_value:
         pct = Decimal(coupon.discount_value) / Decimal(100)
         new_amount = (amount_brl * (Decimal(1) - pct)).quantize(Decimal("0.01"))
-        return max(new_amount, Decimal("0.00")), 0
+        return max(new_amount, Decimal("0.00")), 0, promo
     if coupon.discount_type == CouponDiscountType.fixed and coupon.discount_value:
         new_amount = amount_brl - Decimal(coupon.discount_value)
-        return max(new_amount, Decimal("0.00")), 0
+        return max(new_amount, Decimal("0.00")), 0, promo
     if coupon.discount_type == CouponDiscountType.bonus_credits and coupon.bonus_credits:
-        return amount_brl, int(coupon.bonus_credits)
-    return amount_brl, 0
+        return amount_brl, int(coupon.bonus_credits), promo
+    return amount_brl, 0, promo
 
 
 def _has_any_paid_order(db: Session, user_id) -> bool:
@@ -72,6 +77,29 @@ def _has_any_paid_order(db: Session, user_id) -> bool:
     return db.execute(select(func.count(PaymentOrder.id)).where(
         PaymentOrder.user_id == user_id, PaymentOrder.status == PaymentStatus.paid,
     )).scalar_one() > 0
+
+
+def coupon_gross_revenue(db: Session, coupon_id) -> Decimal:
+    """Faturamento PRÉ-DESCONTO acumulado por um cupom = soma do valor cheio (amount_brl +
+    discount_amount_brl) das ordens PAGAS que o usaram. Base do teto (revenue_limit_brl)."""
+    from app.domains.payments.models import PaymentOrder
+    from app.domains.enums import PaymentStatus
+    total = db.execute(select(
+        func.coalesce(func.sum(PaymentOrder.amount_brl + PaymentOrder.discount_amount_brl), 0)
+    ).where(
+        PaymentOrder.coupon_id == coupon_id, PaymentOrder.status == PaymentStatus.paid,
+    )).scalar_one()
+    return Decimal(str(total or 0))
+
+
+def deactivate_if_cap_reached(db: Session, coupon_id) -> None:
+    """Após um pagamento, desativa o cupom promocional se o teto de faturamento foi atingido
+    (idempotente — se já inativo, não faz nada). Chamado por payments após mark_redeemed."""
+    coupon = db.get(Coupon, coupon_id)
+    if coupon is None or not coupon.active or coupon.revenue_limit_brl is None:
+        return
+    if coupon_gross_revenue(db, coupon_id) >= Decimal(coupon.revenue_limit_brl):
+        coupon.active = False
 
 
 def validate_coupon(db: Session, user_id: uuid.UUID, data: schemas.CouponValidateRequest) -> schemas.CouponPreview:
@@ -88,13 +116,17 @@ def validate_coupon(db: Session, user_id: uuid.UUID, data: schemas.CouponValidat
     if coupon.min_purchase_brl is not None and data.amount_brl < coupon.min_purchase_brl:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             detail=f"Valor mínimo de compra: R$ {coupon.min_purchase_brl}.")
+    # Teto de faturamento pré-desconto (cupom promocional de parceiro limitado por faturamento).
+    if coupon.revenue_limit_brl is not None and \
+            coupon_gross_revenue(db, coupon.id) >= Decimal(coupon.revenue_limit_brl):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cupom esgotado.")
 
-    new_amount, bonus = compute_benefit(coupon, data.amount_brl, data.credits)
+    new_amount, bonus, promo = compute_benefit(coupon, data.amount_brl, data.credits)
     return schemas.CouponPreview(
         coupon_id=str(coupon.id), code=coupon.code,
         discount_type=coupon.discount_type.value if coupon.discount_type else None,
         original_amount_brl=data.amount_brl, final_amount_brl=new_amount,
-        bonus_credits=bonus,
+        bonus_credits=bonus, promo_credits=promo,
     )
 
 

@@ -75,6 +75,35 @@ def portal_stats(user: User = Depends(get_current_user), db: Session = Depends(g
     return schemas.PortalStats(**service.compute_portal_stats(db, affiliate))
 
 
+@router.post("/coupon-requests", response_model=schemas.CouponRequestItem, status_code=201)
+def create_coupon_request(data: schemas.CouponRequestCreate,
+                          user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Parceiro solicita um cupom promocional (nome ≤12, % desconto) — 1 pendente por vez."""
+    affiliate = _get_affiliate_for_user(user, db)
+    item = service.create_coupon_request(db, affiliate, data.requested_code, data.discount_pct)
+    db.commit()
+    return schemas.CouponRequestItem(**item)
+
+
+@router.get("/coupon-requests", response_model=list[schemas.CouponRequestItem])
+def list_coupon_requests(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    affiliate = _get_affiliate_for_user(user, db)
+    return [schemas.CouponRequestItem(**i) for i in service.list_coupon_requests_for_partner(db, affiliate)]
+
+
+@router.get("/portal/referred-partners", response_model=schemas.ReferredPartnersResponse)
+def portal_referred_partners(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    affiliate = _get_affiliate_for_user(user, db)
+    return schemas.ReferredPartnersResponse(**service.referred_partners_stats(db, affiliate))
+
+
+@router.get("/resolve-coupon")
+def resolve_coupon(ref: str, db: Session = Depends(get_db)):
+    """Dado o código de indicação (?ref=), devolve o cupom de convite do parceiro para
+    pré-preencher no checkout (só efetiva na 1ª compra — o backend revalida)."""
+    return {"coupon_code": service.primary_invite_coupon_code(db, ref)}
+
+
 @router.get("/portal/timeseries", response_model=schemas.TimeseriesResponse)
 def portal_timeseries(
     granularity: str = "day",

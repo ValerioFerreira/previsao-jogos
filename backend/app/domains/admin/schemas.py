@@ -128,6 +128,16 @@ class AffiliateRejectRequest(BaseModel):
     reason: str | None = None
 
 
+class CouponRequestApprove(BaseModel):
+    limit_type: str            # 'days' | 'revenue'
+    limit_days: int | None = None
+    limit_revenue_brl: Decimal | None = None
+
+
+class CouponRequestReject(BaseModel):
+    reason: str | None = None
+
+
 class AffiliateDemoAccessRequest(BaseModel):
     enabled: bool
 

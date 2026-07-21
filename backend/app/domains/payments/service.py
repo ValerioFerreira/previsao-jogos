@@ -111,7 +111,22 @@ def _credit_if_paid(db: Session, order: PaymentOrder, raw: dict | None) -> None:
         reference_id=order.id, description=f"Compra de {order.credits} créditos",
     )
     if order.coupon_id is not None:
+        from app.domains.promotions.models import Coupon
         promotions_service.mark_redeemed(db, order.coupon_id)
+        # Créditos PROMOCIONAIS do cupom (ex.: 5 do cupom de convite) -> promo_balance.
+        # NÃO são os créditos comprados (esses já entraram acima como purchase); são
+        # promocionais: consumidos imediatamente em qualquer análise, nunca reservados.
+        coupon = db.get(Coupon, order.coupon_id)
+        promo_credits = int(coupon.promo_credits or 0) if coupon is not None else 0
+        if promo_credits > 0:
+            post_transaction(
+                db, wallet=wallet, tx_type=CreditTxType.promo_credit, amount=Decimal("0"),
+                promo_delta=Decimal(promo_credits), idempotency_key=f"coupon-promo:{order.id}",
+                reference_type="payment_order", reference_id=order.id,
+                description=f"{promo_credits} créditos promocionais (cupom {coupon.code})",
+            )
+        # Cupom promocional limitado por faturamento: desativa ao atingir o teto pré-desconto.
+        promotions_service.deactivate_if_cap_reached(db, order.coupon_id)
     affiliates_service.commission_for_order(db, order)
     analytics_service.track(db, "credit_purchase", user_id=order.user_id,
                             order_id=str(order.id), amount_brl=str(order.amount_brl), credits=order.credits)

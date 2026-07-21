@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.domains.affiliates import schemas
 from app.domains.affiliates.models import Affiliate, AffiliateAttribution, AffiliateCommission
-from app.domains.enums import PartnerPaymentType
+from app.domains.enums import CommissionKind, PartnerPaymentType
 
 _DEFAULT_ATTRIBUTION_DAYS = 30
 _CODE_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz"
@@ -147,11 +147,20 @@ def apply_for_partnership(db: Session, data: "schemas.PartnerApplicationRequest"
     # A comissão base (para o primeiro/principal cupom) será usada caso necessário,
     # mas o real cálculo acontece por pedido/cupom no sistema de pagamento.
     main_pct = data.discount_pcts[0]
+    # Indicação de parceiros: se veio via link de indicação (ref_partner), atrela ao
+    # indicador (parent_affiliate_id, um nível). O indicado não vê o vínculo.
+    parent_id = None
+    if getattr(data, "ref_partner", None):
+        parent = db.execute(select(Affiliate).where(
+            func.upper(Affiliate.code) == data.ref_partner.strip().upper(),
+            Affiliate.status == "active")).scalar_one_or_none()
+        parent_id = parent.id if parent else None
     affiliate = Affiliate(
         name=data.full_name, code=code, status="pending",
         commission_pct=COMMISSION_BUDGET_PCT - main_pct, discount_pcts=pcts_str,
         payment_type=PartnerPaymentType(data.payment_type),
         cpf=data.cpf, contact_email=data.email.lower(), contact_phone=data.phone,
+        parent_affiliate_id=parent_id,
     )
     db.add(affiliate)
     db.flush()
@@ -214,14 +223,29 @@ def _active_attribution_for_order(db: Session, user_id: uuid.UUID, paid_at: date
     return None
 
 
+def _order_commission_pct(db: Session, order, affiliate: Affiliate) -> Decimal | None:
+    """% de comissão a aplicar na ordem. Se ela usou um CUPOM do próprio parceiro com
+    commission_pct definido, usa o do cupom (permite splits diferentes por cupom — convite
+    vs promocional, 30 − desconto); senão cai no commission_pct global do afiliado."""
+    if order.coupon_id is not None:
+        from app.domains.promotions.models import Coupon
+        coupon = db.get(Coupon, order.coupon_id)
+        if coupon is not None and coupon.affiliate_id == affiliate.id and coupon.commission_pct is not None:
+            return Decimal(coupon.commission_pct)
+    return Decimal(affiliate.commission_pct) if affiliate.commission_pct else None
+
+
 def commission_for_order(db: Session, order) -> AffiliateCommission | None:
-    """Chamado quando um PaymentOrder é confirmado — calcula e registra a comissão do
-    afiliado (se houver atribuição válida dentro da janela), independentemente de o
-    pedido ter usado cupom ou não."""
-    existing = db.execute(select(AffiliateCommission).where(
-        AffiliateCommission.order_id == order.id)).scalar_one_or_none()
-    if existing is not None:
-        return existing
+    """Chamado quando um PaymentOrder é confirmado — calcula e registra a comissão DIRETA
+    do afiliado (se houver atribuição válida dentro da janela) e, se o afiliado tiver um
+    parceiro indicador (parent_affiliate_id), o OVERRIDE de 5% para ele. Idempotente por
+    (order_id, affiliate_id)."""
+    direct = db.execute(select(AffiliateCommission).where(
+        AffiliateCommission.order_id == order.id,
+        AffiliateCommission.kind == CommissionKind.direct,
+    )).scalar_one_or_none()
+    if direct is not None:
+        return direct
 
     attr = _active_attribution_for_order(db, order.user_id, order.paid_at or datetime.now(timezone.utc))
     if attr is None:
@@ -230,9 +254,10 @@ def commission_for_order(db: Session, order) -> AffiliateCommission | None:
     if affiliate is None or affiliate.status != "active":
         return None
 
+    pct = _order_commission_pct(db, order, affiliate)
     amount = Decimal("0.00")
-    if affiliate.commission_pct:
-        amount += (Decimal(order.amount_brl) * Decimal(affiliate.commission_pct) / Decimal(100))
+    if pct:
+        amount += (Decimal(order.amount_brl) * pct / Decimal(100))
     if affiliate.commission_fixed_brl:
         amount += Decimal(affiliate.commission_fixed_brl)
     if amount <= 0:
@@ -240,10 +265,61 @@ def commission_for_order(db: Session, order) -> AffiliateCommission | None:
 
     attr.converted_at = datetime.now(timezone.utc)
     order.affiliate_attribution_id = attr.id
-    commission = AffiliateCommission(affiliate_id=affiliate.id, order_id=order.id,
-                                     amount_brl=amount.quantize(Decimal("0.01")), status="devida")
+    amount = amount.quantize(Decimal("0.01"))
+    commission = AffiliateCommission(
+        affiliate_id=affiliate.id, order_id=order.id, amount_brl=amount,
+        status="devida", kind=CommissionKind.direct,
+    )
     db.add(commission)
+    db.flush()
+
+    # Override de indicação de parceiros (5% da comissão do indicado ao indicador) — um
+    # nível só, custo EXTRA do sistema (não descontado do indicado). Ver Fase 3.
+    _override_commission_for_parent(db, order, affiliate, amount)
     return commission
+
+
+def _partner_override_pct(db: Session) -> Decimal:
+    """% do override de indicação de parceiros (default 5), sobrescrito pelo PlatformSetting
+    'partner_override_pct'."""
+    from app.domains.admin.models import PlatformSetting
+    s = db.execute(select(PlatformSetting).where(
+        PlatformSetting.key == "partner_override_pct")).scalar_one_or_none()
+    if s and s.value and isinstance(s.value, dict) and "pct" in s.value:
+        try:
+            return Decimal(str(s.value["pct"]))
+        except (TypeError, ValueError):
+            pass
+    return Decimal(5)
+
+
+def _override_commission_for_parent(db: Session, order, child: Affiliate, direct_amount: Decimal) -> AffiliateCommission | None:
+    """Se `child` foi indicado por outro parceiro (parent_affiliate_id) ativo, registra uma
+    comissão de override (5% da comissão direta) para o indicador. NÃO desconta do indicado
+    — é um valor a mais que o sistema paga pela indicação. Um nível só (não sobe ao avô).
+    Idempotente por (order_id, parent_id)."""
+    if not child.parent_affiliate_id:
+        return None
+    parent = db.get(Affiliate, child.parent_affiliate_id)
+    if parent is None or parent.status != "active":
+        return None
+    existing = db.execute(select(AffiliateCommission).where(
+        AffiliateCommission.order_id == order.id,
+        AffiliateCommission.affiliate_id == parent.id,
+        AffiliateCommission.kind == CommissionKind.override,
+    )).scalar_one_or_none()
+    if existing is not None:
+        return existing
+    amount = (direct_amount * _partner_override_pct(db) / Decimal(100)).quantize(Decimal("0.01"))
+    if amount <= 0:
+        return None
+    override = AffiliateCommission(
+        affiliate_id=parent.id, order_id=order.id, amount_brl=amount, status="devida",
+        kind=CommissionKind.override, source_affiliate_id=child.id,
+    )
+    db.add(override)
+    db.flush()
+    return override
 
 
 def attach_checkout_attribution(db: Session, user_id: uuid.UUID, affiliate_id: uuid.UUID) -> AffiliateAttribution:
@@ -305,12 +381,16 @@ def compute_portal_stats(db: Session, affiliate: Affiliate) -> dict:
     signups = db.execute(select(func.count(func.distinct(AffiliateAttribution.user_id))).where(
         AffiliateAttribution.affiliate_id == affiliate.id, AffiliateAttribution.user_id.is_not(None),
     )).scalar_one()
+    # buyers/revenue = desempenho de VENDAS DIRETAS do parceiro (exclui override recebido de
+    # indicados); due/paid = total que o sistema deve a ele (inclui direta + override).
     buyers = db.execute(select(func.count(AffiliateCommission.id)).where(
-        AffiliateCommission.affiliate_id == affiliate.id)).scalar_one()
+        AffiliateCommission.affiliate_id == affiliate.id,
+        AffiliateCommission.kind == CommissionKind.direct)).scalar_one()
     revenue = db.execute(
         select(func.coalesce(func.sum(PaymentOrder.amount_brl), 0))
         .join(AffiliateCommission, AffiliateCommission.order_id == PaymentOrder.id)
-        .where(AffiliateCommission.affiliate_id == affiliate.id)
+        .where(AffiliateCommission.affiliate_id == affiliate.id,
+               AffiliateCommission.kind == CommissionKind.direct)
     ).scalar_one()
     due = db.execute(select(func.coalesce(func.sum(AffiliateCommission.amount_brl), 0)).where(
         AffiliateCommission.affiliate_id == affiliate.id, AffiliateCommission.status == "devida")).scalar_one()
@@ -322,3 +402,103 @@ def compute_portal_stats(db: Session, affiliate: Affiliate) -> dict:
         "clicks": clicks, "signups": signups, "buyers": buyers,
         "revenue_brl": str(revenue), "commission_due_brl": str(due), "commission_paid_brl": str(paid),
     }
+
+
+# --- Cupom promocional: solicitação pelo parceiro (aprovação/rejeição no admin) ---
+
+def _coupon_request_item(db: Session, req) -> dict:
+    from app.domains.promotions.models import Coupon
+    coupon_code = None
+    if req.coupon_id:
+        c = db.get(Coupon, req.coupon_id)
+        coupon_code = c.code if c else None
+    return {
+        "id": str(req.id), "requested_code": req.requested_code, "discount_pct": req.discount_pct,
+        "status": req.status.value, "limit_type": req.limit_type.value if req.limit_type else None,
+        "limit_days": req.limit_days, "limit_revenue_brl": req.limit_revenue_brl,
+        "rejection_reason": req.rejection_reason, "coupon_code": coupon_code,
+        "created_at": req.created_at, "decided_at": req.decided_at,
+    }
+
+
+def create_coupon_request(db: Session, affiliate: Affiliate, requested_code: str, discount_pct: int) -> dict:
+    """Parceiro solicita um cupom promocional. Só um `pending` por vez; o código não pode
+    colidir com cupom/afiliado já existente. Fica aguardando análise do admin."""
+    from app.domains.promotions.models import PartnerCouponRequest
+    from app.domains.enums import CouponRequestStatus
+
+    if affiliate.status != "active":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Apenas parceiros ativos podem solicitar cupons.")
+    pending = db.execute(select(PartnerCouponRequest).where(
+        PartnerCouponRequest.affiliate_id == affiliate.id,
+        PartnerCouponRequest.status == CouponRequestStatus.pending,
+    )).scalar_one_or_none()
+    if pending is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            detail="Você já tem uma solicitação de cupom aguardando análise.")
+    if code_in_use(db, requested_code):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Esse código já está em uso. Escolha outro nome.")
+    req = PartnerCouponRequest(
+        affiliate_id=affiliate.id, requested_code=requested_code, discount_pct=Decimal(discount_pct),
+        status=CouponRequestStatus.pending,
+    )
+    db.add(req)
+    db.flush()
+    return _coupon_request_item(db, req)
+
+
+def list_coupon_requests_for_partner(db: Session, affiliate: Affiliate) -> list[dict]:
+    from app.domains.promotions.models import PartnerCouponRequest
+    rows = db.execute(select(PartnerCouponRequest).where(
+        PartnerCouponRequest.affiliate_id == affiliate.id,
+    ).order_by(PartnerCouponRequest.created_at.desc())).scalars().all()
+    return [_coupon_request_item(db, r) for r in rows]
+
+
+# --- Indicação de parceiros: estatísticas dos parceiros indicados por este parceiro ---
+
+def referred_partners_stats(db: Session, affiliate: Affiliate) -> dict:
+    """Para cada parceiro indicado por `affiliate` (parent), retorna nº de usuários atrelados,
+    faturamento gerado e quanto o sistema deve ao indicador (override) por ele."""
+    children = db.execute(select(Affiliate).where(
+        Affiliate.parent_affiliate_id == affiliate.id).order_by(Affiliate.created_at.desc())).scalars().all()
+    items, total_override = [], Decimal("0")
+    for child in children:
+        s = compute_portal_stats(db, child)  # vendas DIRETAS do indicado
+        override_due = db.execute(select(func.coalesce(func.sum(AffiliateCommission.amount_brl), 0)).where(
+            AffiliateCommission.affiliate_id == affiliate.id,
+            AffiliateCommission.source_affiliate_id == child.id,
+            AffiliateCommission.kind == CommissionKind.override,
+        )).scalar_one()
+        total_override += Decimal(override_due)
+        items.append({
+            "id": str(child.id), "name": child.name, "code": child.code, "status": child.status,
+            "users_count": s["buyers"], "revenue_brl": s["revenue_brl"],
+            "override_due_brl": str(override_due),
+        })
+    return {
+        "override_pct": _partner_override_pct(db),
+        "total_override_due_brl": str(total_override), "items": items,
+    }
+
+
+def primary_invite_coupon_code(db: Session, ref_code: str | None) -> str | None:
+    """Resolve o cupom de convite a pré-preencher no checkout a partir do ?ref=. Aceita tanto
+    o código-base do parceiro quanto o código de um cupom dele; devolve None se não achar."""
+    from app.domains.promotions.models import Coupon
+    code = (ref_code or "").strip().upper()
+    if not code:
+        return None
+    # ref já é um código de cupom ativo?
+    direct = db.execute(select(Coupon).where(Coupon.code == code, Coupon.active.is_(True))).scalar_one_or_none()
+    if direct is not None:
+        return direct.code
+    # senão, resolve o parceiro pelo código-base e pega o cupom de convite de menor desconto.
+    aff = db.execute(select(Affiliate).where(
+        Affiliate.code == code, Affiliate.status == "active")).scalar_one_or_none()
+    if aff is None:
+        return None
+    coupon = db.execute(select(Coupon).where(
+        Coupon.affiliate_id == aff.id, Coupon.active.is_(True), Coupon.first_purchase_only.is_(True),
+    ).order_by(Coupon.discount_value.asc())).scalars().first()
+    return coupon.code if coupon else None

@@ -20,3 +20,4 @@ class CouponPreview(BaseModel):
     original_amount_brl: Decimal
     final_amount_brl: Decimal
     bonus_credits: int
+    promo_credits: int = 0   # créditos PROMOCIONAIS concedidos no resgate (ex.: 5 do convite)

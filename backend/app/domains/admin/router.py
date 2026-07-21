@@ -172,6 +172,29 @@ def reject_affiliate(affiliate_id: str, data: schemas.AffiliateRejectRequest, re
     return service.reject_affiliate(db, admin, affiliate_id, data, client_ip(request))
 
 
+@router.get("/coupon-requests")
+def list_coupon_requests(status: str | None = None,
+                         _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.list_coupon_requests(db, status)
+
+
+@router.post("/coupon-requests/{request_id}/approve")
+def approve_coupon_request(request_id: str, data: schemas.CouponRequestApprove, request: Request,
+                           admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.approve_coupon_request(db, admin, request_id, data, client_ip(request))
+
+
+@router.post("/coupon-requests/{request_id}/reject")
+def reject_coupon_request(request_id: str, data: schemas.CouponRequestReject, request: Request,
+                          admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.reject_coupon_request(db, admin, request_id, data, client_ip(request))
+
+
+@router.get("/pending-counts")
+def pending_counts(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.pending_counts(db)
+
+
 @router.post("/affiliates/{affiliate_id}/resend-invite")
 def resend_affiliate_invite(affiliate_id: str, request: Request,
                             admin: User = Depends(require_admin), db: Session = Depends(get_db)):

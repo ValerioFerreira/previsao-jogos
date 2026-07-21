@@ -236,6 +236,66 @@ def send_partner_invite_email(to: str, link: str) -> None:
     get_email_sender().send(to, assunto, corpo, html_body=html)
 
 
+def _info_email_html(titulo: str, corpo_html: str) -> str:
+    """E-mail HTML informativo (sem botão) — mesma identidade visual do convite."""
+    return f"""\
+<!doctype html>
+<html lang="pt-BR">
+<body style="margin:0;padding:0;background:#0b0f0e;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0f0e;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#131a18;border-radius:16px;overflow:hidden;border:1px solid #1f2a27;">
+        <tr><td style="background:#10b981;padding:20px 28px;">
+          <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.02em;">ApostAI</span>
+        </td></tr>
+        <tr><td style="padding:32px 28px 28px;">
+          <p style="color:#e6efec;font-size:16px;font-weight:600;margin:0 0 12px;">{titulo}</p>
+          <div style="color:#9fb0ac;font-size:14px;line-height:1.6;">{corpo_html}</div>
+        </td></tr>
+      </table>
+      <p style="color:#4a5852;font-size:11px;margin:16px 0 0;">ApostAI · previsão probabilística de partidas</p>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def send_partner_coupon_decision_email(
+    to: str, *, approved: bool, coupon_code: str,
+    discount_pct=None, limit_desc: str | None = None, reason: str | None = None,
+) -> None:
+    """E-mail ao parceiro com a decisão (aprovação/rejeição) da solicitação de cupom
+    promocional. Na aprovação inclui as configurações; na rejeição, o motivo."""
+    if approved:
+        assunto = "Seu cupom promocional foi aprovado — ApostAI"
+        linhas = [f"Seu cupom promocional <b>{coupon_code}</b> foi aprovado e já está ativo."]
+        if discount_pct is not None:
+            linhas.append(f"Desconto ao usuário: <b>{discount_pct}%</b> (sua comissão: {int(30 - float(discount_pct))}%).")
+        if limit_desc:
+            linhas.append(f"Validade: {limit_desc}.")
+        corpo_txt = (
+            f"Seu cupom promocional {coupon_code} foi aprovado e já está ativo.\n"
+            + (f"Desconto ao usuário: {discount_pct}%.\n" if discount_pct is not None else "")
+            + (f"Validade: {limit_desc}.\n" if limit_desc else "")
+        )
+        html = _info_email_html("Cupom promocional aprovado", "".join(f"<p style='margin:0 0 10px'>{l}</p>" for l in linhas))
+    else:
+        assunto = "Sobre sua solicitação de cupom promocional — ApostAI"
+        motivo = reason or "Não informado."
+        corpo_txt = (
+            f"Sua solicitação do cupom {coupon_code} não foi aprovada desta vez.\n"
+            f"Motivo: {motivo}\n"
+            "Você pode ajustar e enviar uma nova solicitação pelo portal do parceiro."
+        )
+        html = _info_email_html(
+            "Solicitação de cupom não aprovada",
+            f"<p style='margin:0 0 10px'>Sua solicitação do cupom <b>{coupon_code}</b> não foi aprovada desta vez.</p>"
+            f"<p style='margin:0 0 10px'><b>Motivo:</b> {motivo}</p>"
+            "<p style='margin:0'>Você pode ajustar e enviar uma nova solicitação pelo portal do parceiro.</p>",
+        )
+    get_email_sender().send(to, assunto, corpo_txt, html_body=html)
+
+
 def send_otp_email(to: str, code: str, purpose: str) -> None:
     assunto = "Seu código de verificação" if purpose == "email_verify" else "Recuperação de senha"
     titulo = "Confirme seu e-mail" if purpose == "email_verify" else "Recuperação de senha"

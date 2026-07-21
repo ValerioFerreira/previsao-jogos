@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, EmailStr, field_validator
@@ -25,6 +26,9 @@ class PartnerApplicationRequest(BaseModel):
     # desconto é sempre calculado pelo servidor, nunca vem do cliente (ver
     # affiliates/service.py::resolve_partner_code). None/vazio = sistema sugere sozinho.
     code_prefix: str | None = None
+    # Código do parceiro que INDICOU este candidato (via link de indicação de parceiros).
+    # O candidato não vê o vínculo; serve só para atrelar parent_affiliate_id (Fase 3).
+    ref_partner: str | None = None
 
     @field_validator("cpf")
     @classmethod
@@ -102,3 +106,58 @@ class TimeseriesPoint(BaseModel):
 class TimeseriesResponse(BaseModel):
     granularity: str
     items: list[TimeseriesPoint]
+
+
+# --- Cupom promocional solicitado pelo parceiro (analisado pelo admin) ---
+
+class CouponRequestCreate(BaseModel):
+    requested_code: str
+    discount_pct: int
+
+    @field_validator("requested_code")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        v = (v or "").strip().upper()
+        if not (1 <= len(v) <= 12):
+            raise ValueError("O nome do cupom deve ter de 1 a 12 caracteres.")
+        if not v.isalnum():
+            raise ValueError("O nome do cupom deve conter apenas letras e números.")
+        return v
+
+    @field_validator("discount_pct")
+    @classmethod
+    def _pct(cls, v: int) -> int:
+        # orçamento de 30 pontos: desconto ao usuário + comissão ao parceiro = 30.
+        if not (1 <= v <= 29):
+            raise ValueError("O desconto deve ser de 1% a 29%.")
+        return v
+
+
+class CouponRequestItem(BaseModel):
+    id: str
+    requested_code: str
+    discount_pct: Decimal
+    status: str
+    limit_type: str | None = None
+    limit_days: int | None = None
+    limit_revenue_brl: Decimal | None = None
+    rejection_reason: str | None = None
+    coupon_code: str | None = None
+    created_at: datetime
+    decided_at: datetime | None = None
+
+
+class ReferredPartner(BaseModel):
+    id: str
+    name: str
+    code: str
+    status: str
+    users_count: int              # usuários atrelados (compradores via cupons do indicado)
+    revenue_brl: str              # faturamento gerado pelo indicado
+    override_due_brl: str         # quanto o sistema deve ao indicador por este indicado
+
+
+class ReferredPartnersResponse(BaseModel):
+    override_pct: Decimal
+    total_override_due_brl: str
+    items: list[ReferredPartner]

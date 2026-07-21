@@ -20,10 +20,13 @@ from app.domains.analysis.models import Analysis
 from app.domains.analytics.models import Event
 from app.domains.bets.models import Bet
 from app.domains.campaigns.models import Campaign, CampaignAffiliate, CampaignCoupon, CampaignPackage
-from app.domains.enums import CreditTxType, PaymentStatus, UserRole, UserStatus
+from app.domains.enums import (
+    CommissionKind, CouponLimitType, CouponRequestStatus, CreditTxType,
+    PaymentStatus, UserRole, UserStatus,
+)
 from app.domains.legal import service as legal_service
 from app.domains.payments.models import CreditPackage, PaymentOrder
-from app.domains.promotions.models import Coupon, Promotion
+from app.domains.promotions.models import Coupon, PartnerCouponRequest, Promotion
 from app.domains.support import schemas as support_schemas
 from app.domains.support import service as support_service
 from app.domains.users.models import User
@@ -31,6 +34,9 @@ from app.domains.wallet.models import CreditTransaction, Wallet
 from app.domains.wallet.service import get_or_create_wallet, post_transaction
 
 _PARTNER_PROMOTION_CODE = "parceiros"
+# Créditos promocionais concedidos ao usuário que usa um cupom de CONVITE de parceiro (na 1ª
+# compra). Funcionam como o crédito diário promocional (consumidos na hora, nunca reservados).
+_INVITE_PROMO_CREDITS = 5
 
 
 def _utc(dt: datetime | None) -> datetime | None:
@@ -399,16 +405,25 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
             
         for pct in pcts:
             code = f"{affiliate.code.strip().upper()}{pct}"
-            # Procura um cupom existente com esse código exato
+            # comissão POR-CUPOM = orçamento de 30 pontos − desconto (fecha a inconsistência
+            # de um parceiro com vários tiers ter um único commission_pct global).
+            commission_pct = int(affiliates_service.COMMISSION_BUDGET_PCT) - pct
+            # Cupom de CONVITE: só vale na 1ª compra do usuário e concede 5 créditos
+            # PROMOCIONAIS (consumidos na hora, não reservados — ver wallet/models.py).
             coupon = next((c for c in existing_coupons if c.code == code), None)
             if coupon is None:
                 db.add(Coupon(
                     promotion_id=promo.id, code=code,
                     discount_type=CouponDiscountType.percentage, discount_value=pct,
+                    commission_pct=commission_pct, first_purchase_only=True,
+                    promo_credits=_INVITE_PROMO_CREDITS,
                     affiliate_id=affiliate.id, active=True,
                 ))
             else:
                 coupon.discount_value = pct
+                coupon.commission_pct = commission_pct
+                coupon.first_purchase_only = True
+                coupon.promo_credits = _INVITE_PROMO_CREDITS
                 coupon.active = True
     token = security.create_access_token(str(user.id), extra={"scope": "partner_invite"})
     link = f"{settings.frontend_base_url}/parceiro/definir-senha?token={token}"
@@ -505,6 +520,133 @@ def reject_affiliate(db: Session, admin: User, affiliate_id: str, data: schemas.
     return _affiliate_out(a, db)
 
 
+def _coupon_request_out(db: Session, req: PartnerCouponRequest) -> dict:
+    a = db.get(Affiliate, req.affiliate_id)
+    item = affiliates_service._coupon_request_item(db, req)
+    item["affiliate_id"] = str(req.affiliate_id)
+    item["affiliate_name"] = a.name if a else None
+    item["affiliate_code"] = a.code if a else None
+    return item
+
+
+def _get_coupon_request(db: Session, request_id: str) -> PartnerCouponRequest:
+    try:
+        rid = uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada.")
+    req = db.get(PartnerCouponRequest, rid)
+    if req is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Solicitação não encontrada.")
+    return req
+
+
+def list_coupon_requests(db: Session, status_filter: str | None = None) -> dict:
+    stmt = select(PartnerCouponRequest).order_by(PartnerCouponRequest.created_at.desc())
+    if status_filter:
+        stmt = stmt.where(PartnerCouponRequest.status == CouponRequestStatus(status_filter))
+    rows = db.execute(stmt).scalars().all()
+    return {"items": [_coupon_request_out(db, r) for r in rows]}
+
+
+def approve_coupon_request(db: Session, admin: User, request_id: str,
+                           data: schemas.CouponRequestApprove, ip) -> dict:
+    """Aprova a solicitação: cria o cupom promocional (percentage, comissão = 30 − desconto)
+    limitado por prazo (dias) OU faturamento pré-desconto, e envia e-mail ao parceiro."""
+    from app.core.email import EmailSendError, send_partner_coupon_decision_email
+    req = _get_coupon_request(db, request_id)
+    if req.status != CouponRequestStatus.pending:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Solicitação já foi analisada.")
+    affiliate = db.get(Affiliate, req.affiliate_id)
+    if affiliate is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Parceiro não encontrado.")
+    if affiliates_service.code_in_use(db, req.requested_code):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="O código do cupom já está em uso.")
+
+    limit_type = CouponLimitType(data.limit_type)
+    pct = int(req.discount_pct)
+    promo = _get_or_create_partner_promotion(db)
+    from app.domains.enums import CouponDiscountType
+    valid_to = None
+    revenue_limit = None
+    limit_desc = None
+    if limit_type == CouponLimitType.days:
+        if not data.limit_days or data.limit_days <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Informe o prazo em dias.")
+        valid_to = datetime.now(timezone.utc) + timedelta(days=int(data.limit_days))
+        limit_desc = f"{int(data.limit_days)} dias (até {valid_to.date().isoformat()})"
+    else:  # revenue
+        if not data.limit_revenue_brl or Decimal(data.limit_revenue_brl) <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Informe o teto de faturamento.")
+        revenue_limit = Decimal(data.limit_revenue_brl)
+        limit_desc = f"até R$ {revenue_limit} de faturamento"
+
+    coupon = Coupon(
+        promotion_id=promo.id, code=req.requested_code.strip().upper(),
+        discount_type=CouponDiscountType.percentage, discount_value=pct,
+        commission_pct=int(affiliates_service.COMMISSION_BUDGET_PCT) - pct,
+        affiliate_id=affiliate.id, first_purchase_only=False, promo_credits=None,
+        valid_to=valid_to, revenue_limit_brl=revenue_limit, active=True,
+    )
+    db.add(coupon)
+    db.flush()
+    req.status = CouponRequestStatus.approved
+    req.limit_type = limit_type
+    req.limit_days = int(data.limit_days) if limit_type == CouponLimitType.days else None
+    req.limit_revenue_brl = revenue_limit
+    req.decided_at = datetime.now(timezone.utc)
+    req.decided_by = admin.id
+    req.coupon_id = coupon.id
+    audit(db, admin, "coupon_request_approve", "partner_coupon_request", req.id,
+          after={"coupon": coupon.code, "limit_type": limit_type.value}, ip=ip)
+    db.commit()
+
+    if affiliate.contact_email:
+        try:
+            send_partner_coupon_decision_email(
+                affiliate.contact_email, approved=True, coupon_code=coupon.code,
+                discount_pct=pct, limit_desc=limit_desc,
+            )
+        except EmailSendError:
+            pass  # decisão já persistida; falha de e-mail não deve reverter a aprovação
+    return _coupon_request_out(db, req)
+
+
+def reject_coupon_request(db: Session, admin: User, request_id: str,
+                          data: schemas.CouponRequestReject, ip) -> dict:
+    from app.core.email import EmailSendError, send_partner_coupon_decision_email
+    req = _get_coupon_request(db, request_id)
+    if req.status != CouponRequestStatus.pending:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Solicitação já foi analisada.")
+    affiliate = db.get(Affiliate, req.affiliate_id)
+    req.status = CouponRequestStatus.rejected
+    req.rejection_reason = (data.reason or "").strip() or None
+    req.decided_at = datetime.now(timezone.utc)
+    req.decided_by = admin.id
+    audit(db, admin, "coupon_request_reject", "partner_coupon_request", req.id,
+          after={"reason": req.rejection_reason}, ip=ip)
+    db.commit()
+
+    if affiliate and affiliate.contact_email:
+        try:
+            send_partner_coupon_decision_email(
+                affiliate.contact_email, approved=False, coupon_code=req.requested_code,
+                reason=req.rejection_reason,
+            )
+        except EmailSendError:
+            pass
+    return _coupon_request_out(db, req)
+
+
+def pending_counts(db: Session) -> dict:
+    """Contagem de solicitações não respondidas para o badge admin (aba Parceiros)."""
+    partner_apps = db.execute(select(func.count(Affiliate.id)).where(
+        Affiliate.status == "pending")).scalar_one()
+    coupon_reqs = db.execute(select(func.count(PartnerCouponRequest.id)).where(
+        PartnerCouponRequest.status == CouponRequestStatus.pending)).scalar_one()
+    return {"partner_applications": partner_apps, "coupon_requests": coupon_reqs,
+            "total": partner_apps + coupon_reqs}
+
+
 def resend_affiliate_invite(db: Session, admin: User, affiliate_id: str, ip) -> dict:
     a = _get_affiliate(db, affiliate_id)
     if a.status != "active":
@@ -536,11 +678,18 @@ def get_affiliate_detail(db: Session, affiliate_id: str) -> dict:
     }
     demo_logs = db.execute(select(DemoAccessLog).where(
         DemoAccessLog.affiliate_id == a.id).order_by(DemoAccessLog.created_at.desc()).limit(50)).scalars().all()
+    # Parceiros indicados por este parceiro (um nível) + override que o sistema deve a ele.
+    referred = affiliates_service.referred_partners_stats(db, a)
+    parent = db.get(Affiliate, a.parent_affiliate_id) if a.parent_affiliate_id else None
     return {
         **_affiliate_out(a, db), **stats,
         "payments": list_affiliate_payments(db, affiliate_id)["items"],
         "demo_access_logs": [{"cpf_used": l.cpf_used, "ip": l.ip, "created_at": l.created_at.isoformat()}
                              for l in demo_logs],
+        "referred_partners": referred["items"],
+        "referred_override_due_brl": referred["total_override_due_brl"],
+        "parent_affiliate": ({"id": str(parent.id), "name": parent.name, "code": parent.code}
+                             if parent else None),
     }
 
 
