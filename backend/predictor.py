@@ -215,8 +215,14 @@ class Predictor:
         m = r[((r.home_team == home_team) & (r.away_team == away_team)) |
               ((r.home_team == away_team) & (r.away_team == home_team))]
         if len(m) == 0:
-            return {"h2h_played": 0, "h2h_home_winrate": np.nan,
-                    "h2h_home_gd_mean": np.nan, "days_since_last_h2h": np.nan,
+            # None (não NaN): NaN cru vira o token "NaN" no JSON (json.dumps padrão
+            # permite, mas JSON/JSONB do Postgres não é RFC-compliant o suficiente pra
+            # aceitar -- INSERT em app_analyses.snapshot::JSONB falhava com DataError
+            # pra QUALQUER par de times sem confronto direto anterior, 100% reproduzível,
+            # response 500 pro cliente cru o bastante pra às vezes nem carregar CORS
+            # -- achado 2026-07-22).
+            return {"h2h_played": 0, "h2h_home_winrate": None,
+                    "h2h_home_gd_mean": None, "days_since_last_h2h": None,
                     "_resumo": "Sem confrontos anteriores no histórico."}
         wins = gds = 0
         for _, x in m.iterrows():
@@ -443,12 +449,47 @@ class Predictor:
         home_team, away_team = self.norm_team(home_team), self.norm_team(away_team)
         X, h2h = self.build_row(home_team, away_team, neutral, tournament,
                                 home_vals, away_vals, context_overrides, h2h_overrides)
-        bf, ff = self.meta["base_feats"], self.meta["full_feats"]
 
         # confiabilidade do jogo pela cobertura de dados refinados (box-score)
         snap_h = {**self.team_defaults(home_team), **dict(home_vals or {})}
         snap_a = {**self.team_defaults(away_team), **dict(away_vals or {})}
         confiabilidade = self._reliability(snap_h, snap_a)
+
+        return self._predict_from_X(X, home_team, away_team, neutral, tournament, h2h, confiabilidade)
+
+    # ----------------------------------------------------------------- previsao a partir de uma
+    # linha de features JA PRONTA (point-in-time historica) -- usada pelo backtest local
+    # (backend/scripts/backtest_*.py) para reavaliar partidas passadas sem vazamento: ao
+    # contrario de build_row() (que so sabe montar o snapshot de AGORA), aqui a linha ja vem
+    # com as features exatamente como estavam disponiveis antes do jogo (rolling l3/l5/l10,
+    # elo_pre, GAP ratings, h2h -- ver backend/scripts/battery_dataset.py::load_clubs_df).
+    # Reaproveita os MESMOS atributos treinados via _predict_from_X; nao muda predict()/
+    # build_row() acima.
+    def predict_from_row(self, row, tournament=None, neutral=None):
+        home_team = self.norm_team(row["home_team"])
+        away_team = self.norm_team(row["away_team"])
+        tournament = tournament if tournament is not None else row.get("tournament", "Amistoso")
+        neutral = bool(row["neutral"]) if neutral is None else bool(neutral)
+
+        # full_feats + base_feats (GAP ratings entram so em base_feats, ver
+        # build_clubs_production_artifacts.py -- build_row() de producao as injeta
+        # ad-hoc no dict antes de virar DataFrame; aqui a linha historica ja as tem).
+        cols = list(dict.fromkeys(list(self.meta["full_feats"]) + list(self.meta["base_feats"])))
+        X = pd.DataFrame([{c: (row[c] if c in row.index else np.nan) for c in cols}])
+        # None (nao NaN) quando ausente -- NaN cru no dict de resposta quebra
+        # serializacao JSON/JSONB estrita (ver head_to_head() acima, mesmo achado).
+        h2h = {k: (row[k] if k in row.index and pd.notna(row[k]) else None)
+               for k in ("h2h_played", "h2h_home_winrate", "h2h_home_gd_mean", "days_since_last_h2h")}
+
+        snap_h = {b: row.get(f"home_{b}", np.nan) for b in self._box_bases}
+        snap_a = {b: row.get(f"away_{b}", np.nan) for b in self._box_bases}
+        confiabilidade = self._reliability(snap_h, snap_a)
+
+        return self._predict_from_X(X, home_team, away_team, neutral, tournament, h2h, confiabilidade)
+
+    # ----------------------------------------------------------------- corpo compartilhado
+    def _predict_from_X(self, X, home_team, away_team, neutral, tournament, h2h, confiabilidade):
+        bf, ff = self.meta["base_feats"], self.meta["full_feats"]
 
         # vencedor, gols, ambas_marcam, over_2_5 via Dixon-Coles
         dc_probs = self.dc.predict_proba_markets(X[bf])

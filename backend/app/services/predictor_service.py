@@ -13,6 +13,24 @@ from app.services.odds import enrich_with_odds
 from anomaly_detector import detect_anomalies
 
 
+def _json_safe(obj):
+    """Substitui NaN/Infinity (float) por None recursivamente. `json.dumps` padrão
+    aceita NaN como token literal, mas o parser JSON/JSONB do Postgres não -- o
+    INSERT em app_analyses.snapshot::JSONB falhava (DataError, "Token NaN is
+    invalid") pra QUALQUER par de times sem confronto direto anterior (h2h com
+    campos NaN), virando 500 pro cliente (às vezes mascarado como erro de CORS,
+    achado 2026-07-22). Fonte já corrigida em predictor.py::head_to_head/
+    predict_from_row (usam None, não NaN); isto aqui é a rede de segurança pro
+    resto da resposta, caso outro campo numérico algum dia vire NaN."""
+    if isinstance(obj, float):
+        return obj if (obj == obj and obj not in (float("inf"), float("-inf"))) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def _norm(name: str) -> str:
     """Canoniza nome de seleção (alias) — leve, para listas e lookups."""
     return TEAM_ALIASES.get(name, name) if name else name
@@ -450,6 +468,7 @@ def predict_match(payload: Any, scope: str = "selecao") -> dict[str, Any]:
         **raw,
         "odds": enrich_with_odds(raw, predictor.meta.get("n_train", {})),
     }
+    res = _json_safe(res)
 
     # Módulo 4.1: Registro de Logs em JSON Lines
     try:
