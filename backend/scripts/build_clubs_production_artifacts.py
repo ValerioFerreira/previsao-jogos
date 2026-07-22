@@ -365,10 +365,20 @@ def main():
     slim_cols = ["date", "home_team", "away_team", "home_score", "away_score", "tournament"]
     df[slim_cols].to_csv(OUT / "results_slim.csv", index=False)
 
+    h2h_cols = {
+        "date": "date", "home_team": "home_team", "away_team": "away_team",
+        "home_score": "home_score", "away_score": "away_score",
+        "home_cur_sb_shots": "home_shots", "away_cur_sb_shots": "away_shots",
+        "home_cur_sb_shots_on_target": "home_sot", "away_cur_sb_shots_on_target": "away_sot",
+        "home_cur_sb_corners": "home_corners", "away_cur_sb_corners": "away_corners",
+        "home_cur_sb_cards": "home_cards", "away_cur_sb_cards": "away_cards",
+    }
+    h2h_df = df[[c for c in h2h_cols if c in df.columns]].rename(columns=h2h_cols)
+    h2h_df.to_csv(OUT / "h2h_stats.csv", index=False)
+
     print(f"\n>> OK. Artefatos em {OUT}/")
     print(f"   times: {len(teams)} | torneios: {len(tournament_weights)}")
-    print("   (h2h_stats.csv/h2h_results.csv NÃO gerados -- Predictor já degrada com "
-          "graça pro results_slim.csv quando ausentes, ver predictor.py:136-145)")
+    print(f"   h2h_stats.csv gerado com {len(h2h_df)} jogos para médias do confronto direto.")
 
 
 if __name__ == "__main__":
