@@ -377,6 +377,15 @@ Re-treino do DC após validar uma feature: `scripts/retrain_dc_pace.py` (cirúrg
 - Console Windows é cp1252 — evitar caracteres Unicode (Δ, →) em `print` de scripts.
 - Jobs em background morrem no teardown de sessão → fazer scripts **resumíveis** (checkpoint).
 - `nbinom.ppf` é lento para r alto; amostrar via **CDF em grade + searchsorted**.
+- Coletores de longa duração (>100min) derrubam a conexão do pooler do Neon
+  ("server closed the connection unexpectedly") perto do fim — não perde dado
+  (cache-first, resumível), mas é esperado ver esse erro em prefetches muito
+  longos; não é bug do coletor.
+- Controle negativo (rótulos embaralhados) por **acurácia** contra "acaso
+  uniforme" (1/N classes) é **errado** quando há desequilíbrio de classe real
+  (ex.: 1x2 tem H≈45% por vantagem de mandante, não 33%) — compare contra o
+  baseline **constante** (prever sempre a frequência de classe do treino), não
+  contra o acaso uniforme, senão vazamento falso-positivo (ver §19).
 
 ---
 
