@@ -105,12 +105,11 @@ export function PlacarExatoCard({ data, home, away, teamIds }: {
   teamIds: Record<string, number>;
 }) {
   const alerta = data.alerta;
-  if (alerta.nivel === 'normal') return null;
-
-  const isAlert = true;
+  const isAlert = alerta && alerta.nivel !== 'normal';
   const alertStyles =
-    alerta.nivel === 'alto' ? 'bg-amber-500/10 border-amber-500/30'
-    : 'bg-amber-500/5 border-amber-500/20';
+    alerta?.nivel === 'alto' ? 'bg-amber-500/10 border-amber-500/30'
+    : alerta?.nivel === 'moderado' ? 'bg-amber-500/5 border-amber-500/20'
+    : 'bg-muted/30 border-border/30';
   // Texto do motivo em PT-BR: o lado favorito vira o nome traduzido (teamPt).
   const motivoTexto = (m: PlacarMotivo): string => {
     if (m.tipo === 'favoritismo') {

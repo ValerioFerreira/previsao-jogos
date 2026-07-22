@@ -69,5 +69,8 @@ const PT: Record<string, string> = {
 
 export function teamPt(name: string): string {
   if (!name) return name;
-  return PT[name] ?? name;
+  const translated = PT[name];
+  if (translated) return translated;
+  // Fallback de segurança: limpa sufixo de competição entre parênteses
+  return name.replace(/\s*\((?:Brasileirao|Serie A|Serie B|Serie C|La Liga|Premier League|Copa|Champions|Conference|Europa|Liga Pro|Liga Profesional|Primera|Eredivisie|Taça|CAF|CONCACAF|AFC|FA Cup|Coupe de France|Thai League)[^)]*\)$/i, '').trim();
 }

@@ -103,33 +103,113 @@ def build_team_snapshot(df, bases):
 
 _HASH_ID_RE = re.compile(r"#\d+$")
 
+# Mapeamento explícito de desambiguação para nomes de times colidentes (clean_name, team_id) -> nome limpo correto.
+# Garante que clubes principais (ex.: Internacional, Athletic Bilbao, Independiente, Rangers, Santa Cruz)
+# mantenham seus nomes limpos sem sufixos feios de competição em parênteses.
+EXPLICIT_TEAM_NAMES: dict[tuple[str, int], str] = {
+    # Internacional
+    ("Internacional", 119): "Internacional",
+    ("Internacional", 10143): "Internacional de Madrid",
+
+    # Athletic Club
+    ("Athletic Club", 531): "Athletic Bilbao",
+    ("Athletic Club", 13975): "Athletic-MG",
+
+    # Independiente
+    ("Independiente", 453): "Independiente",
+    ("Independiente", 15702): "Independiente Petrolero",
+
+    # Rangers
+    ("Rangers", 257): "Rangers",
+    ("Rangers", 4459): "Hong Kong Rangers",
+
+    # Santa Cruz
+    ("Santa Cruz", 753): "Santa Cruz",
+    ("Santa Cruz", 13974): "Santa Cruz-RS",
+    ("Santa Cruz", 12259): "Real Santa Cruz",
+
+    # Al Nasr / Al Shabab
+    ("Al Nasr", 5470): "Al-Nassr",
+    ("Al Nasr", 4842): "Al Nasr",
+    ("Al Shabab", 5471): "Al Shabab",
+    ("Al Shabab", 4843): "Al Shabab (EAU)",
+
+    # Aurora
+    ("Aurora", 3637): "Aurora",
+    ("Aurora", 10154): "Aurora Guatemala",
+
+    # Bella Vista
+    ("Bella Vista", 2996): "Bella Vista",
+    ("Bella Vista", 3981): "Bella Vista de Bahía Blanca",
+
+    # Comunicaciones
+    ("Comunicaciones", 3658): "Comunicaciones",
+    ("Comunicaciones", 8008): "Club Comunicaciones",
+
+    # Diables Noirs / Dragon / Drita / Highgate United
+    ("Diables Noirs", 3170): "Diables Noirs",
+    ("Diables Noirs", 20600): "Diables Noirs (FRA)",
+    ("Dragon", 3045): "AS Dragon",
+    ("Dragon", 21310): "Dragon (FRA)",
+    ("Drita", 2248): "Drita",
+    ("Drita", 14281): "Drita",
+    ("Highgate United", 8825): "Highgate United",
+    ("Highgate United", 14429): "Highgate United",
+
+    # Laguna / Libertad / Linense / Lokomotiv
+    ("Laguna", 18095): "CD Laguna",
+    ("Laguna", 25123): "Laguna-RN",
+    ("Libertad", 18762): "Libertad FC",
+    ("Libertad", 15715): "Libertad Gran Mamoré",
+    ("Linense", 7846): "Linense",
+    ("Linense", 9596): "Balompédica Linense",
+    ("Lokomotiv", 597): "Lokomotiv Moscou",
+    ("Lokomotiv", 3695): "Lokomotiv Tashkent",
+
+    # Maão / Nyasa Big Bullets / Police United / Resende / Roda / Sacachispas
+    ("Maão", 4767): "Maão",
+    ("Maão", 10144): "Maão",
+    ("Nyasa Big Bullets", 4596): "Nyasa Big Bullets",
+    ("Nyasa Big Bullets", 4599): "Nyasa Big Bullets",
+    ("Police United", 5474): "Police United (Belize)",
+    ("Police United", 13274): "Police Tero",
+    ("Resende", 4857): "Resende",
+    ("Resende", 13162): "CD Resende",
+    ("Roda", 414): "Roda JC",
+    ("Roda", 9684): "CD Roda",
+    ("Sacachispas", 1942): "Sacachispas",
+    ("Sacachispas", 3655): "Sacachispas Guatemala",
+
+    # Santa Lucía / Sport Boys / Toledo / Vasco da Gama AC / Warriors / Atenas
+    ("Santa Lucía", 3651): "Santa Lucía Cotzumalguapa",
+    ("Santa Lucía", 10141): "Santa Lucía Cotzumalguapa",
+    ("Sport Boys", 2544): "Sport Boys",
+    ("Sport Boys", 3699): "Sport Boys Warnes",
+    ("Toledo", 9908): "CD Toledo",
+    ("Toledo", 9994): "Toledo-PR",
+    ("Vasco da Gama AC", 6370): "Vasco-AC",
+    ("Vasco da Gama AC", 13164): "Vasco da Gama de Sines",
+    ("Warriors", 4207): "Warriors FC",
+    ("Warriors", 10531): "Warriors (ZIM)",
+    ("Atenas", 18080): "Atenas",
+    ("Atenas", 21043): "Atenas de Río Cuarto",
+}
+
 
 def disambiguate_collisions(df):
-    """`build_clubs_dataset.py` grava cada time como "Nome#id" (chave interna
-    p/ evitar colisão na COLETA entre países/ligas). Isso não pode vazar cru
-    pro produto -- primeiro removemos o sufixo "#id" pra obter o nome limpo, e
-    só then detectamos colisões REAIS (nome limpo com mais de um team_id) pra
-    aplicar o sufixo " (Liga)" -- a esmagadora maioria fica só com o nome limpo."""
     clean_home = df["home_team"].str.replace(_HASH_ID_RE, "", regex=True)
     clean_away = df["away_team"].str.replace(_HASH_ID_RE, "", regex=True)
-    long = pd.concat([
-        pd.DataFrame({"team": clean_home, "team_id": df["home_team_id"], "tournament": df["tournament"]}),
-        pd.DataFrame({"team": clean_away, "team_id": df["away_team_id"], "tournament": df["tournament"]}),
-    ], ignore_index=True)
-    n_ids = long.groupby("team")["team_id"].nunique()
-    colliding = set(n_ids[n_ids > 1].index)
-    if colliding:
-        print(f">> Colisões de nome detectadas: {sorted(colliding)}")
-    # Liga mais frequente por (nome_limpo, id) -- vira o sufixo de desambiguação
-    # só para os nomes colidentes; os demais ficam só com o nome limpo.
-    tag = (long.groupby(["team", "team_id"])["tournament"]
-           .agg(lambda s: s.value_counts().idxmax()))
-    rename = {(team, tid): (f"{team} ({liga})" if team in colliding else team)
-              for (team, tid), liga in tag.items()}
+
     df = df.copy()
-    df["home_team"] = [rename.get((t, i), t) for t, i in zip(clean_home, df["home_team_id"])]
-    df["away_team"] = [rename.get((t, i), t) for t, i in zip(clean_away, df["away_team_id"])]
-    return rename, df
+
+    def resolve_name(team_clean: str, team_id: int) -> str:
+        if (team_clean, team_id) in EXPLICIT_TEAM_NAMES:
+            return EXPLICIT_TEAM_NAMES[(team_clean, team_id)]
+        return team_clean
+
+    df["home_team"] = [resolve_name(t, i) for t, i in zip(clean_home, df["home_team_id"])]
+    df["away_team"] = [resolve_name(t, i) for t, i in zip(clean_away, df["away_team_id"])]
+    return {}, df
 
 
 def main():
