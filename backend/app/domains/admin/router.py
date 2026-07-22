@@ -376,6 +376,56 @@ def delete_deep_analysis(fixture_id: int, request: Request,
     return schemas.OkResponse(detail="Análise profunda excluída.")
 
 
+# ---------- partidas em destaque ----------
+@router.get("/featured-matches")
+def list_featured_matches(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.list_featured_matches(db)
+
+
+@router.post("/featured-matches", status_code=201)
+def create_featured_match(data: schemas.FeaturedMatchRequest, request: Request,
+                          admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.create_featured_match(db, admin, data, client_ip(request))
+
+
+@router.patch("/featured-matches/{featured_id}")
+def patch_featured_match(featured_id: str, data: schemas.FeaturedMatchReorderRequest, request: Request,
+                         admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.patch_featured_match(db, admin, featured_id, data, client_ip(request))
+
+
+@router.delete("/featured-matches/{featured_id}", response_model=schemas.OkResponse)
+def delete_featured_match(featured_id: str, request: Request,
+                          admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    service.delete_featured_match(db, admin, featured_id, client_ip(request))
+    return schemas.OkResponse(detail="Partida em destaque removida.")
+
+
+# ---------- compartilhamento de análise ----------
+@router.get("/shared-analyses")
+def list_shared_analyses(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.list_shared_analyses(db)
+
+
+@router.post("/shared-analyses", status_code=201)
+def create_shared_analysis(data: schemas.SharedAnalysisRequest, request: Request,
+                           admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.create_shared_analysis(db, admin, data, client_ip(request))
+
+
+@router.patch("/shared-analyses/{shared_id}")
+def patch_shared_analysis(shared_id: str, active: bool, request: Request,
+                          admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.set_shared_analysis_active(db, admin, shared_id, active, client_ip(request))
+
+
+@router.delete("/shared-analyses/{shared_id}", response_model=schemas.OkResponse)
+def delete_shared_analysis(shared_id: str, request: Request,
+                           admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    service.delete_shared_analysis(db, admin, shared_id, client_ip(request))
+    return schemas.OkResponse(detail="Análise compartilhada excluída.")
+
+
 # ---------- auditoria ----------
 @router.get("/audit")
 def audit_log(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),

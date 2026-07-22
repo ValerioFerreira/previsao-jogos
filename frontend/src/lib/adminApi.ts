@@ -1,5 +1,6 @@
 // Chamadas do Painel Administrativo (exigem papel admin).
 import { authFetch } from "@/lib/authApi";
+import type { UpcomingFixture } from "@/lib/api";
 
 export type AdminUser = {
   id: string; full_name: string; email: string; cpf: string; phone: string;
@@ -93,6 +94,24 @@ export const adminApi = {
   upsertDeepAnalysis: (body: Record<string, unknown>) =>
     authFetch("/admin/deep-analyses", { method: "POST", body: JSON.stringify(body) }),
   deleteDeepAnalysis: (fixtureId: number) => authFetch(`/admin/deep-analyses/${fixtureId}`, { method: "DELETE" }),
+
+  featuredMatches: () =>
+    authFetch<{ items: { id: string; fixture_id: number; scope: string; sort_order: number; fixture: UpcomingFixture | null }[] }>("/admin/featured-matches"),
+  createFeaturedMatch: (body: { fixture_id: number; scope: string }) =>
+    authFetch("/admin/featured-matches", { method: "POST", body: JSON.stringify(body) }),
+  patchFeaturedMatch: (id: string, sort_order: number) =>
+    authFetch(`/admin/featured-matches/${id}`, { method: "PATCH", body: JSON.stringify({ sort_order }) }),
+  deleteFeaturedMatch: (id: string) => authFetch(`/admin/featured-matches/${id}`, { method: "DELETE" }),
+
+  sharedAnalyses: () =>
+    authFetch<{ items: { id: string; token: string; home_team: string; away_team: string; scope: string; tournament: string; match_date: string | null; active: boolean; created_at: string }[] }>("/admin/shared-analyses"),
+  createSharedAnalysis: (body: {
+    fixture_id?: number | null; home_team: string; away_team: string; scope: string;
+    tournament: string; neutral?: boolean; match_date?: string | null; league_name?: string | null;
+  }) => authFetch<{ token: string }>("/admin/shared-analyses", { method: "POST", body: JSON.stringify(body) }),
+  setSharedAnalysisActive: (id: string, active: boolean) =>
+    authFetch(`/admin/shared-analyses/${id}?active=${active}`, { method: "PATCH" }),
+  deleteSharedAnalysis: (id: string) => authFetch(`/admin/shared-analyses/${id}`, { method: "DELETE" }),
 
   campaigns: () => authFetch<{ items: Record<string, unknown>[] }>("/admin/campaigns"),
   createCampaign: (body: Record<string, unknown>) =>

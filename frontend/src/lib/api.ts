@@ -450,6 +450,9 @@ export const api = {
     request<CompetitionBenchmarkResponse>(`/api/competition-benchmark?tournament=${encodeURIComponent(tournament)}&scope=${scope}`),
   upcomingFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/upcoming"),
   pastFixtures: () => request<{ fixtures: UpcomingFixture[] }>("/api/fixtures/past"),
+  featuredMatches: () => request<{ items: UpcomingFixture[] }>("/api/featured-matches"),
+  sharedAnalysis: (token: string) =>
+    request<SharedAnalysisPublic>(`/public/shared-analyses/${encodeURIComponent(token)}`),
   matchDetail: (home: string, away: string, date: string) =>
     request<MatchDetail>(`/api/match-detail?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&date=${encodeURIComponent(date)}`),
   scorers: (home: string, away: string, scope: Scope = "selecao") =>
@@ -507,6 +510,17 @@ export type UpcomingFixture = {
   scope: Scope;
   // Nome do analista, presente se a partida tiver Análise Aprofundada cadastrada no admin.
   deep_analyst?: string;
+};
+
+export type SharedAnalysisPublic = {
+  snapshot: PredictionResponse;
+  home_team: string;
+  away_team: string;
+  scope: Scope;
+  tournament: string;
+  neutral: boolean;
+  match_date: string | null;
+  league_name: string | null;
 };
 
 // URL do logo da seleção (api-football media; não conta cota).

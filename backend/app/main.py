@@ -269,6 +269,34 @@ def upcoming_fixtures(db: Session = Depends(get_db)) -> dict:
     return {"fixtures": fixtures}
 
 
+@app.get("/api/featured-matches")
+def featured_matches(db: Session = Depends(get_db)) -> dict:
+    """Partidas fixadas pelo admin pra home -- pública, sem auth. Pula silenciosamente
+    qualquer destaque cujo fixture_id já não esteja mais entre os próximos jogos
+    (partida já ocorreu ou saiu da janela coletada)."""
+    from app.domains.admin.models import FeaturedMatch
+
+    rows = db.execute(select(FeaturedMatch).order_by(FeaturedMatch.sort_order)).scalars().all()
+    if not rows:
+        return {"items": []}
+    # get_upcoming_fixtures() usa fixture_id em string (chave do registry); FeaturedMatch
+    # guarda int -- normaliza os dois lados pra string antes de casar.
+    upcoming = {str(f["fixture_id"]): f for f in get_upcoming_fixtures()}
+    items = []
+    for r in rows:
+        fx = upcoming.get(str(r.fixture_id))
+        if fx:
+            items.append(fx)
+    return {"items": items}
+
+
+@app.get("/public/shared-analyses/{token}")
+def public_shared_analysis(token: str, db: Session = Depends(get_db)) -> dict:
+    """Análise gerada pelo admin e publicada com um token -- pública, sem auth."""
+    from app.domains.admin.service import get_public_shared_analysis
+    return get_public_shared_analysis(db, token)
+
+
 @app.get("/api/fixtures/past")
 def past_fixtures(limit: int = Query(100000)) -> dict:
     # devolve TODAS as partidas passadas (o seletor filtra/limita no cliente);

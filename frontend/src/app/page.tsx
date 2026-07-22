@@ -1,17 +1,15 @@
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowDown, CheckCircle2, Target, ChevronDown, Sliders, Clock, X } from 'lucide-react';
-import { api, PredictionResponse, PlacarMotivo, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl, onImgError } from '@/lib/api';
+import { AlertTriangle, Zap, TrendingUp, ShieldAlert, ShieldCheck, ArrowDown, CheckCircle2, Clock, X } from 'lucide-react';
+import { api, PredictionResponse, RecentMatch, Anomaly, UpcomingFixture, teamLogoUrl, onImgError } from '@/lib/api';
 import InfoTooltip from '@/components/platform/InfoTooltip';
 import { usePrediction } from '@/lib/PredictionContext';
 import { TeamSelect } from '@/components/platform/TeamSelect';
-import { MarketCard } from '@/components/platform/MarketCard';
 import { teamPt } from '@/lib/teamNames';
 import { competitionPt } from '@/lib/competitionNames';
 import { MatchPickerModal } from '@/components/platform/MatchPickerModal';
@@ -20,13 +18,11 @@ import Link from 'next/link';
 import { Coins, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { analysisApi } from '@/lib/monetizationApi';
-import BetLab from '@/components/platform/BetLab';
 import BetBuilder from '@/components/platform/BetBuilder';
-import { DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard, VitoriaSemSofrerCard, TimeAMarcarPrimeiroCard, MataMataAgregadoCard } from '@/components/platform/DerivedMarkets';
 import H2HCard from '@/components/platform/H2HCard';
-import ScorersCard from '@/components/platform/ScorersCard';
 import ScreenshotGuard from '@/components/platform/ScreenshotGuard';
 import type { ScorersResponse } from '@/lib/api';
+import { AnalysisResultsView, SectionDivider } from '@/components/platform/AnalysisResultsView';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -41,17 +37,6 @@ function fmtMatchDateTime(iso?: string): string {
   if (isNaN(d.getTime())) return '';
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-// Faixa de odd justa (margem de 7% para menos até 1/prob) a partir de uma prob em %.
-function oddRangeStr(probPct: number): string {
-  if (!probPct || probPct <= 0) return '—';
-  const odd = 100 / probPct;
-  if (odd > 50) return '50+';
-  // Odd nunca abaixo de 1.00.
-  const hi = Math.max(1, odd);
-  const lo = Math.max(1, odd * 0.93);
-  return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
 }
 
 const CLUB_LEAGUES = [
@@ -139,164 +124,71 @@ function ClubMarketsBanner({ onExplore }: { onExplore: () => void }) {
   );
 }
 
-// Título de seção centralizado com linhas em degradê preenchendo a horizontal.
-function SectionDivider({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-4 mt-8 mb-4">
-      <div className="h-px flex-1 bg-gradient-to-r from-transparent to-border" />
-      <h3 className="text-lg font-heading font-bold uppercase tracking-wide whitespace-nowrap text-center">{children}</h3>
-      <div className="h-px flex-1 bg-gradient-to-l from-transparent to-border" />
-    </div>
-  );
-}
-
-// Subseção de mercado com título SEMPRE visível e botão exibir/ocultar ao lado (colapso
-// individual — cada mercado secundário abre/fecha por conta própria). Retraído por padrão.
-function CollapsibleMarket({ title, tip, tipHref, defaultOpen = false, children }: {
-  title: string; tip?: string; tipHref?: string; defaultOpen?: boolean; children: React.ReactNode;
+// Banner de partidas fixadas pelo admin — substitui o ClubMarketsBanner quando houver
+// destaques ativos. Mesmo invólucro visual (fundo/gradiente), miolo com grid de cards.
+function FeaturedMatchesBanner({ matches, teamIds, onPick }: {
+  matches: UpcomingFixture[]; teamIds: Record<string, number>; onPick: (fx: UpcomingFixture) => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div>
-      <div className="flex items-center justify-center gap-1.5 mb-3">
-        <h4 className="text-sm font-bold uppercase text-foreground flex items-center gap-1.5">
-          {title}
-          {tip && <InfoTooltip text={tip} href={tipHref} />}
-        </h4>
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border border-border/60 bg-muted/40 hover:bg-muted transition-colors"
-          aria-expanded={open}
-        >
-          {open ? 'Ocultar' : 'Exibir'}
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
-        </button>
-      </div>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="relative overflow-hidden rounded-2xl shadow-xl shadow-cyan-900/20 bg-slate-100 dark:bg-slate-950"
+    >
+      <img
+        aria-hidden
+        src="https://png.pngtree.com/thumb_back/fh260/background/20230705/pngtree-intense-football-game-at-the-stadium-3d-rendering-of-competing-players-image_3821105.jpg"
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover opacity-60 hidden dark:block"
+      />
+      <img
+        aria-hidden
+        src="https://www.shutterstock.com/image-vector/silhouette-soccer-football-player-set-260nw-2710080835.jpg"
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover opacity-60 block dark:hidden"
+      />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-white/85 via-white/70 to-slate-100 dark:from-slate-950/85 dark:via-slate-950/75 dark:to-background" />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-slate-100/50 via-transparent to-slate-100/50 dark:from-background/50 dark:to-background/50" />
 
-// Recortes por tempo para gols e cartões (Partida inteira / 1º / 2º), por lado.
-function goalPeriods(p: PredictionResponse, side: string) {
-  return {
-    'Partida inteira': side === 'total' ? (p.gols as any) : p.gols_equipe?.[side],
-    '1º tempo': p.tempos?.gols_1t?.[side],
-    '2º tempo': p.tempos?.gols_2t?.[side],
-  };
-}
-function cardPeriods(p: PredictionResponse, side: string) {
-  return {
-    'Partida inteira': p.cartoes?.[side],
-    '1º tempo': p.tempos?.cartoes_1t?.[side],
-    '2º tempo': p.tempos?.cartoes_2t?.[side],
-  };
-}
-// Variantes por tipo de cartão (amarelo isolado / ambos / vermelho isolado) para o
-// seletor 🟨-Ambos-🟥 do card de Cartões. Amarelo e vermelho isolados não têm recorte
-// por tempo, então entram como um único período ("Partida inteira").
-function cardKindsFor(p: PredictionResponse, side: string) {
-  const amarelo = p.cartoes_amarelos?.[side];
-  const vermelho = p.cartoes_vermelhos?.[side];
-  return {
-    amarelo: amarelo ? { 'Partida inteira': amarelo } : undefined,
-    ambos: cardPeriods(p, side),
-    vermelho: vermelho ? { 'Partida inteira': vermelho } : undefined,
-  };
-}
-
-// Placar Exato: 3 placares mais prováveis + alerta de potencial de desvio (placar
-// fora do padrão), no mesmo estilo do Radar de Anomalias.
-function PlacarExatoCard({ data, home, away, teamIds }: {
-  data: NonNullable<PredictionResponse['placar_exato']>;
-  home: string;
-  away: string;
-  teamIds: Record<string, number>;
-}) {
-  const alerta = data.alerta;
-  if (alerta.nivel === 'normal') return null;
-
-  const isAlert = true;
-  const alertStyles =
-    alerta.nivel === 'alto' ? 'bg-amber-500/10 border-amber-500/30'
-    : 'bg-amber-500/5 border-amber-500/20';
-  // Texto do motivo em PT-BR: o lado favorito vira o nome traduzido (teamPt).
-  const motivoTexto = (m: PlacarMotivo): string => {
-    if (m.tipo === 'favoritismo') {
-      const fav = m.favorito_lado === 'mandante' ? teamPt(home) : teamPt(away);
-      return `${fav} é forte favorito: ${m.exp_alto} × ${m.exp_baixo} gols projetados (Elo, forma e ataque/defesa embutidos).`;
-    }
-    return `Placar alto projetado: ${m.exp_total} gols esperados, P(4+ gols) = ${m.prob_4_mais}%.`;
-  };
-  return (
-    <div className="bg-card border border-border/50 rounded-xl p-5">
-      <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
-        <Target className="w-4 h-4 text-purple-500" />
-        Placar Exato
-        <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." href="/como-funciona#mercado-placar" />
-      </h4>
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {data.top.map((s, i) => (
-          <div key={i} className={`text-center rounded-lg p-2 border ${i === 0 ? 'bg-purple-500/10 border-purple-500/30' : 'bg-muted/30 border-border/30'}`}>
-            <div className="flex items-center justify-center gap-1.5 mb-0.5">
-              {teamLogoUrl(teamIds[home]) && (
-                <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-4 h-4 object-contain" onError={onImgError} />
-              )}
-              <p className="text-xl font-mono font-bold text-foreground leading-none">{s.mandante}<span className="text-muted-foreground mx-0.5">–</span>{s.visitante}</p>
-              {teamLogoUrl(teamIds[away]) && (
-                <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-4 h-4 object-contain" onError={onImgError} />
-              )}
-            </div>
-            <p className="text-[11px] font-mono text-cyan-400 mt-0.5">{s.prob.toFixed(1)}%</p>
-            <p className="text-[9px] text-muted-foreground mt-0.5">odd {oddRangeStr(s.prob)}</p>
-          </div>
-        ))}
-      </div>
-      <div className={`rounded-lg p-3 border ${alertStyles}`}>
-        <p className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
-          <AlertTriangle className={`w-3.5 h-3.5 ${isAlert ? 'text-amber-400' : 'text-muted-foreground'}`} />
-          {isAlert ? `Alerta de desvio: potencial ${alerta.nivel}` : 'Padrão de placar normal'}
-        </p>
-        {isAlert ? (
-          <ul className="space-y-1">
-            {alerta.motivos.map((m, i) => (
-              <li key={i} className="text-xs text-amber-500/80 flex items-start gap-1.5">
-                <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-400 shrink-0" /><span>{motivoTexto(m)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-muted-foreground italic">
-            Gols esperados equilibrados ({alerta.exp_mandante} x {alerta.exp_visitante}); sem indícios de placar fora do padrão.
+      <div className="relative px-5 py-8 sm:py-10 flex flex-col items-center text-center gap-5">
+        <div>
+          <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300 mb-2">
+            Partidas em Destaque
           </p>
-        )}
+          <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight tracking-tight">
+            Escolha um confronto e veja a análise completa
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 max-w-4xl w-full">
+          {matches.map((fx) => (
+            <button
+              key={fx.fixture_id}
+              onClick={() => onPick(fx)}
+              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-slate-900/10 dark:border-white/15 bg-white/70 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 backdrop-blur-sm transition-colors text-center"
+            >
+              <div className="flex items-center justify-center gap-1.5">
+                <img src={teamLogoUrl(teamIds[fx.home]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain" />
+                <span className="text-[10px] font-bold text-slate-500 dark:text-white/50">x</span>
+                <img src={teamLogoUrl(teamIds[fx.away]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain" />
+              </div>
+              <div className="text-[11px] font-semibold text-slate-900 dark:text-white leading-tight">
+                {teamPt(fx.home)} x {teamPt(fx.away)}
+              </div>
+              <div className="text-[10px] text-slate-600 dark:text-white/60 truncate w-full">{competitionPt(fx.tournament)}</div>
+              <div className="text-[10px] text-slate-500 dark:text-white/50">{fmtMatchDateTime(fx.date)}</div>
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-// Badge de confiabilidade do JOGO pela cobertura de dados refinados (box-score).
-function MatchReliabilityBadge({ confiabilidade }: { confiabilidade: PredictionResponse['confiabilidade'] }) {
-  if (!confiabilidade) return null;
-  const tier = confiabilidade.tier;
-  const styles =
-    tier === 'Alta' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
-    : tier === 'Média' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
-    : 'bg-red-500/10 border-red-500/30 text-red-500';
-  return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border ${styles}`}>
-      {tier === 'Alta' ? <ShieldCheck className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-      Confiabilidade dos dados: {tier}
-      <InfoTooltip text={confiabilidade._resumo} href="/como-funciona#metrica-confiabilidade" />
-    </div>
-  );
-}
+// SectionDivider, CollapsibleMarket, goalPeriods/cardKindsFor, PlacarExatoCard e
+// MatchReliabilityBadge foram extraídos para AnalysisResultsView.tsx (reutilizados também
+// pela página pública de compartilhamento) -- import no topo do arquivo.
 
 function DataReliabilityBadge({ totalMatches }: { totalMatches: number }) {
   const isLow = totalMatches < 10;
@@ -456,7 +348,6 @@ export default function Previsoes() {
   
   const [h2hData, setH2hData] = useState<any>(null);
   const [scorers, setScorers] = useState<ScorersResponse | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   // F5: com as duas equipes escolhidas, o card de Configuração recolhe (só o título);
   // "Alterar Equipes" (no cabeçalho flutuante) reabre para trocar.
   const [editingTeams, setEditingTeams] = useState(false);
@@ -489,6 +380,7 @@ export default function Previsoes() {
   const [referee, setReferee] = useState('');
   const [referees, setReferees] = useState<string[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingFixture[]>([]);
+  const [featured, setFeatured] = useState<UpcomingFixture[]>([]);
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
@@ -500,6 +392,7 @@ export default function Previsoes() {
     api.referees().then(r => setReferees(r.referees)).catch(() => {});
     setLoadingUpcoming(true);
     api.upcomingFixtures().then(r => setUpcoming(r.fixtures)).catch(() => {}).finally(() => setLoadingUpcoming(false));
+    api.featuredMatches().then(r => setFeatured(r.items)).catch(() => {});
     // Uma única lista com os dois escopos -- evita ter que refazer o fetch a cada troca
     // de Seleções/Clubes; nomes de seleção e de clube não colidem entre si.
     Promise.all([api.teamIds("selecao"), api.teamIds("clube")])
@@ -538,6 +431,23 @@ export default function Previsoes() {
     setFixtureId(Number(fx.fixture_id));
     setProjection(null);
     setEditingTeams(false); // recolhe o card de configuração após escolher a partida
+  };
+
+  // Card de "Partidas em Destaque" (curadoria do admin): pré-preenche o confronto e o
+  // modo "partida futura", igual selectFutureFixture, mas a partir do objeto já resolvido
+  // pelo banner (não depende de já estar carregado em `upcoming`) -- só falta apertar
+  // "Gerar Análise", como pedido.
+  const selectFeaturedMatch = (fx: UpcomingFixture) => {
+    setMode('futura');
+    setScope(fx.scope || 'selecao');
+    setHomeTeamId(fx.home);
+    setAwayTeamId(fx.away);
+    setCompetition(fx.tournament);
+    setNeutralField(fx.neutral);
+    setMatchDate(fx.date);
+    setFixtureId(Number(fx.fixture_id));
+    setProjection(null);
+    setEditingTeams(false);
   };
 
   // Troca de escopo (Seleções/Clubes) na Análise Independente: roster e competições são
@@ -631,11 +541,15 @@ export default function Previsoes() {
 
   return (
     <div className="space-y-6">
-      <ClubMarketsBanner onExplore={() => {
-        setMode('independente');
-        changeScope('clube');
-        setEditingTeams(true);
-      }} />
+      {featured.length > 0 ? (
+        <FeaturedMatchesBanner matches={featured} teamIds={teamIds} onPick={selectFeaturedMatch} />
+      ) : (
+        <ClubMarketsBanner onExplore={() => {
+          setMode('independente');
+          changeScope('clube');
+          setEditingTeams(true);
+        }} />
+      )}
       {homeTeamId && awayTeamId && (
         <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} onEditTeams={() => setEditingTeams(true)} />
       )}
@@ -894,216 +808,7 @@ export default function Previsoes() {
           <ScreenshotGuard page="analise-resultado">
           <div className="space-y-6">
 
-            {/* Badge de confiabilidade do jogo (cobertura de dados refinados) */}
-            {projection.confiabilidade && (
-              <div className="flex justify-center">
-                <MatchReliabilityBadge confiabilidade={projection.confiabilidade} />
-              </div>
-            )}
-
-            {/* ANÁLISE APROFUNDADA (Opcional) */}
-            {projection.deep_analysis && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-slate-900 border-2 border-indigo-500/40 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.15)]">
-                <div className="bg-indigo-500/10 px-5 py-3 border-b border-indigo-500/20 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-indigo-400" />
-                  <h3 className="font-heading font-bold text-lg text-indigo-100 tracking-wide uppercase">Análise Aprofundada Detalhada</h3>
-                </div>
-                <div className="p-5 prose prose-sm dark:prose-invert max-w-none text-slate-300">
-                  <ReactMarkdown>{(projection.deep_analysis as any).markdown_content}</ReactMarkdown>
-                </div>
-                <div className="bg-black/20 px-5 py-2.5 text-right border-t border-white/5">
-                  <span className="text-xs text-muted-foreground italic">Análise por <strong className="text-indigo-300">{(projection.deep_analysis as any).analyst_name}</strong></span>
-                </div>
-              </motion.div>
-            )}
-
-            {/* MERCADOS PRINCIPAIS — Resultados | Ambas Marcam / Dupla Chance | Empate Anula / Placar Exato | Handicaps */}
-            <SectionDivider>MERCADOS PRINCIPAIS</SectionDivider>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
-              {/* Resultados (1X2) */}
-              <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col justify-center text-center shadow-sm h-full">
-                <p className="text-xs text-muted-foreground mb-4 font-semibold uppercase tracking-wider">Resultados</p>
-                <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-                  <div className="text-center w-[30%] min-w-[82px]">
-                    {teamLogoUrl(teamIds[homeTeamId]) && (
-                      <img src={teamLogoUrl(teamIds[homeTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={onImgError} />
-                    )}
-                    <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(homeTeamId)}</p>
-                    <p className="text-3xl font-bold font-mono text-emerald-400">{projection.vencedor.probabilidades[homeTeamId]}%</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(projection.vencedor.probabilidades[homeTeamId])}</p>
-                  </div>
-                  <div className="text-center w-[30%] min-w-[82px] border-x border-border/50">
-                    <p className="text-sm font-medium text-muted-foreground mb-1">Empate</p>
-                    <p className="text-2xl font-bold font-mono text-muted-foreground">{projection.vencedor.probabilidades["Empate"]}%</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(projection.vencedor.probabilidades["Empate"])}</p>
-                  </div>
-                  <div className="text-center w-[30%] min-w-[82px]">
-                    {teamLogoUrl(teamIds[awayTeamId]) && (
-                      <img src={teamLogoUrl(teamIds[awayTeamId])!} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" loading="lazy" onError={onImgError} />
-                    )}
-                    <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(awayTeamId)}</p>
-                    <p className="text-3xl font-bold font-mono text-cyan-400">{projection.vencedor.probabilidades[awayTeamId]}%</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(projection.vencedor.probabilidades[awayTeamId])}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ambas Marcam (à direita de Resultados) */}
-              {projection.ambas_marcam && (
-                <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
-                  <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
-                    Ambas Marcam
-                    <InfoTooltip text="Probabilidade de as duas equipes marcarem pelo menos um gol na partida." href="/como-funciona#mercado-btts" />
-                  </h4>
-                  <div className="flex-1 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:gap-x-8 text-center">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
-                      <p className="text-2xl font-mono font-bold text-emerald-400">{projection.ambas_marcam.prob_sim}%</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(projection.ambas_marcam.prob_sim)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
-                      <p className="text-2xl font-mono font-bold text-blue-400">{(100 - projection.ambas_marcam.prob_sim).toFixed(1)}%</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(100 - projection.ambas_marcam.prob_sim)}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Dupla Chance e Time a Marcar Primeiro | Handicaps */}
-              <div className="flex flex-col gap-4 lg:gap-6">
-                {projection.mercados_derivados && <DuplaChanceCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />}
-                {projection.time_marca_primeiro && <TimeAMarcarPrimeiroCard d={projection.time_marca_primeiro} home={homeTeamId} away={awayTeamId} />}
-              </div>
-              {projection.mercados_derivados && <HandicapsCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />}
-              {/* Placar Exato — card detalhado em largura total */}
-              {projection.placar_exato && (
-                <div className="md:col-span-2">
-                  <PlacarExatoCard data={projection.placar_exato} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
-                </div>
-              )}
-            </div>
-
-            {/* MERCADOS SECUNDÁRIOS — cada mercado colapsa individualmente (título sempre visível) */}
-            <SectionDivider>MERCADOS SECUNDÁRIOS</SectionDivider>
-            <div className="space-y-6">
-              {/* Gols (mandante/total/visitante, com seletor de tempo) */}
-              {projection.gols && (
-                <CollapsibleMarket title="Gols" tip="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." tipHref="/como-funciona#mercado-gols">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <MarketCard title="Gols" subtitle={teamPt(homeTeamId)} periods={goalPeriods(projection, homeTeamId)} />
-                    <MarketCard title="Gols" subtitle="Totais (Partida)" periods={goalPeriods(projection, 'total')} />
-                    <MarketCard title="Gols" subtitle={teamPt(awayTeamId)} periods={goalPeriods(projection, awayTeamId)} />
-                  </div>
-                  {projection.mercados_derivados && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                      <ParImparCard d={projection.mercados_derivados} />
-                      <FaixaGolsCard d={projection.mercados_derivados} />
-                      <CleanSheetCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />
-                      <VitoriaSemSofrerCard d={projection.mercados_derivados} home={homeTeamId} away={awayTeamId} />
-                    </div>
-                  )}
-                </CollapsibleMarket>
-              )}
-
-              {/* Finalizações */}
-              {projection.chutes && (
-                <CollapsibleMarket title="Finalizações" tip="Conta qualquer tentativa de marcar gol, independentemente da direção. Inclui chutes no alvo, para fora, na trave e também os bloqueados pela defesa adversária." tipHref="/como-funciona#mercado-finalizacoes">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {projection.chutes_equipe && projection.chutes_equipe[homeTeamId] && (
-                      <MarketCard title="Finalizações" subtitle={teamPt(homeTeamId)} prediction={projection.chutes_equipe[homeTeamId]} />
-                    )}
-                    <MarketCard title="Finalizações" subtitle="Totais (Partida)" prediction={projection.chutes as any} />
-                    {projection.chutes_equipe && projection.chutes_equipe[awayTeamId] && (
-                      <MarketCard title="Finalizações" subtitle={teamPt(awayTeamId)} prediction={projection.chutes_equipe[awayTeamId]} />
-                    )}
-                  </div>
-                </CollapsibleMarket>
-              )}
-
-              {/* Chutes a Gol */}
-              {projection.chutes_a_gol && projection.chutes_a_gol.total && (
-                <CollapsibleMarket title="Chutes a Gol" tip="Considera apenas os chutes que vão na direção exata da baliza e que seriam gol se não houvesse intervenção do goleiro. Chutes na trave, para fora ou bloqueados não contam." tipHref="/como-funciona#mercado-finalizacoes-gol">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <MarketCard title="Chutes a Gol" subtitle={teamPt(homeTeamId)} prediction={projection.chutes_a_gol[homeTeamId]} />
-                    <MarketCard title="Chutes a Gol" subtitle="Totais (Partida)" prediction={projection.chutes_a_gol.total} />
-                    <MarketCard title="Chutes a Gol" subtitle={teamPt(awayTeamId)} prediction={projection.chutes_a_gol[awayTeamId]} />
-                  </div>
-                </CollapsibleMarket>
-              )}
-
-              {/* Escanteios */}
-              {projection.escanteios && projection.escanteios.total && (
-                <CollapsibleMarket title="Escanteios" tip="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." tipHref="/como-funciona#mercado-escanteios">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <MarketCard title="Escanteios" subtitle={teamPt(homeTeamId)} prediction={projection.escanteios[homeTeamId]} />
-                    <MarketCard title="Escanteios" subtitle="Totais (Partida)" prediction={projection.escanteios.total} />
-                    <MarketCard title="Escanteios" subtitle={teamPt(awayTeamId)} prediction={projection.escanteios[awayTeamId]} />
-                  </div>
-                </CollapsibleMarket>
-              )}
-
-              {/* Cartões (com seletor de tempo + seletor 🟨/Ambos/🟥 por tipo) */}
-              {projection.cartoes && projection.cartoes.total && (
-                <CollapsibleMarket title="Cartões" tip="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Use o seletor 🟨/Ambos/🟥 em cada card para ver amarelos e vermelhos isolados. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." tipHref="/como-funciona#mercado-cartoes">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <MarketCard title="Cartões" subtitle={teamPt(homeTeamId)} cardKinds={cardKindsFor(projection, homeTeamId)} />
-                    <MarketCard title="Cartões" subtitle="Totais (Partida)" cardKinds={cardKindsFor(projection, 'total')} />
-                    <MarketCard title="Cartões" subtitle={teamPt(awayTeamId)} cardKinds={cardKindsFor(projection, awayTeamId)} />
-                  </div>
-                </CollapsibleMarket>
-              )}
-
-              {/* Impedimentos (mercado novo, exibido cru) */}
-              {projection.impedimentos && projection.impedimentos.total && (
-                <CollapsibleMarket title="Impedimentos" tip="Total de impedimentos assinalados na partida.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <MarketCard title="Impedimentos" subtitle={teamPt(homeTeamId)} prediction={projection.impedimentos[homeTeamId]} />
-                    <MarketCard title="Impedimentos" subtitle="Totais (Partida)" prediction={projection.impedimentos.total} />
-                    <MarketCard title="Impedimentos" subtitle={teamPt(awayTeamId)} prediction={projection.impedimentos[awayTeamId]} />
-                  </div>
-                </CollapsibleMarket>
-              )}
-
-              {/* Qualificação/agregado (mata-mata ida-volta) — só competições continentais de clube com 2 pernas */}
-              {projection.mata_mata_agregado && (
-                <CollapsibleMarket title="Mata-Mata (Ida e Volta)" tip="Probabilidade de classificação no agregado das duas pernas, assumindo mando invertido na volta e pernas independentes (sem regra do gol fora).">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <MataMataAgregadoCard d={projection.mata_mata_agregado} />
-                    <MarketCard title="Gols Agregados" subtitle="Total (2 pernas)" prediction={projection.mata_mata_agregado.gols_agregados} />
-                  </div>
-                </CollapsibleMarket>
-              )}
-
-
-
-              {/* Jogador — modelo de goleador (dentro dos secundários, colapso individual) */}
-              {scorers?.disponivel && (
-                <CollapsibleMarket title="Jogador" tip="Por jogador do elenco recente, se jogar: probabilidade de marcar a qualquer momento e de dar ≥ 0,5/1,5/2,5 finalizações — modelos de goleador e de finalizações (forma + defesa do adversário + mando + minutos), calibrados. Odd justa = 1/probabilidade, sem margem de casa.">
-                  <ScorersCard data={scorers} home={homeTeamId} away={awayTeamId} teamIds={teamIds} embedded />
-                </CollapsibleMarket>
-              )}
-            </div>
-
-            {/* FUNÇÕES AVANÇADAS DE ANÁLISE (acima do Monte sua Aposta, abaixo dos secundários) */}
-            <SectionDivider>FUNÇÕES AVANÇADAS DE ANÁLISE</SectionDivider>
-            <div className="flex justify-center mb-4">
-              <button
-                onClick={() => setShowAdvanced(s => !s)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border/60 bg-muted/40 hover:bg-muted transition-colors"
-              >
-                <Sliders className="w-4 h-4" />
-                {showAdvanced ? 'Ocultar ferramentas' : 'Explorador de Linha e Value Betting'}
-                <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
-            <AnimatePresence initial={false}>
-              {showAdvanced && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                  <BetLab prediction={projection} />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <AnalysisResultsView prediction={projection} home={homeTeamId} away={awayTeamId} teamIds={teamIds} scorers={scorers} />
 
             {/* MONTE SUA SELEÇÃO — oferta "ParcerIA" (Só Paga se Acertar) */}
             <SectionDivider>MONTE SUA SELEÇÃO</SectionDivider>

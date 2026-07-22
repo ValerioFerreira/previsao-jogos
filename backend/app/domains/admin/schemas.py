@@ -236,6 +236,28 @@ class MatchDeepAnalysisRequest(BaseModel):
     markdown_content: str
 
 
+# ---------- partidas em destaque ----------
+class FeaturedMatchRequest(BaseModel):
+    fixture_id: int
+    scope: str = "selecao"
+
+
+class FeaturedMatchReorderRequest(BaseModel):
+    sort_order: int
+
+
+# ---------- compartilhamento de análise ----------
+class SharedAnalysisRequest(BaseModel):
+    fixture_id: int | None = None
+    home_team: str
+    away_team: str
+    scope: str = "selecao"
+    tournament: str
+    neutral: bool = False
+    match_date: str | None = None
+    league_name: str | None = None
+
+
 class OkResponse(BaseModel):
     ok: bool = True
     detail: str | None = None

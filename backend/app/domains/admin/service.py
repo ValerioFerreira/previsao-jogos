@@ -13,7 +13,9 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from app.domains.admin import schemas
-from app.domains.admin.models import AdminAuditLog, Banner, PlatformSetting, MatchDeepAnalysis
+from app.domains.admin.models import (
+    AdminAuditLog, Banner, PlatformSetting, MatchDeepAnalysis, FeaturedMatch, SharedAnalysis,
+)
 from app.domains.affiliates import service as affiliates_service
 from app.domains.affiliates.models import Affiliate, AffiliateCommission, AffiliatePayment, DemoAccessLog
 from app.domains.analysis.models import Analysis
@@ -1313,3 +1315,140 @@ def delete_deep_analysis(db: Session, admin: User, fixture_id: int, ip) -> None:
     audit(db, admin, "deep_analysis_delete", "deep_analysis", da.id, before=_deep_analysis_out(da), ip=ip)
     db.delete(da)
     db.commit()
+
+
+# --------------------------------------------------------------- partidas em destaque
+_FEATURED_MATCH_LIMIT = 10
+
+
+def _featured_match_out(f: FeaturedMatch) -> dict:
+    return {"id": str(f.id), "fixture_id": f.fixture_id, "scope": f.scope, "sort_order": f.sort_order}
+
+
+def list_featured_matches(db: Session) -> dict:
+    from app.services.predictor_service import get_upcoming_fixtures
+
+    rows = db.execute(select(FeaturedMatch).order_by(FeaturedMatch.sort_order)).scalars().all()
+    # get_upcoming_fixtures() usa fixture_id em string (chave do registry); FeaturedMatch
+    # guarda int -- normaliza os dois lados pra string antes de casar.
+    upcoming = {str(f["fixture_id"]): f for f in get_upcoming_fixtures()}
+    items = []
+    for r in rows:
+        fx = upcoming.get(str(r.fixture_id))
+        items.append({**_featured_match_out(r), "fixture": fx})
+    return {"items": items}
+
+
+def create_featured_match(db: Session, admin: User, data: schemas.FeaturedMatchRequest, ip) -> dict:
+    count = db.execute(select(func.count(FeaturedMatch.id))).scalar_one()
+    if count >= _FEATURED_MATCH_LIMIT:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            detail=f"Máximo de {_FEATURED_MATCH_LIMIT} partidas em destaque.")
+    existing = db.execute(select(FeaturedMatch).where(FeaturedMatch.fixture_id == data.fixture_id)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Partida já está em destaque.")
+    next_order = db.execute(select(func.coalesce(func.max(FeaturedMatch.sort_order), -1))).scalar_one() + 1
+    f = FeaturedMatch(fixture_id=data.fixture_id, scope=data.scope, sort_order=next_order)
+    db.add(f); db.flush()
+    audit(db, admin, "featured_match_create", "featured_match", f.id, after=_featured_match_out(f), ip=ip)
+    db.commit()
+    return _featured_match_out(f)
+
+
+def patch_featured_match(db: Session, admin: User, featured_id: str,
+                         data: schemas.FeaturedMatchReorderRequest, ip) -> dict:
+    try:
+        f = db.get(FeaturedMatch, uuid.UUID(featured_id))
+    except ValueError:
+        f = None
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Partida em destaque não encontrada.")
+    before = _featured_match_out(f)
+    f.sort_order = data.sort_order
+    audit(db, admin, "featured_match_reorder", "featured_match", f.id, before=before, after=_featured_match_out(f), ip=ip)
+    db.commit()
+    return _featured_match_out(f)
+
+
+def delete_featured_match(db: Session, admin: User, featured_id: str, ip) -> None:
+    try:
+        f = db.get(FeaturedMatch, uuid.UUID(featured_id))
+    except ValueError:
+        f = None
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Partida em destaque não encontrada.")
+    audit(db, admin, "featured_match_delete", "featured_match", f.id, before=_featured_match_out(f), ip=ip)
+    db.delete(f)
+    db.commit()
+
+
+# --------------------------------------------------------------- compartilhamento de análise
+def _shared_analysis_out(s: SharedAnalysis) -> dict:
+    return {
+        "id": str(s.id), "token": s.token, "fixture_id": s.fixture_id,
+        "home_team": s.home_team, "away_team": s.away_team, "scope": s.scope,
+        "tournament": s.tournament, "neutral": s.neutral, "match_date": s.match_date,
+        "league_name": s.league_name, "active": s.active, "created_at": s.created_at.isoformat(),
+    }
+
+
+def list_shared_analyses(db: Session) -> dict:
+    rows = db.execute(select(SharedAnalysis).order_by(SharedAnalysis.created_at.desc())).scalars().all()
+    return {"items": [_shared_analysis_out(s) for s in rows]}
+
+
+def create_shared_analysis(db: Session, admin: User, data: schemas.SharedAnalysisRequest, ip) -> dict:
+    import secrets
+
+    from app.domains.analysis.schemas import AnalysisRequest
+    from app.domains.analysis.service import _generate_snapshot
+
+    req = AnalysisRequest(home_team=data.home_team, away_team=data.away_team, tournament=data.tournament,
+                          neutral=data.neutral, scope=data.scope, type="independent")
+    snapshot, home, away = _generate_snapshot(req)
+    token = secrets.token_urlsafe(24)
+    s = SharedAnalysis(token=token, fixture_id=data.fixture_id, home_team=home, away_team=away,
+                       scope=data.scope, tournament=data.tournament, neutral=data.neutral,
+                       match_date=data.match_date, league_name=data.league_name, snapshot=snapshot)
+    db.add(s); db.flush()
+    audit(db, admin, "shared_analysis_create", "shared_analysis", s.id,
+          after={"home_team": home, "away_team": away, "token": token}, ip=ip)
+    db.commit()
+    return _shared_analysis_out(s)
+
+
+def set_shared_analysis_active(db: Session, admin: User, shared_id: str, active: bool, ip) -> dict:
+    try:
+        s = db.get(SharedAnalysis, uuid.UUID(shared_id))
+    except ValueError:
+        s = None
+    if s is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Análise compartilhada não encontrada.")
+    before = _shared_analysis_out(s)
+    s.active = active
+    audit(db, admin, "shared_analysis_update", "shared_analysis", s.id, before=before, after=_shared_analysis_out(s), ip=ip)
+    db.commit()
+    return _shared_analysis_out(s)
+
+
+def delete_shared_analysis(db: Session, admin: User, shared_id: str, ip) -> None:
+    try:
+        s = db.get(SharedAnalysis, uuid.UUID(shared_id))
+    except ValueError:
+        s = None
+    if s is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Análise compartilhada não encontrada.")
+    audit(db, admin, "shared_analysis_delete", "shared_analysis", s.id, before=_shared_analysis_out(s), ip=ip)
+    db.delete(s)
+    db.commit()
+
+
+def get_public_shared_analysis(db: Session, token: str) -> dict:
+    s = db.execute(select(SharedAnalysis).where(SharedAnalysis.token == token)).scalar_one_or_none()
+    if s is None or not s.active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Análise não encontrada.")
+    return {
+        "snapshot": s.snapshot, "home_team": s.home_team, "away_team": s.away_team,
+        "scope": s.scope, "tournament": s.tournament, "neutral": s.neutral,
+        "match_date": s.match_date, "league_name": s.league_name,
+    }

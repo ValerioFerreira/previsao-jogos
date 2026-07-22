@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { adminApi, type AdminUser, type AuditEntry } from "@/lib/adminApi";
 import { api, type UpcomingFixture } from "@/lib/api";
 import { legalApi, type LegalDoc } from "@/lib/monetizationApi";
-import { MatchPickerModal } from "@/components/platform/MatchPickerModal";
+import { MatchPickerModal, type PickerFixture } from "@/components/platform/MatchPickerModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -182,6 +182,10 @@ export default function AdminPage() {
   const [teamIds, setTeamIds] = useState<Record<string, number>>({});
   const [allCompetitions, setAllCompetitions] = useState<{ selecao: string[]; clube: string[] }>({ selecao: [], clube: [] });
   const [pickerDeepAnalysisOpen, setPickerDeepAnalysisOpen] = useState(false);
+  const [featuredMatches, setFeaturedMatches] = useState<{ id: string; fixture_id: number; scope: string; sort_order: number; fixture: UpcomingFixture | null }[]>([]);
+  const [pickerFeaturedOpen, setPickerFeaturedOpen] = useState(false);
+  const [sharedAnalyses, setSharedAnalyses] = useState<{ id: string; token: string; home_team: string; away_team: string; scope: string; tournament: string; match_date: string | null; active: boolean; created_at: string }[]>([]);
+  const [pickerShareOpen, setPickerShareOpen] = useState(false);
 
   const [newPromo, setNewPromo] = useState({ code: "", name: "", type: "refund_if_lose" });
   const [newCoupon, setNewCoupon] = useState({
@@ -247,6 +251,8 @@ export default function AdminPage() {
         adminApi.deepAnalyses().then(r => setDeepAnalyses(r.items)),
         adminApi.settings().then(r => setSettings(r.items)),
         adminApi.banners().then(r => setBanners(r.items)),
+        adminApi.featuredMatches().then(r => setFeaturedMatches(r.items)),
+        adminApi.sharedAnalyses().then(r => setSharedAnalyses(r.items)),
         api.upcomingFixtures().then(r => setUpcoming(r.fixtures)),
         Promise.all([api.teamIds("selecao"), api.teamIds("clube")]).then(([sel, clu]) => setTeamIds({ ...sel, ...clu })),
         Promise.all([api.teams("selecao"), api.teams("clube")]).then(([sel, clu]) => setAllCompetitions({ selecao: sel.tournaments, clube: clu.tournaments })),
@@ -676,6 +682,70 @@ export default function AdminPage() {
     });
   }
 
+  async function addFeaturedMatch(fx: PickerFixture) {
+    try {
+      await adminApi.createFeaturedMatch({ fixture_id: Number(fx.fixture_id), scope: fx.scope ?? "selecao" });
+      setFeaturedMatches((await adminApi.featuredMatches()).items);
+    } catch (e) { setErr((e as Error).message); }
+  }
+
+  async function moveFeaturedMatch(index: number, dir: -1 | 1) {
+    const other = index + dir;
+    if (other < 0 || other >= featuredMatches.length) return;
+    const a = featuredMatches[index], b = featuredMatches[other];
+    try {
+      await Promise.all([
+        adminApi.patchFeaturedMatch(a.id, b.sort_order),
+        adminApi.patchFeaturedMatch(b.id, a.sort_order),
+      ]);
+      setFeaturedMatches((await adminApi.featuredMatches()).items);
+    } catch (e) { setErr((e as Error).message); }
+  }
+
+  function deleteFeaturedMatch(id: string) {
+    setConfirmState({
+      message: "Remover esta partida dos destaques?",
+      onConfirm: async () => {
+        try {
+          await adminApi.deleteFeaturedMatch(id);
+          setFeaturedMatches((await adminApi.featuredMatches()).items);
+        } catch (e) { setErr((e as Error).message); }
+      },
+    });
+  }
+
+  async function addSharedAnalysis(fx: PickerFixture) {
+    try {
+      await adminApi.createSharedAnalysis({
+        fixture_id: Number(fx.fixture_id), home_team: fx.home, away_team: fx.away,
+        scope: fx.scope ?? "selecao", tournament: fx.tournament ?? "Amistoso", neutral: fx.neutral ?? false,
+        match_date: fx.date, league_name: fx.league_name,
+      });
+      setSharedAnalyses((await adminApi.sharedAnalyses()).items);
+    } catch (e) { setErr((e as Error).message); }
+  }
+
+  function deleteSharedAnalysis(id: string) {
+    setConfirmState({
+      message: "Excluir este link compartilhado?",
+      onConfirm: async () => {
+        try {
+          await adminApi.deleteSharedAnalysis(id);
+          setSharedAnalyses((await adminApi.sharedAnalyses()).items);
+        } catch (e) { setErr((e as Error).message); }
+      },
+    });
+  }
+
+  function shareUrl(token: string): string {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/compartilhado/${token}`;
+  }
+
+  async function copyShareUrl(url: string) {
+    try { await navigator.clipboard.writeText(url); } catch { /* ignora */ }
+  }
+
   if (loading || !isAdmin) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   const rev = dashboard?.revenue as Record<string, string> | undefined;
@@ -707,6 +777,8 @@ export default function AdminPage() {
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="config">Configurações</TabsTrigger>
           <TabsTrigger value="deep">Análise Aprofundada</TabsTrigger>
+          <TabsTrigger value="destaque">Partidas em Destaque</TabsTrigger>
+          <TabsTrigger value="compartilhar">Compartilhar Análise</TabsTrigger>
           <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
         </TabsList>
 
@@ -1338,6 +1410,85 @@ export default function AdminPage() {
           </Card>
         </TabsContent>
 
+        {/* ---------------- Partidas em Destaque ---------------- */}
+        <TabsContent value="destaque">
+          <Card>
+            <CardHeader><CardTitle>Partidas em Destaque na Home</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Selecione até 10 partidas para substituir o banner padrão da home por cards
+                clicáveis. Ao clicar num card, o visitante só precisa apertar &quot;Gerar Análise&quot;.
+              </p>
+              <div className="flex justify-end mb-4">
+                <Button size="sm" disabled={featuredMatches.length >= 10} onClick={() => setPickerFeaturedOpen(true)}>
+                  <Plus className="w-4 h-4 mr-1" /> Adicionar partida{featuredMatches.length >= 10 ? " (máximo 10)" : ""}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {featuredMatches.map((f, i) => (
+                  <div key={f.id} className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors gap-2">
+                    <div className="min-w-0">
+                      {f.fixture ? (
+                        <>
+                          <div className="font-semibold text-sm truncate">{f.fixture.home} x {f.fixture.away}</div>
+                          <div className="text-xs text-muted-foreground">{f.fixture.tournament} · {fmt(f.fixture.date)}</div>
+                        </>
+                      ) : (
+                        <div className="text-sm text-muted-foreground italic">Partida não encontrada mais nos próximos jogos (fixture_id: {f.fixture_id})</div>
+                      )}
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button variant="outline" size="sm" disabled={i === 0} onClick={() => moveFeaturedMatch(i, -1)}>↑</Button>
+                      <Button variant="outline" size="sm" disabled={i === featuredMatches.length - 1} onClick={() => moveFeaturedMatch(i, 1)}>↓</Button>
+                      <Button variant="destructive" size="sm" onClick={() => deleteFeaturedMatch(f.id)}>Excluir</Button>
+                    </div>
+                  </div>
+                ))}
+                {featuredMatches.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhuma partida em destaque.</p>}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------- Compartilhar Análise ---------------- */}
+        <TabsContent value="compartilhar">
+          <Card>
+            <CardHeader><CardTitle>Compartilhar Análise</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Gere um link público de uma análise completa (sem &quot;Monte sua Seleção&quot;),
+                usável como porta de entrada para visitantes sem cadastro.
+              </p>
+              <div className="flex justify-end mb-4">
+                <Button size="sm" onClick={() => setPickerShareOpen(true)}><Plus className="w-4 h-4 mr-1" /> Nova partida</Button>
+              </div>
+              <div className="space-y-2">
+                {sharedAnalyses.map((s) => {
+                  const url = shareUrl(s.token);
+                  return (
+                    <div key={s.id} className="p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors space-y-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm truncate">{s.home_team} x {s.away_team}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {s.tournament} · gerado em {fmt(s.created_at)}{!s.active && " · inativo"}
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <Button variant="outline" size="sm" onClick={() => copyShareUrl(url)}>Copiar link</Button>
+                          <Button variant="destructive" size="sm" onClick={() => deleteSharedAnalysis(s.id)}>Excluir</Button>
+                        </div>
+                      </div>
+                      <Input readOnly value={url} className="text-xs h-8" onFocus={(e) => e.target.select()} />
+                    </div>
+                  );
+                })}
+                {sharedAnalyses.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhum link compartilhado ainda.</p>}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ---------------- Auditoria ---------------- */}
         <TabsContent value="auditoria">
           <Card>
@@ -1568,6 +1719,28 @@ export default function AdminPage() {
         teamIds={teamIds}
         onSelect={(fx) => { setNewDeepAnalysis({ ...newDeepAnalysis, fixture_id: String(fx.fixture_id) }); setPickerDeepAnalysisOpen(false); }}
         title="Selecionar Partida para Análise Aprofundada"
+        defaultScope="selecao"
+        allCompetitions={allCompetitions}
+      />
+
+      <MatchPickerModal
+        open={pickerFeaturedOpen}
+        onOpenChange={setPickerFeaturedOpen}
+        fixtures={upcoming}
+        teamIds={teamIds}
+        onSelect={(fx) => { setPickerFeaturedOpen(false); addFeaturedMatch(fx); }}
+        title="Selecionar Partida em Destaque"
+        defaultScope="selecao"
+        allCompetitions={allCompetitions}
+      />
+
+      <MatchPickerModal
+        open={pickerShareOpen}
+        onOpenChange={setPickerShareOpen}
+        fixtures={upcoming}
+        teamIds={teamIds}
+        onSelect={(fx) => { setPickerShareOpen(false); addSharedAnalysis(fx); }}
+        title="Selecionar Partida para Compartilhar"
         defaultScope="selecao"
         allCompetitions={allCompetitions}
       />
