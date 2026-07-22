@@ -1225,3 +1225,77 @@ runtime), frontend typecheck limpo. **Migrations são Postgres (produção); o S
 `d1f0a1b2c3d4` (wallet promo) → `d2f1b2c3d4e5` (coupon cols + `app_partner_coupon_requests`) →
 `d3f2c3d4e5f6` (affiliate parent + commission kind/source + unique composto). Validadas por SQL
 offline p/ Postgres + `create_all` no SQLite.
+
+---
+
+## 19. Bateria H1-H4 (empate/valor/de-vig/xG) + coleta 68→83 competições (2026-07-21/22)
+
+Pedido do dono: baseline walk-forward de população completa + 4 hipóteses (H1 empate,
+H2 backtest de valor, H3 de-vig 3-vias, H4 xG) + exaurir a cota do dia com coleta nova.
+Relatório completo com todos os números: `backend/data/reports/RESUMO_BATERIA.md`
+(por hipótese: `backend/data/reports/{baseline_walkforward,h1_empate,h2_value,h3_devig,h4_xg}/`).
+Scripts: `backend/scripts/battery_{dataset,baseline_and_h1,h2_h3,h4_xg}.py`.
+Dataset/comando/hiperparâmetros: `club_features_enriched.parquet` (183.530 jogos após
+filtro matches_played_before≥5, 52 torneios), `DixonColesNBRegressor(n_estimators=100,
+max_depth=3, learning_rate=0.05, max_goals=12, random_state=42)` — produção, sem alteração.
+
+### 19.1 Coleta
+68 competições de clube confirmaram **"tudo coberto"** (só gaps residuais de jogos
+recém-terminados). Adicionadas **+15 competições novas** em duas levas (cota resetou à
+meia-noite UTC no meio da sessão, aproveitada): Copa Argentina, Primera Nacional (ARG),
+Taça de Portugal, Segunda Liga (POR), 3. Liga (Alemanha), Série C (Brasil), Liga
+Panamenha, NB I (Hungria), Premier League (Gana), Botola Pro (Marrocos), Primera
+Division (Costa Rica/Guatemala), Veikkausliiga (Finlândia), First League (Bulgária),
+Liga 1 (Indonésia) — **68→83 competições no espelho local** (`club_raw_cache.sqlite`).
+Seleções (`--all-nations`, floor 2010) recoletadas, sem achado novo (segue saturada,
+§12.6). **As 15 ligas novas ainda NÃO entraram no `club_features_enriched.parquet`
+nem no artefato de produção** — fast-follow natural: rebuildar o parquet + retreinar
+quando quiser incorporá-las (mesmo padrão do §17.6).
+
+### 19.2 Baseline walk-forward (pré-requisito)
+Desvio documentado: protocolo de 5 folds temporais expanding (já estabelecido no
+projeto, `research_clubs/protocol.py`) em vez de leave-one-(liga,temporada)-out literal
+(≈600 retreinos, inviável numa sessão). 91.765 jogos avaliados fora-da-amostra: log-loss
+médio 1.0082, ECE médio 1.26%, acurácia 1x2 ~49.9%, acurácia placar exato ~13.0%.
+Robustez de 5 seeds (último fold): variação 0.00% — `GradientBoostingRegressor` de
+produção usa `subsample=1.0`, é determinístico dado o dataset (achado documentado, não
+é falha de reprodutibilidade).
+
+### 19.3 H1 — Empate — NÃO PASSA o gate (estruturalmente; diagnóstico honesto)
+ECE do empate isolado = 1.21% (já bem calibrado). Correlação freq_real_empate ×
+acurácia_argmax por liga = **-0.681** (confirma: ligas com mais empate real sofrem mais
+acurácia). Regra draw-aware (τ sweep): **nenhum τ melhora a acurácia sobre o argmax
+puro** — log-loss/Brier do modelo são invariantes à regra de decisão (matemático).
+Controle negativo corrigido nesta sessão (limiar original comparava contra acaso
+uniforme 33%, errado para 1x2 que tem desequilíbrio de classe real ~45% de H por
+vantagem de mandante — contra o baseline correto, sem vazamento). **Decisão: não é bug
+de modelo, é oportunidade de PRODUTO** — exibir P(empate) + odd justa ao lado do argmax.
+
+### 19.4 H2 — Backtest de valor — achado de infra + proxy positivo + real inconclusivo
+**Achado de infra**: `collect_club_odds_forward.py` **NÃO está no cron**
+(`collect_odds_task.cmd` só chama a versão de seleção) — cobertura de odds de clube só
+cresce manualmente. Backtest de papel (proxy, grid edge×Kelly×overround): modelo bate
+"sempre o favorito" com folga (+4.38% vs -7.65% yield médio), controle negativo ~0,
+robusto a 5 seeds. CLV real (84 fixtures reais resolvidas via snapshots +
+`model_snapshot` forward): edge médio -6.28%, 32.7% positivo — amostra pequena demais
+pra validar rentabilidade; valida a metodologia, não o lucro.
+
+### 19.5 H3 — De-vig 3-vias — Shin recomendado
+`backend/data/reports/h3_devig/devig_methods.py` (proporcional/power/Shin) com testes
+unitários, confirma favorite-longshot bias da literatura. Amostra real pequena (84
+fixtures) — Shin recomendado por fundamentação teórica (equivalente a power nesta
+amostra). Não é código de produção ainda, é modelo de referência pra quando o value
+betting de 1x2 for implementado.
+
+### 19.6 H4 — xG no DC-NB — REPROVADO (3ª vez)
+Já reprovado em Fase 7 (2026-06-30) e §17.1 (2026-07-19). Por instrução do pedido, **não
+reexecutada a bateria completa** — só Passo 0 (cobertura, agora 15.7%, cresceu marginal
+e só em jogos recentes) + reteste confirmatório 1-fold: Δlog-loss=-0.00014 (limiar
+-0.001, não passa por 7x), Δece=+0.00027 (piora). Controle negativo limpo. **Fechado
+definitivamente** — não repetir sem xG de fonte nova (tracking) ou cobertura que deixe
+de ser concentrada em 2023+.
+
+### 19.7 Decisão
+Nenhuma promoção de modelo, nenhum push de mudança de modelo pra `main` (H4 reprovado,
+H1 é produto). Ver `RESUMO_BATERIA.md` para o detalhe completo e a lista de
+ações de produto/infra recomendadas (fora do escopo de código desta sessão).

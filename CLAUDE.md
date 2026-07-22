@@ -30,7 +30,11 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   (2026-07-21): créditos promocionais (boas-vindas 0 + saldo `promo_balance` consumido antes do
   pago e nunca reservado), 2 tipos de cupom de parceiro (convite 1ª-compra+5 promo; promocional
   solicitado→aprovado pelo admin com prazo/faturamento), indicação de parceiros (`parent_affiliate_id`
-  + override 5%, um nível) e badge de pendências no admin — backend testado, migrations Postgres**.
+  + override 5%, um nível) e badge de pendências no admin — backend testado, migrations Postgres**,
+  **§19 bateria H1-H4 (empate/valor/de-vig/xG, 2026-07-21/22) — nenhuma promoção de modelo (H4 xG
+  reprovado pela 3ª vez, H1 é achado de produto); coleta 68→83 competições de clube (cota resetou
+  no meio da sessão, aproveitada); achado de infra: coleta forward de odds de clube não está no
+  cron. Relatório completo em `backend/data/reports/RESUMO_BATERIA.md`**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa

@@ -120,6 +120,30 @@ LEAGUES = [
     (66, "Coupe de France"),
     (323, "Indian Super League"),
     (296, "Thai League 1"),
+    # --- Expansão 2026-07-21: cota do dia sobrando após os 68 confirmarem "tudo
+    # coberto" (só gaps residuais). Prioriza 2as divisoes/copas domesticas dos
+    # paises ja cobertos (mais provavel ter box-score decente, mesmo padrao
+    # editorial dos tiers anteriores) + 1 liga sul-americana ainda ausente.
+    # IDs confirmados via /leagues nesta sessao.
+    (130, "Copa Argentina"),
+    (129, "Primera Nacional (Argentina)"),
+    (96, "Taca de Portugal"),
+    (95, "Segunda Liga (Portugal)"),
+    (80, "3. Liga (Alemanha)"),
+    (75, "Serie C (Brasil)"),
+    (304, "Liga Panamena de Futbol"),
+    # --- Expansao 2026-07-22 (virada de cota UTC dentro da mesma sessao -- 75k
+    # frescos): mais 8 competicoes de mercados ainda nao cobertos (Leste
+    # Europeu, Africa, America Central, Sudeste Asiatico). IDs confirmados via
+    # /leagues nesta sessao.
+    (271, "NB I (Hungria)"),
+    (570, "Premier League (Gana)"),
+    (200, "Botola Pro (Marrocos)"),
+    (162, "Primera Division (Costa Rica)"),
+    (338, "Primera Division (Guatemala)"),
+    (244, "Veikkausliiga (Finlandia)"),
+    (172, "First League (Bulgaria)"),
+    (274, "Liga 1 (Indonesia)"),
 ]
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"
