@@ -344,7 +344,7 @@ function RecentMatchRow({ match, onOpen }: { match: RecentMatch; onOpen?: () => 
 // para empilhar no lado direito do bloco de confronto.
 function TeamRecentBlock({ teamId, form, anomalies, label, loading, error, teamIds, onOpenMatch }: {
   teamId: string; form: { matches: RecentMatch[]; total: number }; anomalies: Anomaly[];
-  label: string; loading: boolean; error?: boolean; teamIds: Record<string, number>; onOpenMatch: (m: RecentMatch) => void;
+  label: string; loading: boolean; error?: false | 'not_found' | 'error'; teamIds: Record<string, number>; onOpenMatch: (m: RecentMatch) => void;
 }) {
   const [showMore, setShowMore] = React.useState(false);
   const totalAvailable = React.useMemo(() => Math.min(10, (form.matches || []).length), [form.matches]);
@@ -365,6 +365,10 @@ function TeamRecentBlock({ teamId, form, anomalies, label, loading, error, teamI
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-xs">
             <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-emerald-500 rounded-full animate-spin" /> Buscando…
+          </div>
+        ) : error === 'not_found' ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-xs text-center px-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" /> Ainda não temos histórico coletado para esta equipe.
           </div>
         ) : error ? (
           <div className="flex items-center justify-center gap-2 py-8 text-amber-500/80 text-xs text-center px-2">
@@ -566,8 +570,8 @@ export default function Previsoes() {
       .catch(() => {});
   }, []);
 
-  const [errorHome, setErrorHome] = useState(false);
-  const [errorAway, setErrorAway] = useState(false);
+  const [errorHome, setErrorHome] = useState<false | 'not_found' | 'error'>(false);
+  const [errorAway, setErrorAway] = useState<false | 'not_found' | 'error'>(false);
 
   React.useEffect(() => {
     if (homeTeamId) {
@@ -575,7 +579,7 @@ export default function Previsoes() {
       Promise.all([
         api.recentMatches(homeTeamId, scope).then(res => setHomeForm({matches: res.matches, total: res.total_matches})),
         api.teamAnomalies(homeTeamId, scope).then(res => setHomeAnomalies(res.anomalies)),
-      ]).catch(() => { setErrorHome(true); }).finally(() => setLoadingHome(false));
+      ]).catch((e) => { setErrorHome(e?.status === 404 ? 'not_found' : 'error'); }).finally(() => setLoadingHome(false));
     } else {
       setHomeForm({matches: [], total: 0});
       setHomeAnomalies([]);
@@ -589,7 +593,7 @@ export default function Previsoes() {
       Promise.all([
         api.recentMatches(awayTeamId, scope).then(res => setAwayForm({matches: res.matches, total: res.total_matches})),
         api.teamAnomalies(awayTeamId, scope).then(res => setAwayAnomalies(res.anomalies)),
-      ]).catch(() => { setErrorAway(true); }).finally(() => setLoadingAway(false));
+      ]).catch((e) => { setErrorAway(e?.status === 404 ? 'not_found' : 'error'); }).finally(() => setLoadingAway(false));
     } else {
       setAwayForm({matches: [], total: 0});
       setAwayAnomalies([]);
