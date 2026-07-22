@@ -8,6 +8,8 @@ cd /d "%REPO%"
 if not exist "data\odds" mkdir "data\odds"
 echo ===== %DATE% %TIME% ===== >> "data\odds\collect.log"
 ".venv\Scripts\python.exe" "scripts\collect_odds_forward.py" --days 12 >> "data\odds\collect.log" 2>&1
+REM coleta forward de odds de CLUBE (achado 2026-07-21/22: faltava aqui, so rodava manual)
+".venv\Scripts\python.exe" "scripts\collect_club_odds_forward.py" --days 12 >> "data\odds\collect.log" 2>&1
 REM fecha o loop: resolve os jogos que ja terminaram (barato ate haver jogos resolvidos)
 ".venv\Scripts\python.exe" "scripts\resolve_results.py" >> "data\odds\collect.log" 2>&1
 endlocal

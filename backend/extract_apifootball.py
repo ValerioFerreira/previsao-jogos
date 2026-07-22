@@ -1,8 +1,13 @@
+import os
 import requests
 import json
 import time
+from dotenv import load_dotenv
 
-API_KEY = "515dac49287f85774d532f095815e90c"
+load_dotenv()
+API_KEY = os.environ.get("API_FOOTBALL_KEY") or os.environ.get("APIFOOTBALL_KEY")
+if not API_KEY:
+    raise SystemExit("API_FOOTBALL_KEY/APIFOOTBALL_KEY ausente (.env).")
 BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {
     'x-apisports-key': API_KEY

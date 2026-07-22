@@ -42,13 +42,18 @@ export function MatchHeader({
     referee ? `👨‍⚖️ ${referee}` : '',
   ].filter(Boolean);
 
+  const handleEdit = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (onEditTeams) onEditTeams();
+  };
+
   return (
     <div className="sticky top-14 z-30">
       {onEditTeams && (
         <div className="flex justify-center mb-1">
           <button
-            onClick={onEditTeams}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-card/80 backdrop-blur-md border-2 border-emerald-500/60 hover:border-emerald-500 rounded-full px-4 py-2 shadow-sm transition-colors"
+            onClick={handleEdit}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-card/80 backdrop-blur-md border-2 border-emerald-500/60 hover:border-emerald-500 rounded-full px-4 py-2 shadow-sm transition-colors cursor-pointer"
           >
             ✎ Alterar Confronto
           </button>

@@ -212,7 +212,7 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }
             <Sparkles className="w-5 h-5 text-indigo-400" />
             <h3 className="font-heading font-bold text-lg text-indigo-100 tracking-wide uppercase">Análise Aprofundada Detalhada</h3>
           </div>
-          <div className="p-5 prose prose-sm dark:prose-invert max-w-none text-slate-300">
+          <div className="p-5 prose prose-sm dark:prose-invert max-w-none text-slate-300 text-justify">
             <ReactMarkdown>{(prediction.deep_analysis as any).markdown_content}</ReactMarkdown>
           </div>
           <div className="bg-black/20 px-5 py-2.5 text-right border-t border-white/5">

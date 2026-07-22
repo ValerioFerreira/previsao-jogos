@@ -161,24 +161,31 @@ function FeaturedMatchesBanner({ matches, teamIds, onPick }: {
           </h2>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 max-w-4xl w-full">
+        <div className="flex flex-wrap justify-center gap-4 max-w-5xl w-full mx-auto">
           {matches.map((fx) => (
-            <button
+            <div
               key={fx.fixture_id}
-              onClick={() => onPick(fx)}
-              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-slate-900/10 dark:border-white/15 bg-white/70 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 backdrop-blur-sm transition-colors text-center"
+              className="group relative p-[2px] rounded-xl overflow-hidden transition-all duration-300 hover:scale-105 shadow-md hover:shadow-cyan-500/20 w-[calc(50%-0.5rem)] sm:w-[180px]"
             >
-              <div className="flex items-center justify-center gap-1.5">
-                <img src={teamLogoUrl(teamIds[fx.home]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain" />
-                <span className="text-[10px] font-bold text-slate-500 dark:text-white/50">x</span>
-                <img src={teamLogoUrl(teamIds[fx.away]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain" />
-              </div>
-              <div className="text-[11px] font-semibold text-slate-900 dark:text-white leading-tight">
-                {teamPt(fx.home)} x {teamPt(fx.away)}
-              </div>
-              <div className="text-[10px] text-slate-600 dark:text-white/60 truncate w-full">{competitionPt(fx.tournament)}</div>
-              <div className="text-[10px] text-slate-500 dark:text-white/50">{fmtMatchDateTime(fx.date)}</div>
-            </button>
+              {/* Contorno neon azul-esverdeado girando ao redor no hover */}
+              <div className="absolute inset-[-150%] bg-[conic-gradient(from_0deg,#00f2fe,#10b981,#06b6d4,#00f2fe)] animate-[spin_4s_linear_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+              
+              <button
+                onClick={() => onPick(fx)}
+                className="relative z-10 w-full h-full flex flex-col items-center justify-between gap-1.5 p-3 rounded-[10px] bg-white/90 dark:bg-slate-900/90 hover:bg-white dark:hover:bg-slate-900 backdrop-blur-sm transition-colors text-center cursor-pointer"
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <img src={teamLogoUrl(teamIds[fx.home]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain" />
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-white/50">x</span>
+                  <img src={teamLogoUrl(teamIds[fx.away]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain" />
+                </div>
+                <div className="text-[11px] font-semibold text-slate-900 dark:text-white leading-tight">
+                  {teamPt(fx.home)} x {teamPt(fx.away)}
+                </div>
+                <div className="text-[10px] text-slate-600 dark:text-white/60 truncate w-full">{competitionPt(fx.tournament)}</div>
+                <div className="text-[10px] text-slate-500 dark:text-white/50">{fmtMatchDateTime(fx.date)}</div>
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -674,6 +681,28 @@ export default function Previsoes() {
             router.push(`/estatisticas?home=${encodeURIComponent(mh)}&away=${encodeURIComponent(ma)}&date=${encodeURIComponent(m.date.slice(0, 10))}`);
           };
           if (both) {
+            const hasH2H = h2hData && (h2hData.h2h_played ?? 0) > 0;
+            if (!hasH2H && !loadingH2H) {
+              return (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+                  <div className="bg-card border border-border/50 rounded-xl p-5 text-center shadow-sm">
+                    <h3 className="text-sm font-bold uppercase mb-1">Resumo do Confronto Direto</h3>
+                    <p className="text-sm text-muted-foreground italic">Não há confrontos diretos entre estas equipes em nossa base de dados</p>
+                  </div>
+
+                  {/* Cards dos últimos 5 jogos: Visitante à esquerda e Mandante à direita */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+                    <div className="min-w-0 flex-1">
+                      <TeamRecentBlock teamId={awayTeamId} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} error={errorAway} teamIds={teamIds} onOpenMatch={openMatch(awayTeamId)} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} error={errorHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            }
+
             return (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
                 {/* ESQUERDA: Resumo do Confronto Direto */}
@@ -683,20 +712,15 @@ export default function Previsoes() {
                       <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-emerald-500 rounded-full animate-spin" />
                       Buscando confronto direto…
                     </div>
-                  ) : h2hData ? (
-                    <H2HCard h2hData={h2hData} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
                   ) : errorH2H ? (
                     <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex items-center justify-center gap-2 text-sm text-amber-500/80 text-center">
                       <AlertTriangle className="w-4 h-4 shrink-0" /> Não foi possível carregar os dados. Tente novamente em instantes.
                     </div>
                   ) : (
-                    <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex items-center justify-center text-sm text-muted-foreground italic text-center">
-                      Sem confrontos diretos no histórico entre as seleções.
-                    </div>
+                    <H2HCard h2hData={h2hData} home={homeTeamId} away={awayTeamId} teamIds={teamIds} />
                   )}
                 </div>
-                {/* DIREITA: mandante e visitante empilhados (juntos ocupam a altura do confronto direto;
-                    crescem além disso se necessário para não cortar dados dos jogos anteriores) */}
+                {/* DIREITA: mandante e visitante empilhados */}
                 <div className="flex flex-col gap-4 h-full">
                   <div className="flex-1">
                     <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} error={errorHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
@@ -727,47 +751,40 @@ export default function Previsoes() {
           </div>
         )}
         
-        <div className="relative mt-2">
-          {/* Badge Análise Aprofundada (Carimbo Pulsante) */}
-          {!loading && fixtureId && !analysis && upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst && (
+        {/* Card Mensagem Análise Aprofundada (substituindo o carimbo) */}
+        {(() => {
+          const activeFx = (upcoming || []).find(f => (fixtureId && String(f.fixture_id) === String(fixtureId)) || (homeTeamId && awayTeamId && f.home === homeTeamId && f.away === awayTeamId))
+            || (featured || []).find(f => (fixtureId && String(f.fixture_id) === String(fixtureId)) || (homeTeamId && awayTeamId && f.home === homeTeamId && f.away === awayTeamId));
+          const analystName = activeFx?.deep_analyst;
+          if (loading || analysis || !analystName) return null;
+          return (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, rotate: -6 }}
-              animate={{
-                opacity: 1,
-                scale: [1, 1.05, 1],
-                rotate: -6
-              }}
-              transition={{
-                scale: {
-                  repeat: Infinity,
-                  duration: 1.5,
-                  ease: "easeInOut"
-                },
-                default: { duration: 0.3 }
-              }}
-              className="absolute -top-10 -right-2 translate-x-1/3 -translate-y-1/3 z-10 border-4 border-double border-red-500 bg-red-950 text-red-500 uppercase tracking-widest font-black text-[9px] px-3 py-1 rounded-lg flex flex-col items-center select-none shadow-[4px_4px_0px_rgba(239,68,68,0.25),_inset_0_0_10px_rgba(239,68,68,0.15)] whitespace-nowrap pointer-events-none"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-slate-900 border-2 border-indigo-500/40 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.15)] mb-3 max-w-md w-full text-left"
             >
-              <div className="flex items-center gap-1 font-extrabold text-[9px] tracking-widest leading-none">
-                <Sparkles className="w-2.5 h-2.5 text-red-400" />
-                ANÁLISE DETALHADA
+              <div className="bg-indigo-500/10 px-4 py-2.5 border-b border-indigo-500/20 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <h3 className="font-heading font-bold text-xs sm:text-sm text-indigo-100 tracking-wide uppercase">Análise Aprofundada Detalhada</h3>
               </div>
-              <div className="text-[8px] text-red-400/90 font-medium normal-case tracking-normal mt-0.5">
-                Por: <strong className="font-semibold text-white">{upcoming.find(f => f.fixture_id === String(fixtureId))?.deep_analyst}</strong>
+              <div className="p-4 text-xs sm:text-sm text-indigo-200/90 leading-relaxed text-justify">
+                Essa partida contém uma Análise Aprofundada Detalhada, feita por <strong className="text-indigo-300 font-semibold">{analystName}</strong>. Gere a análise para conferir!
               </div>
             </motion.div>
-          )}
+          );
+        })()}
 
-          <motion.button
-            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={handleGenerate}
-            // Não bloqueia por saldo: o backend decide a prioridade real de consumo
-            // (crédito diário grátis → conta demo → promo_balance → available_balance —
-            // ver analysis/service.py::create_analysis) e o front não tem como prever se o
-            // grátis diário já foi usado hoje. Se realmente não houver crédito, o erro 402
-            // aparece abaixo com o link "Comprar créditos" (não trava o clique à toa).
-            disabled={!canGenerate || loading}
-            className="px-8 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
-          >
+        <motion.button
+          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          onClick={handleGenerate}
+          // Não bloqueia por saldo: o backend decide a prioridade real de consumo
+          // (crédito diário grátis → conta demo → promo_balance → available_balance —
+          // ver analysis/service.py::create_analysis) e o front não tem como prever se o
+          // grátis diário já foi usado hoje. Se realmente não houver crédito, o erro 402
+          // aparece abaixo com o link "Comprar créditos" (não trava o clique à toa).
+          disabled={!canGenerate || loading}
+          className="px-8 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 cursor-pointer"
+        >
           {loading
             ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processando...</span>
             : (
@@ -791,7 +808,6 @@ export default function Previsoes() {
               </span>
             )}
         </motion.button>
-        </div>
         {user && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Coins className="w-3.5 h-3.5 text-emerald-500" />

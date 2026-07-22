@@ -19,7 +19,14 @@ type RecentH2H = { date: string; home_team: string; away_team: string; home_scor
 export default function H2HCard({ h2hData, home, away, teamIds }: {
   h2hData: any; home: string; away: string; teamIds: Record<string, number>;
 }) {
-  if (!h2hData || (h2hData.h2h_played ?? 0) === 0) return null;
+  if (!h2hData || (h2hData.h2h_played ?? 0) === 0) {
+    return (
+      <div className="bg-card border border-border/50 rounded-xl p-5 shadow-sm w-full h-full flex flex-col items-center justify-center text-center">
+        <h3 className="text-sm font-bold uppercase mb-2">Resumo do Confronto Direto</h3>
+        <p className="text-sm text-muted-foreground italic">Não há confrontos diretos entre estas equipes em nossa base de dados</p>
+      </div>
+    );
+  }
   const played: number = h2hData.h2h_played;
   const hw: number = h2hData.home_wins ?? 0;
   const dr: number = h2hData.draws ?? 0;
@@ -32,13 +39,8 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
 
   const AVG_ROWS: [string, string][] = [["Gols", "goals"], ["Chutes", "shots"], ["Chutes a gol", "shots_on_target"], ["Escanteios", "corners"], ["Cartões", "cards"]];
 
-  // Métricas-resumo (chips) — Gols/jogo, Ambas marcam e Média de gols sempre na mesma linha.
+  // Métricas-resumo (chips) — Ambas marcam e Média de gols reorganizados.
   const chips: { label: string; value: string }[] = [
-    {
-      label: "Gols/jogo (M–V)",
-      value: h2hData.home_avgs?.goals != null && h2hData.away_avgs?.goals != null
-        ? `${h2hData.home_avgs.goals}–${h2hData.away_avgs.goals}` : "—",
-    },
     { label: "Ambas marcam", value: `${pct(bttsCount)}%` },
     { label: "Média de gols", value: `${h2hData.avg_total_goals ?? "—"}` },
   ];
@@ -84,8 +86,8 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
         <div style={{ width: `${pct(aw)}%` }} className="bg-cyan-500" title={`${teamPt(away)} ${pct(aw)}%`} />
       </div>
 
-      {/* chips de métricas do confronto — sempre na mesma linha */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      {/* chips de métricas do confronto — 2 balões reorganizados */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
         {chips.map((c) => (
           <div key={c.label} className="rounded-lg bg-muted/50 border border-border/40 px-2 py-1.5 text-center">
             <p className="text-[9px] uppercase tracking-wide text-muted-foreground leading-tight">{c.label}</p>

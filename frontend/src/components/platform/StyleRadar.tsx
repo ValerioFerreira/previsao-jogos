@@ -84,15 +84,15 @@ export default function StyleRadar({ home, away, homeMatches, awayMatches, targe
   const data = Object.keys(ph).map((k) => ({ metric: k, [home]: Math.round((ph as any)[k]), [away]: Math.round((pa as any)[k]) }));
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex flex-col justify-between">
-      <div>
+      <div className="flex flex-col flex-1">
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
           Radar de Estilo
           <InfoTooltip text="Perfil comparativo (0–100) das duas equipes nos jogos recentes. Passe o mouse sobre cada vértice para ver o que o indicador mede. Quanto mais para fora, mais forte naquele quesito." />
         </h3>
-        <p className="text-xs text-muted-foreground mb-1">Passe o mouse nos vértices para detalhes</p>
-        <div className="flex-1 min-h-[260px] relative">
+        <p className="text-xs text-muted-foreground mb-2">Passe o mouse nos vértices para detalhes</p>
+        <div className="w-full h-[280px] relative">
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={data} outerRadius="50%" margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+            <RadarChart data={data} outerRadius="68%" margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
               <PolarGrid stroke="hsl(var(--border))" opacity={0.5} />
               <PolarAngleAxis dataKey="metric" tick={<AngleTick />} />
               <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }} angle={90} />

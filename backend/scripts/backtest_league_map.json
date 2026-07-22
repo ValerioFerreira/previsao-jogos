@@ -1,0 +1,62 @@
+{
+  "_comment": "Mapa de configuracao do modulo de backtest local (data-test). Adicionar uma liga/temporada nova = editar este JSON, nao o codigo (ver Etapa 9 do plano).",
+  "csv_div": {
+    "B1":  {"country": "Belgium",     "tournament": "Jupiler Pro League", "covered": true},
+    "D1":  {"country": "Germany",     "tournament": "Bundesliga",         "covered": true},
+    "D2":  {"country": "Germany",     "tournament": "2. Bundesliga",      "covered": true},
+    "E0":  {"country": "England",     "tournament": "Premier League",     "covered": true},
+    "E1":  {"country": "England",     "tournament": "Championship",       "covered": true},
+    "E2":  {"country": "England",     "tournament": "League One",         "covered": false},
+    "E3":  {"country": "England",     "tournament": "League Two",         "covered": false},
+    "EC":  {"country": "England",     "tournament": "National League",    "covered": false},
+    "F1":  {"country": "France",      "tournament": "Ligue 1",            "covered": true},
+    "F2":  {"country": "France",      "tournament": "Ligue 2",            "covered": true},
+    "G1":  {"country": "Greece",      "tournament": "Super League 1",     "covered": true},
+    "I1":  {"country": "Italy",       "tournament": "Serie A Italia",     "covered": true},
+    "I2":  {"country": "Italy",       "tournament": "Serie B",            "covered": true},
+    "N1":  {"country": "Netherlands", "tournament": "Eredivisie",         "covered": true},
+    "P1":  {"country": "Portugal",    "tournament": "Primeira Liga",      "covered": true},
+    "SC0": {"country": "Scotland",    "tournament": "Premiership",        "covered": true},
+    "SC1": {"country": "Scotland",    "tournament": "Championship",       "covered": false},
+    "SC2": {"country": "Scotland",    "tournament": "League One",         "covered": false},
+    "SC3": {"country": "Scotland",    "tournament": "League Two",         "covered": false},
+    "SP1": {"country": "Spain",       "tournament": "La Liga",            "covered": true},
+    "SP2": {"country": "Spain",       "tournament": "Segunda División", "covered": true},
+    "T1":  {"country": "Turkey",      "tournament": "Süper Lig",     "covered": true}
+  },
+  "xlsx_sheet": {
+    "ARG": {"country": "Argentina",   "covered": true},
+    "AUT": {"country": "Austria",     "covered": false},
+    "BRA": {"country": "Brazil",      "covered": true},
+    "CHN": {"country": "China",       "covered": true},
+    "DNK": {"country": "Denmark",     "covered": true},
+    "FIN": {"country": "Finland",     "covered": true},
+    "IRL": {"country": "Ireland",     "covered": false},
+    "JPN": {"country": "Japan",       "covered": true},
+    "MEX": {"country": "Mexico",      "covered": true},
+    "NOR": {"country": "Norway",      "covered": true},
+    "POL": {"country": "Poland",      "covered": false},
+    "ROU": {"country": "Romania",     "covered": false},
+    "RUS": {"country": "Russia",      "covered": true},
+    "SWE": {"country": "Sweden",      "covered": true},
+    "SWZ": {"country": "Switzerland", "covered": true},
+    "USA": {"country": "USA",         "covered": true}
+  },
+  "tournament_aliases": {
+    "Argentina": {"Liga Profesional": "Liga Profesional Argentina"},
+    "Brazil": {"Serie A": "Brasileirao Serie A"},
+    "USA": {"MLS": "Major League Soccer"}
+  },
+  "team_aliases": {
+    "_comment": "Casos ja confirmados por comparacao direta (football-data.co.uk usa nomes abreviados). Extensivel; o fallback fuzzy + log cobre o resto. 'Paris SG' foi um FALSO POSITIVO do fuzzy (ratio de string favorecia 'Paris FC', time errado) -- pego por revisao manual do log, corrigido aqui explicitamente.",
+    "Man City": "Manchester City",
+    "Man United": "Manchester United",
+    "Nott'm Forest": "Nottingham Forest",
+    "Spurs": "Tottenham",
+    "Paris SG": "Paris Saint Germain",
+    "Sp Lisbon": "Sporting CP",
+    "M'gladbach": "Borussia Monchengladbach",
+    "Hearts": "Heart Of Midlothian"
+  },
+  "_aviso_china": "Times da China mudam de nome/dono com frequencia (ex.: Shanghai Port = Shanghai SIPG renomeado, confirmado). 'Qingdao Hainiu'->'Qingdao Huanghai' e 'Dalian Yingbo'->'Dalian Zhixing' sao aceitos pelo fuzzy mas nao foram confirmados manualmente -- ver backtest_team_matching.log antes de confiar nos números dessa liga especificamente."
+}
