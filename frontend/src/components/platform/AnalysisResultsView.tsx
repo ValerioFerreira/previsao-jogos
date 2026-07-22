@@ -108,8 +108,8 @@ export function PlacarExatoCard({ data, home, away, teamIds }: {
   const isAlert = alerta && alerta.nivel !== 'normal';
   const alertStyles =
     alerta?.nivel === 'alto' ? 'bg-amber-500/10 border-amber-500/30'
-    : alerta?.nivel === 'moderado' ? 'bg-amber-500/5 border-amber-500/20'
-    : 'bg-muted/30 border-border/30';
+    : 'bg-amber-500/5 border-amber-500/20';
+
   // Texto do motivo em PT-BR: o lado favorito vira o nome traduzido (teamPt).
   const motivoTexto = (m: PlacarMotivo): string => {
     if (m.tipo === 'favoritismo') {
@@ -118,6 +118,7 @@ export function PlacarExatoCard({ data, home, away, teamIds }: {
     }
     return `Placar alto projetado: ${m.exp_total} gols esperados, P(4+ gols) = ${m.prob_4_mais}%.`;
   };
+
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5">
       <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
@@ -125,7 +126,7 @@ export function PlacarExatoCard({ data, home, away, teamIds }: {
         Placar Exato
         <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols do modelo (Dixon-Coles). A faixa de odd justa usa 7% de margem até 1/probabilidade." href="/como-funciona#mercado-placar" />
       </h4>
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className={`grid grid-cols-3 gap-2 ${isAlert ? 'mb-4' : ''}`}>
         {data.top.map((s, i) => (
           <div key={i} className={`text-center rounded-lg p-2 border ${i === 0 ? 'bg-purple-500/10 border-purple-500/30' : 'bg-muted/30 border-border/30'}`}>
             <div className="flex items-center justify-center gap-1.5 mb-0.5">
@@ -142,12 +143,12 @@ export function PlacarExatoCard({ data, home, away, teamIds }: {
           </div>
         ))}
       </div>
-      <div className={`rounded-lg p-3 border ${alertStyles}`}>
-        <p className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
-          <AlertTriangle className={`w-3.5 h-3.5 ${isAlert ? 'text-amber-400' : 'text-muted-foreground'}`} />
-          {isAlert ? `Alerta de desvio: potencial ${alerta.nivel}` : 'Padrão de placar normal'}
-        </p>
-        {isAlert ? (
+      {isAlert && (
+        <div className={`rounded-lg p-3 border ${alertStyles}`}>
+          <p className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            Alerta de desvio: potencial {alerta.nivel}
+          </p>
           <ul className="space-y-1">
             {alerta.motivos.map((m, i) => (
               <li key={i} className="text-xs text-amber-500/80 flex items-start gap-1.5">
@@ -155,12 +156,8 @@ export function PlacarExatoCard({ data, home, away, teamIds }: {
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="text-xs text-muted-foreground italic">
-            Gols esperados equilibrados ({alerta.exp_mandante} x {alerta.exp_visitante}); sem indícios de placar fora do padrão.
-          </p>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
