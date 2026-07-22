@@ -105,7 +105,16 @@ function fmtDateTime(iso: string): string {
 }
 
 function todayISO(): string {
-  const d = new Date();
+  return toLocalDateStr(new Date());
+}
+
+// `f.date` vem em ISO UTC (ex. "2026-07-23T00:30:00+00:00") -- um jogo às 21:30 no
+// Brasil (UTC-3) já virou "amanhã" em UTC. Comparar via `.slice(0,10)` (data crua UTC)
+// contra o filtro de data LOCAL do usuário some com jogos de hoje à noite (ex. Brasileirão
+// 21:30) da aba "Hoje", jogando-os pra "Amanhã" -- por isso a conversão pro fuso local
+// abaixo, nunca slice direto na string ISO.
+function toLocalDateStr(d: Date): string {
+  if (isNaN(d.getTime())) return '';
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
@@ -162,7 +171,7 @@ export function MatchPickerModal({
   );
 
   const dateFiltered = useMemo(
-    () => scopedFixtures.filter(f => !dateFilter || (f.date || '').slice(0, 10) === dateFilter),
+    () => scopedFixtures.filter(f => !dateFilter || (f.date && toLocalDateStr(new Date(f.date)) === dateFilter)),
     [scopedFixtures, dateFilter]
   );
 
