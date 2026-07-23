@@ -183,6 +183,83 @@ export function MatchReliabilityBadge({ confiabilidade }: { confiabilidade: Pred
 // reutilizado pela página autenticada (app/page.tsx) e pela página pública de compartilhamento
 // (app/compartilhado/[token]/page.tsx). Deliberadamente NÃO inclui "Monte sua Seleção"
 // (BetBuilder) -- depende de analysisId/carteira, fora de escopo de uma visão pública/somente-leitura.
+function DeepAnalysisCard({ deepAnalysis }: { deepAnalysis: { analyst_name: string; markdown_content: string } }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-slate-900 border-2 border-indigo-500/40 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.15)]"
+    >
+      <div className="bg-indigo-500/10 px-5 py-3.5 border-b border-indigo-500/20 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-heading font-bold text-base sm:text-lg text-indigo-100 tracking-wide uppercase leading-snug">
+              Análise Aprofundada Detalhada
+            </h3>
+            <span className="text-xs text-indigo-300/80 italic block">
+              Por <strong className="text-indigo-200">{deepAnalysis.analyst_name}</strong>
+            </span>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setOpen((prev) => !prev)}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600/90 hover:bg-indigo-500 text-white shadow-md shadow-indigo-950/50 transition-all cursor-pointer border border-indigo-400/40 hover:scale-[1.02] active:scale-[0.98] shrink-0"
+        >
+          <span>{open ? "Recolher análise" : "Ler análise completa"}</span>
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="p-5 sm:p-6 prose prose-sm dark:prose-invert max-w-none text-slate-300 text-justify leading-relaxed border-b border-white/5">
+              <ReactMarkdown>{deepAnalysis.markdown_content}</ReactMarkdown>
+            </div>
+            <div className="bg-black/20 px-5 py-3 text-right flex justify-between items-center text-xs text-muted-foreground border-t border-white/5">
+              <span className="italic">
+                Análise por <strong className="text-indigo-300">{deepAnalysis.analyst_name}</strong>
+              </span>
+              <button
+                onClick={() => setOpen(false)}
+                className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors cursor-pointer"
+              >
+                Recolher ↑
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!open && (
+        <div
+          onClick={() => setOpen(true)}
+          className="px-5 py-3 bg-indigo-950/30 hover:bg-indigo-950/50 transition-colors cursor-pointer flex items-center justify-between text-xs text-indigo-200/90 border-t border-indigo-500/10 select-none"
+        >
+          <span className="truncate pr-2">
+            Esta partida contém uma análise aprofundada, feita por <strong className="text-indigo-300">{deepAnalysis.analyst_name}</strong>.
+          </span>
+          <span className="text-indigo-400 font-semibold underline shrink-0 flex items-center gap-1">
+            Ler análise completa <ChevronDown className="w-3.5 h-3.5" />
+          </span>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }: {
   prediction: PredictionResponse;
   home: string;
@@ -201,20 +278,9 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }
         </div>
       )}
 
-      {/* ANÁLISE APROFUNDADA (Opcional) */}
+      {/* ANÁLISE APROFUNDADA (Opcional - Retraída por padrão em Desktop e Mobile) */}
       {prediction.deep_analysis && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-slate-900 border-2 border-indigo-500/40 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.15)]">
-          <div className="bg-indigo-500/10 px-5 py-3 border-b border-indigo-500/20 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-indigo-400" />
-            <h3 className="font-heading font-bold text-lg text-indigo-100 tracking-wide uppercase">Análise Aprofundada Detalhada</h3>
-          </div>
-          <div className="p-5 prose prose-sm dark:prose-invert max-w-none text-slate-300 text-justify">
-            <ReactMarkdown>{(prediction.deep_analysis as any).markdown_content}</ReactMarkdown>
-          </div>
-          <div className="bg-black/20 px-5 py-2.5 text-right border-t border-white/5">
-            <span className="text-xs text-muted-foreground italic">Análise por <strong className="text-indigo-300">{(prediction.deep_analysis as any).analyst_name}</strong></span>
-          </div>
-        </motion.div>
+        <DeepAnalysisCard deepAnalysis={prediction.deep_analysis} />
       )}
 
       {/* MERCADOS PRINCIPAIS — Resultados | Ambas Marcam / Dupla Chance / Placar Exato / Handicaps */}
