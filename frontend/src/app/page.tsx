@@ -211,8 +211,10 @@ export default function Previsoes() {
   const { user, wallet, refreshWallet } = useAuth();
 
   const [loading, setLoading] = useState(false);
-  // projection é derivada da análise persistida no contexto (persiste ao navegar e voltar).
-  const projection = analysis ? (analysis.snapshot as unknown as PredictionResponse) : null;
+  // projection é derivada da análise persistida no contexto — só ativa se os times baterem com a seleção atual
+  const projection = (analysis && analysis.home_team === homeTeamId && analysis.away_team === awayTeamId)
+    ? (analysis.snapshot as unknown as PredictionResponse)
+    : null;
   const setProjection = (_: PredictionResponse | null) => { if (_ === null) setAnalysis(null); };
   const [errMsg, setErrMsg] = useState<string | null>(null);
   // available + promo: ambos são gastáveis em análise (ver analysis/service.py::create_analysis).
@@ -336,6 +338,9 @@ export default function Previsoes() {
     setScope(s);
     setHomeTeamId('');
     setAwayTeamId('');
+    setFixtureId(null);
+    setAnalysis(null);
+    setDeepAnalysisInfo(null);
     setProjection(null);
   };
 
@@ -470,7 +475,22 @@ export default function Previsoes() {
         }} />
       )}
       {homeTeamId && awayTeamId && (
-        <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} date={matchDate} referee={referee} neutral={neutralField} onEditTeams={() => setEditingTeams(true)} />
+        <MatchHeader
+          home={homeTeamId}
+          away={awayTeamId}
+          teamIds={teamIds}
+          competition={competition}
+          date={matchDate}
+          referee={referee}
+          neutral={neutralField}
+          onEditTeams={() => {
+            setEditingTeams(true);
+            setAnalysis(null);
+            setFixtureId(null);
+            setDeepAnalysisInfo(null);
+            setProjection(null);
+          }}
+        />
       )}
       {(canGenerate && !editingTeams) ? null : (
       <motion.div
@@ -497,7 +517,14 @@ export default function Previsoes() {
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'futura' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Selecionar Partida Agendada</button>
           <button
-            onClick={() => { setMode('independente'); setMatchDate(undefined); }}
+            onClick={() => {
+              setMode('independente');
+              setMatchDate(undefined);
+              setFixtureId(null);
+              setAnalysis(null);
+              setDeepAnalysisInfo(null);
+              setProjection(null);
+            }}
             className={`px-3 py-1.5 rounded-md transition-colors ${mode === 'independente' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >Análise Independente</button>
           <InfoTooltip
@@ -539,12 +566,12 @@ export default function Previsoes() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">Time Mandante</Label>
-              <TeamSelect value={homeTeamId} onValueChange={v => { setHomeTeamId(v); setProjection(null); }} teams={teams.filter(t => t !== awayTeamId)}
+              <TeamSelect value={homeTeamId} onValueChange={v => { setHomeTeamId(v); setFixtureId(null); setAnalysis(null); setDeepAnalysisInfo(null); setProjection(null); }} teams={teams.filter(t => t !== awayTeamId)}
                 placeholder={scope === 'clube' ? 'Buscar clube...' : undefined} searchPlaceholder={scope === 'clube' ? 'Buscar clube...' : undefined} />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">Time Visitante</Label>
-              <TeamSelect value={awayTeamId} onValueChange={v => { setAwayTeamId(v); setProjection(null); }} teams={teams.filter(t => t !== homeTeamId)}
+              <TeamSelect value={awayTeamId} onValueChange={v => { setAwayTeamId(v); setFixtureId(null); setAnalysis(null); setDeepAnalysisInfo(null); setProjection(null); }} teams={teams.filter(t => t !== homeTeamId)}
                 placeholder={scope === 'clube' ? 'Buscar clube...' : undefined} searchPlaceholder={scope === 'clube' ? 'Buscar clube...' : undefined} />
             </div>
             <div>
