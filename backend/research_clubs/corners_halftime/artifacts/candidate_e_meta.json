@@ -1,0 +1,268 @@
+{
+  "k_grid": [
+    0,
+    1,
+    5,
+    10,
+    25,
+    50,
+    100,
+    200,
+    400,
+    800,
+    1500,
+    3000,
+    6000,
+    12000,
+    25000,
+    50000
+  ],
+  "k_star": 6000.0,
+  "grid_results": [
+    {
+      "k": 0,
+      "mean_logloss": 1.9163465157093327,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 9.771611485995591e-05,
+      "frac_folds_better": 0.51
+    },
+    {
+      "k": 1,
+      "mean_logloss": 1.9163463582247158,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 9.755863024346612e-05,
+      "frac_folds_better": 0.51
+    },
+    {
+      "k": 5,
+      "mean_logloss": 1.9163457300909723,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 9.69304964998785e-05,
+      "frac_folds_better": 0.51
+    },
+    {
+      "k": 10,
+      "mean_logloss": 1.9163449489657385,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 9.614937126559476e-05,
+      "frac_folds_better": 0.51
+    },
+    {
+      "k": 25,
+      "mean_logloss": 1.9163426322405614,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 9.38326460888983e-05,
+      "frac_folds_better": 0.52
+    },
+    {
+      "k": 50,
+      "mean_logloss": 1.9163388580557088,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 9.005846123630646e-05,
+      "frac_folds_better": 0.52
+    },
+    {
+      "k": 100,
+      "mean_logloss": 1.9163316229619216,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 8.282336744873887e-05,
+      "frac_folds_better": 0.52
+    },
+    {
+      "k": 200,
+      "mean_logloss": 1.9163183118032618,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 6.95122087888822e-05,
+      "frac_folds_better": 0.52
+    },
+    {
+      "k": 400,
+      "mean_logloss": 1.9162956758291505,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 4.687623467762636e-05,
+      "frac_folds_better": 0.57
+    },
+    {
+      "k": 800,
+      "mean_logloss": 1.9162624059175877,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 1.3606323114705442e-05,
+      "frac_folds_better": 0.58
+    },
+    {
+      "k": 1500,
+      "mean_logloss": 1.916227993873975,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -2.08057204977119e-05,
+      "frac_folds_better": 0.61
+    },
+    {
+      "k": 3000,
+      "mean_logloss": 1.9161993674356537,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -4.943215881895613e-05,
+      "frac_folds_better": 0.66
+    },
+    {
+      "k": 6000,
+      "mean_logloss": 1.916192504236521,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -5.6295357951354764e-05,
+      "frac_folds_better": 0.71
+    },
+    {
+      "k": 12000,
+      "mean_logloss": 1.9162034525352791,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -4.534705919363891e-05,
+      "frac_folds_better": 0.73
+    },
+    {
+      "k": 25000,
+      "mean_logloss": 1.9162200805105576,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -2.8719083915593747e-05,
+      "frac_folds_better": 0.74
+    },
+    {
+      "k": 50000,
+      "mean_logloss": 1.916232333791221,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -1.6465803251857202e-05,
+      "frac_folds_better": 0.74
+    }
+  ],
+  "sensitivity_table_around_k_star": [
+    {
+      "k": 800,
+      "mean_logloss": 1.9162624059175877,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": 1.3606323114705442e-05,
+      "frac_folds_better": 0.58
+    },
+    {
+      "k": 1500,
+      "mean_logloss": 1.916227993873975,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -2.08057204977119e-05,
+      "frac_folds_better": 0.61
+    },
+    {
+      "k": 3000,
+      "mean_logloss": 1.9161993674356537,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -4.943215881895613e-05,
+      "frac_folds_better": 0.66
+    },
+    {
+      "k": 6000,
+      "mean_logloss": 1.916192504236521,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -5.6295357951354764e-05,
+      "frac_folds_better": 0.71
+    },
+    {
+      "k": 12000,
+      "mean_logloss": 1.9162034525352791,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -4.534705919363891e-05,
+      "frac_folds_better": 0.73
+    },
+    {
+      "k": 25000,
+      "mean_logloss": 1.9162200805105576,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -2.8719083915593747e-05,
+      "frac_folds_better": 0.74
+    },
+    {
+      "k": 50000,
+      "mean_logloss": 1.916232333791221,
+      "baseline_mean_logloss": 1.9162487995944728,
+      "delta_vs_baseline": -1.6465803251857202e-05,
+      "frac_folds_better": 0.74
+    }
+  ],
+  "tournament_fracs_whole_dataset_context": {
+    "La Liga": 0.5321530851340797,
+    "Ligue 1": 0.524,
+    "Premier League": 0.5439238653001464,
+    "Serie A Italia": 0.5204366590505204
+  },
+  "tournament_n_escanteios_whole_dataset": {
+    "La Liga": 3841.0,
+    "Ligue 1": 3500.0,
+    "Premier League": 4098.0,
+    "Serie A Italia": 3939.0
+  },
+  "global_frac_whole_dataset": 0.5304330862270776,
+  "tournament_fracs_final_shrunk": {
+    "La Liga": 0.5311044118852216,
+    "Ligue 1": 0.528063001827628,
+    "Premier League": 0.5359079537891133,
+    "Serie A Italia": 0.526471326829909
+  },
+  "global_frac_final": 0.5304330862270776,
+  "fallback_tournaments": [
+    "Champions League",
+    "Bundesliga"
+  ],
+  "leave_one_tournament_out": [
+    {
+      "held_out_tournament": "La Liga",
+      "n_test": 380,
+      "pmf_logloss_candidate": 1.9124520399900844,
+      "pmf_logloss_baseline": 1.9124520399900844,
+      "diff": 0.0
+    },
+    {
+      "held_out_tournament": "Ligue 1",
+      "n_test": 377,
+      "pmf_logloss_candidate": 1.8835273388538778,
+      "pmf_logloss_baseline": 1.8835273388538778,
+      "diff": 0.0
+    },
+    {
+      "held_out_tournament": "Premier League",
+      "n_test": 379,
+      "pmf_logloss_candidate": 1.9555208352280788,
+      "pmf_logloss_baseline": 1.9555208352280788,
+      "diff": 0.0
+    },
+    {
+      "held_out_tournament": "Serie A Italia",
+      "n_test": 380,
+      "pmf_logloss_candidate": 1.9136557522003266,
+      "pmf_logloss_baseline": 1.9136557522003266,
+      "diff": 0.0
+    }
+  ],
+  "loto_max_abs_diff_candidate_vs_baseline": 0.0,
+  "bootstrap_delta_ci": {
+    "mean_delta": -6.959321655054137e-05,
+    "ci_lo": -0.0002661102952134456,
+    "ci_hi": 0.00011726730982855298,
+    "crosses_zero": true,
+    "frac_seeds_candidate_better": 0.756
+  },
+  "criteria": {
+    "a_bootstrap_ci_excludes_zero_favorable": false,
+    "b_improves_in_ge_60pct_folds_seeds": true,
+    "b_frac_folds_better": 0.71,
+    "c_gain_survives_more_shrinkage": true
+  },
+  "veredito_heterogeneidade_real": false,
+  "veredito": "SEM HETEROGENEIDADE DEFENSAVEL (candidato E nao bate o baseline global sob o criterio pre-registrado)",
+  "n_fixtures_predicted": 48580,
+  "target_tournaments": [
+    "La Liga",
+    "Champions League",
+    "Bundesliga",
+    "Ligue 1",
+    "Premier League",
+    "Serie A Italia"
+  ],
+  "frac2t_mean": 0.5319442726962478,
+  "frac2t_min": 0.526471326829909,
+  "frac2t_max": 0.5359079537891133
+}

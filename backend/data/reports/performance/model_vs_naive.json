@@ -1,0 +1,247 @@
+{
+  "stake": 1.0,
+  "fonte": "backtest out-of-sample 2025 (odds reais abertura/fechamento)",
+  "aviso": "ROI reflete o resultado real contra o vig; nao ha promessa de lucro. A leitura correta e RELATIVA: o modelo perde menos/decide melhor que as apostas ingenuas.",
+  "ligas": {
+    "Brasileirao Serie A": {
+      "n_jogos": 306,
+      "estrategias": {
+        "modelo_1x2": {
+          "n": 306,
+          "hit_rate": 52.3,
+          "roi_pct": 1.97
+        },
+        "sempre_favorito": {
+          "n": 306,
+          "hit_rate": 51.6,
+          "roi_pct": -3.66
+        },
+        "sempre_azarao": {
+          "n": 306,
+          "hit_rate": 19.6,
+          "roi_pct": -22.94
+        },
+        "sempre_mandante": {
+          "n": 306,
+          "hit_rate": 49.0,
+          "roi_pct": 0.2
+        },
+        "sempre_empate": {
+          "n": 306,
+          "hit_rate": 28.4,
+          "roi_pct": -3.94
+        },
+        "modelo_over_under": {
+          "n": 0,
+          "hit_rate": null,
+          "roi_pct": null
+        },
+        "sempre_over_2_5": {
+          "n": 0,
+          "hit_rate": null,
+          "roi_pct": null
+        }
+      }
+    },
+    "Premier League": {
+      "n_jogos": 446,
+      "estrategias": {
+        "modelo_1x2": {
+          "n": 420,
+          "hit_rate": 49.5,
+          "roi_pct": -8.93
+        },
+        "sempre_favorito": {
+          "n": 420,
+          "hit_rate": 50.5,
+          "roi_pct": -7.78
+        },
+        "sempre_azarao": {
+          "n": 420,
+          "hit_rate": 21.7,
+          "roi_pct": -10.2
+        },
+        "sempre_mandante": {
+          "n": 420,
+          "hit_rate": 43.3,
+          "roi_pct": -7.53
+        },
+        "sempre_empate": {
+          "n": 420,
+          "hit_rate": 26.9,
+          "roi_pct": 2.79
+        },
+        "modelo_over_under": {
+          "n": 380,
+          "hit_rate": 51.3,
+          "roi_pct": -11.42
+        },
+        "sempre_over_2_5": {
+          "n": 380,
+          "hit_rate": 55.0,
+          "roi_pct": -4.24
+        }
+      }
+    },
+    "La Liga": {
+      "n_jogos": 342,
+      "estrategias": {
+        "modelo_1x2": {
+          "n": 342,
+          "hit_rate": 52.0,
+          "roi_pct": -2.7
+        },
+        "sempre_favorito": {
+          "n": 342,
+          "hit_rate": 54.4,
+          "roi_pct": 1.03
+        },
+        "sempre_azarao": {
+          "n": 342,
+          "hit_rate": 21.1,
+          "roi_pct": -14.75
+        },
+        "sempre_mandante": {
+          "n": 342,
+          "hit_rate": 48.2,
+          "roi_pct": 0.19
+        },
+        "sempre_empate": {
+          "n": 342,
+          "hit_rate": 25.4,
+          "roi_pct": -12.11
+        },
+        "modelo_over_under": {
+          "n": 342,
+          "hit_rate": 57.3,
+          "roi_pct": -4.33
+        },
+        "sempre_over_2_5": {
+          "n": 342,
+          "hit_rate": 50.3,
+          "roi_pct": -4.74
+        }
+      }
+    },
+    "Serie A Italia": {
+      "n_jogos": 380,
+      "estrategias": {
+        "modelo_1x2": {
+          "n": 380,
+          "hit_rate": 52.9,
+          "roi_pct": -2.4
+        },
+        "sempre_favorito": {
+          "n": 380,
+          "hit_rate": 53.9,
+          "roi_pct": -1.19
+        },
+        "sempre_azarao": {
+          "n": 380,
+          "hit_rate": 19.7,
+          "roi_pct": -12.06
+        },
+        "sempre_mandante": {
+          "n": 380,
+          "hit_rate": 38.9,
+          "roi_pct": -14.37
+        },
+        "sempre_empate": {
+          "n": 380,
+          "hit_rate": 26.1,
+          "roi_pct": -8.32
+        },
+        "modelo_over_under": {
+          "n": 380,
+          "hit_rate": 50.8,
+          "roi_pct": -11.79
+        },
+        "sempre_over_2_5": {
+          "n": 380,
+          "hit_rate": 45.8,
+          "roi_pct": -3.93
+        }
+      }
+    },
+    "Geral (ligas-alvo)": {
+      "n_jogos": 1474,
+      "estrategias": {
+        "modelo_1x2": {
+          "n": 1448,
+          "hit_rate": 51.6,
+          "roi_pct": -3.44
+        },
+        "sempre_favorito": {
+          "n": 1448,
+          "hit_rate": 52.6,
+          "roi_pct": -3.1
+        },
+        "sempre_azarao": {
+          "n": 1448,
+          "hit_rate": 20.6,
+          "roi_pct": -14.45
+        },
+        "sempre_mandante": {
+          "n": 1448,
+          "hit_rate": 44.5,
+          "roi_pct": -5.87
+        },
+        "sempre_empate": {
+          "n": 1448,
+          "hit_rate": 26.7,
+          "roi_pct": -5.07
+        },
+        "modelo_over_under": {
+          "n": 1102,
+          "hit_rate": 53.0,
+          "roi_pct": -9.35
+        },
+        "sempre_over_2_5": {
+          "n": 1102,
+          "hit_rate": 50.4,
+          "roi_pct": -4.29
+        }
+      }
+    },
+    "Todas as ligas (26)": {
+      "n_jogos": 8117,
+      "estrategias": {
+        "modelo_1x2": {
+          "n": 8090,
+          "hit_rate": 49.1,
+          "roi_pct": -6.39
+        },
+        "sempre_favorito": {
+          "n": 8091,
+          "hit_rate": 50.7,
+          "roi_pct": -4.96
+        },
+        "sempre_azarao": {
+          "n": 8091,
+          "hit_rate": 21.9,
+          "roi_pct": -13.03
+        },
+        "sempre_mandante": {
+          "n": 8090,
+          "hit_rate": 43.5,
+          "roi_pct": -8.52
+        },
+        "sempre_empate": {
+          "n": 8091,
+          "hit_rate": 26.4,
+          "roi_pct": -6.24
+        },
+        "modelo_over_under": {
+          "n": 4955,
+          "hit_rate": 54.9,
+          "roi_pct": -7.14
+        },
+        "sempre_over_2_5": {
+          "n": 4955,
+          "hit_rate": 52.2,
+          "roi_pct": -4.15
+        }
+      }
+    }
+  }
+}

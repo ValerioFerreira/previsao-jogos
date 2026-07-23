@@ -209,3 +209,27 @@ Achados de interesse pra próximas rodadas:
   de heurística por cidade-sede).
 - Bloqueados por falta de dado (não retestar sem coletar antes): lesões (zero cache de
   `/injuries` pra clube) e lotação de estádio (`attendance` não existe na api-football).
+
+## 7. Rodada 2026-07-23 — Escanteios por tempo (1T/2T): mercado NOVO, sem rótulo na API
+
+**Veredito: nenhum modelo condicional é defensável. A divisão 1T/2T de escanteio é ~constante
+(53% no 2º tempo); usar split fixo de 0.53 se o mercado for lançado.** Relatório completo com
+tabelas em `data/reports/corners_halftime/RESUMO.md`.
+
+- **Bloqueio de dado resolvido por fonte externa:** nem API-Football (produção) nem footballdata.io
+  têm escanteio por tempo (só total). Pivô pro **StatsBomb open data** (github.com/hudl/open-data,
+  eventos minuto-a-minuto). 2068 jogos linkados; subconjunto `clean` (sem viés "todos os jogos de 1
+  time" do StatsBomb) = **1516**. StatsBomb é só teste/rótulo — NUNCA estará em produção.
+- **Fração real 2T = 0.53** (não 0.55 da literatura). Correlação com Elo/GAP-escanteio ≈ 0 mesmo
+  contra o rótulo real. Sem diferença mandante/visitante (p=0.75).
+- **5 candidatos, todos empatam o baseline ingênuo:** A (GLM proxy gols/cartões), B (hazard/
+  literatura Swartz 2025), C (GBM proxy — **pior**, overfit ruído R²≈0), D (GLM supervisionado no
+  rótulo real, CV aninhada — 1/3 critérios: IC bootstrap cruza zero, inverte em Ligue1 no LOTO),
+  E (fração empírica por liga + shrinkage — spread entre ligas só 2.4pp, IC cruza zero).
+- **Único ganho honesto:** recalibrar o split fixo pro 0.53 empírico (bate 50/50 e o 0.55 de
+  literatura no log-loss). Aplicar via `binom_mixture_pmf` sobre o total já validado
+  (`corners_cascade_rfixo.joblib`). Nenhum modelo condicional merece a complexidade.
+- **Lição metodológica:** com N pequeno (~1500) e 1 temporada-calendário só, split temporal
+  clássico não serve — usar k-fold estratificado repetido + leave-one-tournament-out + IC bootstrap
+  do delta, com critério de promoção PRÉ-REGISTRADO (evita p-hacking de "tenta arquitetura até
+  bater"). Harness reusável em `research_clubs/corners_halftime/eval_halftime_smallN.py`.

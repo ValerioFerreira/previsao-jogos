@@ -32,16 +32,25 @@ MARKET_TO_GT_COL = {
 }
 
 CANDIDATES = {
-    "baseline_50_50": None,   # gerado sinteticamente abaixo, nao tem CSV
-    "baseline_lit_55": None,  # idem
+    "baseline_50_50": None,      # gerado sinteticamente abaixo, nao tem CSV
+    "baseline_lit_55": None,     # idem (prior de literatura)
+    "baseline_emp_53": None,     # idem (fracao empirica real ~0.53)
     "candidate_a": REPORTS_DIR / "candidate_a_predictions.csv",
     "candidate_b": REPORTS_DIR / "candidate_b_predictions.csv",
     "candidate_c": REPORTS_DIR / "candidate_c_predictions.csv",
+    "candidate_d": REPORTS_DIR / "candidate_d_predictions.csv",
+    "candidate_e": REPORTS_DIR / "candidate_e_predictions.csv",
 }
 
 
 def load_gt() -> pd.DataFrame:
-    gt = pd.read_parquet(GT_PATH)
+    """Usa o frame rotulado e filtra pro subconjunto 'clean' (sem vies de
+    'todos os jogos de 1 time' do StatsBomb) -- ver adhoc_corners_halftime_audit_gt.py."""
+    labeled = GT_PATH.parent / "corners_halftime_ground_truth_labeled.parquet"
+    src = labeled if labeled.exists() else GT_PATH
+    gt = pd.read_parquet(src)
+    if "sample_type" in gt.columns:
+        gt = gt[gt["sample_type"] == "clean"]
     return gt.set_index("fixture_id")
 
 
@@ -127,6 +136,7 @@ def main() -> None:
     any_df = next(iter(available.values()))
     available["baseline_50_50"] = build_baseline(any_df, frac_2t=0.50)
     available["baseline_lit_55"] = build_baseline(any_df, frac_2t=0.55)
+    available["baseline_emp_53"] = build_baseline(any_df, frac_2t=0.5304)
 
     all_scores = []
     for name, pred_df in available.items():

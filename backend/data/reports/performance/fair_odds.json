@@ -1,0 +1,160 @@
+{
+  "metodo": "Odd justa do modelo (1/p) vs odd justa do mercado (de-vig real das odds de fechamento). Vies = erro sistematico; precisao (MAE/RMSE em prob) = quao perto o modelo chega da odd justa; break-even uplift = margem embutida (quanto a odd precisa subir p/ chegar no justo); gap entre casas = melhor casa (Max) vs media (Avg) no lado recomendado.",
+  "nota_margem": "Overround empirico medido ~6-7% (backtest_margin_fit.md); usamos o de-vig real por jogo, nao um 6% fixo. 'Max' e a melhor de ~10 casas (estatistica de extremo).",
+  "nota_honestidade": "Vies ~0 confirma que o modelo nao bate o mercado — o valor esta em comparar casas (line-shopping), nao em apostar no fluxo. Sem promessa de lucro.",
+  "mercados": {
+    "Resultado (1X2)": {
+      "ligas": {
+        "Brasileirao Serie A": {
+          "n": 306,
+          "vies_prob_pp": 0.47,
+          "precisao_mae_pp": 6.21,
+          "precisao_rmse_pp": 8.2,
+          "breakeven_uplift_mediano_pct": 4.33,
+          "breakeven_uplift_medio_pct": 4.74,
+          "gap_melhor_casa_mediano_pct": 3.19,
+          "gap_cobertura_n": 306
+        },
+        "Premier League": {
+          "n": 420,
+          "vies_prob_pp": 1.16,
+          "precisao_mae_pp": 5.95,
+          "precisao_rmse_pp": 7.62,
+          "breakeven_uplift_mediano_pct": 3.7,
+          "breakeven_uplift_medio_pct": 3.89,
+          "gap_melhor_casa_mediano_pct": 2.64,
+          "gap_cobertura_n": 420
+        },
+        "La Liga": {
+          "n": 342,
+          "vies_prob_pp": 2.2,
+          "precisao_mae_pp": 5.36,
+          "precisao_rmse_pp": 6.93,
+          "breakeven_uplift_mediano_pct": 4.26,
+          "breakeven_uplift_medio_pct": 4.27,
+          "gap_melhor_casa_mediano_pct": 2.78,
+          "gap_cobertura_n": 342
+        },
+        "Serie A Italia": {
+          "n": 380,
+          "vies_prob_pp": 1.9,
+          "precisao_mae_pp": 6.23,
+          "precisao_rmse_pp": 7.72,
+          "breakeven_uplift_mediano_pct": 4.1,
+          "breakeven_uplift_medio_pct": 4.19,
+          "gap_melhor_casa_mediano_pct": 2.7,
+          "gap_cobertura_n": 380
+        },
+        "Geral (ligas-alvo)": {
+          "n": 1448,
+          "vies_prob_pp": 1.45,
+          "precisao_mae_pp": 5.94,
+          "precisao_rmse_pp": 7.62,
+          "breakeven_uplift_mediano_pct": 4.1,
+          "breakeven_uplift_medio_pct": 4.24,
+          "gap_melhor_casa_mediano_pct": 2.8,
+          "gap_cobertura_n": 1448
+        }
+      }
+    },
+    "Mais/Menos 2,5 gols": {
+      "ligas": {
+        "Premier League": {
+          "n": 380,
+          "vies_prob_pp": 1.09,
+          "precisao_mae_pp": 4.96,
+          "precisao_rmse_pp": 6.18,
+          "breakeven_uplift_mediano_pct": 5.38,
+          "breakeven_uplift_medio_pct": 5.55,
+          "gap_melhor_casa_mediano_pct": 3.03,
+          "gap_cobertura_n": 380
+        },
+        "La Liga": {
+          "n": 342,
+          "vies_prob_pp": -0.58,
+          "precisao_mae_pp": 6.08,
+          "precisao_rmse_pp": 7.67,
+          "breakeven_uplift_mediano_pct": 5.39,
+          "breakeven_uplift_medio_pct": 5.6,
+          "gap_melhor_casa_mediano_pct": 2.92,
+          "gap_cobertura_n": 342
+        },
+        "Serie A Italia": {
+          "n": 380,
+          "vies_prob_pp": 0.94,
+          "precisao_mae_pp": 5.81,
+          "precisao_rmse_pp": 7.19,
+          "breakeven_uplift_mediano_pct": 5.61,
+          "breakeven_uplift_medio_pct": 5.85,
+          "gap_melhor_casa_mediano_pct": 3.12,
+          "gap_cobertura_n": 380
+        },
+        "Geral (ligas-alvo)": {
+          "n": 1102,
+          "vies_prob_pp": 0.52,
+          "precisao_mae_pp": 5.6,
+          "precisao_rmse_pp": 7.02,
+          "breakeven_uplift_mediano_pct": 5.43,
+          "breakeven_uplift_medio_pct": 5.67,
+          "gap_melhor_casa_mediano_pct": 3.03,
+          "gap_cobertura_n": 1102
+        }
+      }
+    },
+    "Handicap asiático (linhas .5)": {
+      "nota": "Restrito as linhas .5 (onde o modelo produz prob direta). Odds reais de-vigadas 2-vias. Pool geral e por liga com >=40 jogos.",
+      "ligas": {
+        "Premier League": {
+          "n": 91,
+          "vies_prob_pp": 4.89,
+          "precisao_mae_pp": 5.04,
+          "precisao_rmse_pp": 6.2,
+          "breakeven_uplift_mediano_pct": 6.67,
+          "breakeven_uplift_medio_pct": 6.79,
+          "gap_melhor_casa_mediano_pct": 3.48,
+          "gap_cobertura_n": 91
+        },
+        "La Liga": {
+          "n": 78,
+          "vies_prob_pp": 4.62,
+          "precisao_mae_pp": 4.89,
+          "precisao_rmse_pp": 6.47,
+          "breakeven_uplift_mediano_pct": 6.97,
+          "breakeven_uplift_medio_pct": 6.9,
+          "gap_melhor_casa_mediano_pct": 3.96,
+          "gap_cobertura_n": 78
+        },
+        "Serie A Italia": {
+          "n": 82,
+          "vies_prob_pp": 5.14,
+          "precisao_mae_pp": 5.28,
+          "precisao_rmse_pp": 6.42,
+          "breakeven_uplift_mediano_pct": 6.75,
+          "breakeven_uplift_medio_pct": 6.76,
+          "gap_melhor_casa_mediano_pct": 3.51,
+          "gap_cobertura_n": 82
+        },
+        "Geral (ligas-alvo)": {
+          "n": 251,
+          "vies_prob_pp": 4.89,
+          "precisao_mae_pp": 5.07,
+          "precisao_rmse_pp": 6.35,
+          "breakeven_uplift_mediano_pct": 6.75,
+          "breakeven_uplift_medio_pct": 6.81,
+          "gap_melhor_casa_mediano_pct": 3.63,
+          "gap_cobertura_n": 251
+        },
+        "Todas as ligas": {
+          "n": 1234,
+          "vies_prob_pp": 4.92,
+          "precisao_mae_pp": 5.22,
+          "precisao_rmse_pp": 6.6,
+          "breakeven_uplift_mediano_pct": 7.55,
+          "breakeven_uplift_medio_pct": 7.43,
+          "gap_melhor_casa_mediano_pct": 3.83,
+          "gap_cobertura_n": 1234
+        }
+      }
+    }
+  }
+}

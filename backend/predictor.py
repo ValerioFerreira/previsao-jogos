@@ -161,6 +161,14 @@ class Predictor:
         _cal_path = f"{art_dir}/ou_calibrators.joblib"
         if os.path.exists(_cal_path):
             self.ou_calibrators = joblib.load(_cal_path)
+        # Correção de viés por mercado (odd justa do modelo -> odd justa real do
+        # mercado, aprendida contra odds reais de-vigadas). Opcional: ausência =
+        # identidade (comportamento antigo). Servida ao enrich_with_odds. Ver
+        # scripts/build_bias_correction.py. Viés é pequeno (modelo bem calibrado).
+        self.bias_correction = {}
+        _bias_path = f"{art_dir}/bias_correction.joblib"
+        if os.path.exists(_bias_path):
+            self.bias_correction = joblib.load(_bias_path)
         with open(f"{art_dir}/meta.json", encoding="utf-8") as f:
             self.meta = json.load(f)
         # Bases de box-score (sb_*): são o sinal "rico" que falta às seleções de

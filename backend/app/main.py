@@ -255,6 +255,19 @@ def competition_benchmark(tournament: str = Query(""), scope: str = Query("selec
     return CompetitionBenchmarkResponse(**get_competition_benchmark(tournament, scope=scope))
 
 
+@app.get("/api/performance")
+def performance_overview() -> dict:
+    """Vitrine de desempenho do modelo (métricas reais de backtest, precomputadas)."""
+    from app.services.performance_service import get_performance_overview
+    return get_performance_overview()
+
+
+@app.get("/api/performance/{league:path}")
+def performance_league(league: str) -> dict:
+    from app.services.performance_service import get_performance_league
+    return get_performance_league(league)
+
+
 @app.get("/api/fixtures/upcoming")
 def upcoming_fixtures(db: Session = Depends(get_db)) -> dict:
     from app.domains.admin.models import MatchDeepAnalysis

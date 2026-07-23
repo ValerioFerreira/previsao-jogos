@@ -73,6 +73,9 @@ function ParcerIAHighlight() {
           <Link href="/" className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-shadow">
             Selecionar Partida Agendada <ArrowRight className="w-4 h-4" />
           </Link>
+          <Link href="/desempenho" className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 px-5 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/10 transition-colors">
+            Ver os números reais do modelo <ArrowRight className="w-4 h-4" />
+          </Link>
           <a href="#promocao" className="text-sm font-medium text-primary hover:underline">Ver as regras completas ↓</a>
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground italic">

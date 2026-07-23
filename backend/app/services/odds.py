@@ -15,6 +15,31 @@ def fair_odd(probability: float) -> float:
     return round(1.0 / clamp_probability(probability), 2)
 
 
+# --- Correção de viés por mercado + faixa de odd justa ±5% (PLANO 4 / Fase B) ---
+# A correção (Platt logit-linear por mercado, aprendida contra odds reais de-vigadas)
+# é passada como dict {mercado: {"a","b"}}; ausente => identidade. Viés é pequeno
+# (modelo já bem calibrado) — recalibra a odd justa exibida sem inventar edge.
+FAIXA_PCT = 0.05
+
+
+def apply_bias(probability: float, market_key: str | None, correction: dict | None) -> float:
+    p = clamp_probability(probability)
+    if not correction or not market_key or market_key not in correction:
+        return p
+    c = correction[market_key]
+    a, b = c.get("a", 1.0), c.get("b", 0.0)
+    if a == 1.0 and b == 0.0:
+        return p
+    z = math.log(p / (1.0 - p))
+    return clamp_probability(1.0 / (1.0 + math.exp(-(a * z + b))))
+
+
+def fair_band(odd_justa: float) -> dict[str, float]:
+    """Faixa de odd justa a 95%/100%/105% da odd corrigida (min=0,95·odd, max=1,05·odd)."""
+    return {"min": round(odd_justa * (1.0 - FAIXA_PCT), 2),
+            "max": round(odd_justa * (1.0 + FAIXA_PCT), 2)}
+
+
 def odds_range(probability_low: float, probability_high: float) -> dict[str, float]:
     low = clamp_probability(min(probability_low, probability_high))
     high = clamp_probability(max(probability_low, probability_high))
@@ -43,38 +68,44 @@ def classifier_probability_interval(
     return clamp_probability(p - half_width), clamp_probability(p + half_width)
 
 
-def binary_market_odds(prob_yes_percent: float, n_train: int) -> dict[str, Any]:
+def binary_market_odds(prob_yes_percent: float, n_train: int,
+                       correction: dict | None = None, market_key: str | None = None) -> dict[str, Any]:
     p_yes = clamp_probability(prob_yes_percent / 100.0)
     p_no = 1.0 - p_yes
     confidence_reference = max(p_yes, p_no)
     yes_low, yes_high = classifier_probability_interval(p_yes, n_train, confidence_reference)
     no_low, no_high = classifier_probability_interval(p_no, n_train, confidence_reference)
+    p_yes_c = apply_bias(p_yes, market_key, correction)
+    p_no_c = apply_bias(p_no, market_key, correction)
+    odd_yes, odd_no = fair_odd(p_yes_c), fair_odd(p_no_c)
     return {
         "sim": {
             "probabilidade": round(p_yes * 100, 1),
-            "odd_justa": fair_odd(p_yes),
-            "faixa_odd_justa": odds_range(yes_low, yes_high),
+            "odd_justa": odd_yes,
+            "faixa_odd_justa": fair_band(odd_yes),
             "intervalo_probabilidade_80": [round(yes_low * 100, 1), round(yes_high * 100, 1)],
         },
         "nao": {
             "probabilidade": round(p_no * 100, 1),
-            "odd_justa": fair_odd(p_no),
-            "faixa_odd_justa": odds_range(no_low, no_high),
+            "odd_justa": odd_no,
+            "faixa_odd_justa": fair_band(odd_no),
             "intervalo_probabilidade_80": [round(no_low * 100, 1), round(no_high * 100, 1)],
         },
     }
 
 
-def winner_market_odds(probabilidades: dict[str, float], n_train: int) -> dict[str, Any]:
+def winner_market_odds(probabilidades: dict[str, float], n_train: int,
+                       correction: dict | None = None) -> dict[str, Any]:
     confidence_reference = max((value / 100.0 for value in probabilidades.values()), default=0.34)
     markets: dict[str, Any] = {}
     for label, percent in probabilidades.items():
         p = clamp_probability(percent / 100.0)
         low, high = classifier_probability_interval(p, n_train, confidence_reference)
+        odd = fair_odd(apply_bias(p, "1x2", correction))
         markets[label] = {
             "probabilidade": round(p * 100, 1),
-            "odd_justa": fair_odd(p),
-            "faixa_odd_justa": odds_range(low, high),
+            "odd_justa": odd,
+            "faixa_odd_justa": fair_band(odd),
             "intervalo_probabilidade_80": [round(low * 100, 1), round(high * 100, 1)],
         }
     return markets
@@ -119,7 +150,7 @@ def numeric_line_market(metric: dict[str, Any], label: str) -> dict[str, Any]:
         "over": {
             "probabilidade": round(p_over * 100, 1),
             "odd_justa": fair_odd(p_over),
-            "faixa_odd_justa": odds_range(p_over_low, p_over_high),
+            "faixa_odd_justa": fair_band(fair_odd(p_over)),
             "intervalo_probabilidade_80": [
                 round(min(p_over_low, p_over_high) * 100, 1),
                 round(max(p_over_low, p_over_high) * 100, 1),
@@ -128,7 +159,7 @@ def numeric_line_market(metric: dict[str, Any], label: str) -> dict[str, Any]:
         "under": {
             "probabilidade": round(p_under * 100, 1),
             "odd_justa": fair_odd(p_under),
-            "faixa_odd_justa": odds_range(p_under_low, p_under_high),
+            "faixa_odd_justa": fair_band(fair_odd(p_under)),
             "intervalo_probabilidade_80": [
                 round(min(p_under_low, p_under_high) * 100, 1),
                 round(max(p_under_low, p_under_high) * 100, 1),
@@ -155,11 +186,10 @@ def corners_line_market(market: dict[str, Any]) -> dict[str, Any]:
     side_over, side_under = linhas[key]["over"], linhas[key]["under"]
 
     def fmt(side: dict[str, Any]) -> dict[str, Any]:
-        p = side["prob"] / 100.0
         return {
             "probabilidade": side["prob"],
             "odd_justa": side["odd_justa"],
-            "faixa_odd_justa": {"min": side["odd_justa"], "max": side["odd_justa"]},
+            "faixa_odd_justa": fair_band(side["odd_justa"]),
             "intervalo_probabilidade_80": [side["prob"], side["prob"]],
         }
 
@@ -172,12 +202,13 @@ def corners_line_market(market: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def enrich_with_odds(prediction: dict[str, Any], n_train: dict[str, int]) -> dict[str, Any]:
+def enrich_with_odds(prediction: dict[str, Any], n_train: dict[str, int],
+                     correction: dict | None = None) -> dict[str, Any]:
     home_team, away_team = [name for name in prediction["vencedor"]["probabilidades"] if name != "Empate"]
     return {
-        "vencedor": winner_market_odds(prediction["vencedor"]["probabilidades"], n_train.get("result", 1)),
-        "ambas_marcam": binary_market_odds(prediction["ambas_marcam"]["prob_sim"], n_train.get("btts", 1)),
-        "over_under_2_5": binary_market_odds(prediction["over_2_5"]["prob_sim"], n_train.get("over25", 1)),
+        "vencedor": winner_market_odds(prediction["vencedor"]["probabilidades"], n_train.get("result", 1), correction),
+        "ambas_marcam": binary_market_odds(prediction["ambas_marcam"]["prob_sim"], n_train.get("btts", 1), correction, "btts"),
+        "over_under_2_5": binary_market_odds(prediction["over_2_5"]["prob_sim"], n_train.get("over25", 1), correction, "ou25"),
         "linhas_numericas": {
             "gols": numeric_line_market(prediction["gols"], "total_goals"),
             "chutes": corners_line_market(prediction["chutes"]),

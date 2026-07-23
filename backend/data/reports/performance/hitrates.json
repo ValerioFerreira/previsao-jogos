@@ -1,0 +1,196 @@
+{
+  "fonte": "backtest out-of-sample 2025 (modelo congelado) + odds reais de fechamento",
+  "benchmark_literatura": {
+    "acc_1x2": "~50-55% (mercado/modelos academicos)",
+    "placar_exato": "~10-13%",
+    "ece": "<2% = bem calibrado"
+  },
+  "nota_benchmark_mercado": "p_fair_close = probabilidade implicita de-vigada das odds de fechamento (a previsao do proprio mercado). Mercado eficiente e dificil de bater em log-loss; o objetivo honesto e EMPATAR com ele em precisao sendo transparente.",
+  "ligas": {
+    "Brasileirao Serie A": {
+      "n_jogos": 306,
+      "modelo_1x2": {
+        "n": 306,
+        "acuracia": 52.3,
+        "log_loss": 1.0022,
+        "brier": 0.6003,
+        "ece": 4.61
+      },
+      "mercado_1x2": {
+        "n": 306,
+        "acuracia": 51.6,
+        "log_loss": 0.9761,
+        "brier": 0.5848,
+        "ece": 3.89
+      },
+      "modelo_1x2_no_conjunto_do_mercado": {
+        "n": 306,
+        "acuracia": 52.3,
+        "log_loss": 1.0022,
+        "brier": 0.6003,
+        "ece": 4.61
+      },
+      "empates": {
+        "empates_reais": 87,
+        "empates_previstos_pelo_modelo": 0,
+        "acertos_quando_previu_empate": 0,
+        "prob_media_empate_modelo": 25.7,
+        "freq_real_empate": 28.4
+      },
+      "placar_e_btts": {
+        "placar_exato_top1_acerto_pct": 14.1,
+        "placar_exato_n": 306,
+        "btts_acerto_pct": 54.2,
+        "btts_n": 306
+      }
+    },
+    "Premier League": {
+      "n_jogos": 446,
+      "modelo_1x2": {
+        "n": 446,
+        "acuracia": 49.6,
+        "log_loss": 1.0266,
+        "brier": 0.616,
+        "ece": 4.1
+      },
+      "mercado_1x2": {
+        "n": 420,
+        "acuracia": 50.5,
+        "log_loss": 1.0049,
+        "brier": 0.6028,
+        "ece": 4.55
+      },
+      "modelo_1x2_no_conjunto_do_mercado": {
+        "n": 420,
+        "acuracia": 49.5,
+        "log_loss": 1.0272,
+        "brier": 0.6168,
+        "ece": 4.1
+      },
+      "empates": {
+        "empates_reais": 123,
+        "empates_previstos_pelo_modelo": 0,
+        "acertos_quando_previu_empate": 0,
+        "prob_media_empate_modelo": 23.7,
+        "freq_real_empate": 27.6
+      },
+      "placar_e_btts": {
+        "placar_exato_top1_acerto_pct": 12.8,
+        "placar_exato_n": 446,
+        "btts_acerto_pct": 59.4,
+        "btts_n": 446
+      }
+    },
+    "La Liga": {
+      "n_jogos": 342,
+      "modelo_1x2": {
+        "n": 342,
+        "acuracia": 52.0,
+        "log_loss": 0.9777,
+        "brier": 0.58,
+        "ece": 4.33
+      },
+      "mercado_1x2": {
+        "n": 342,
+        "acuracia": 54.4,
+        "log_loss": 0.9571,
+        "brier": 0.5673,
+        "ece": 4.21
+      },
+      "modelo_1x2_no_conjunto_do_mercado": {
+        "n": 342,
+        "acuracia": 52.0,
+        "log_loss": 0.9777,
+        "brier": 0.58,
+        "ece": 4.33
+      },
+      "empates": {
+        "empates_reais": 87,
+        "empates_previstos_pelo_modelo": 0,
+        "acertos_quando_previu_empate": 0,
+        "prob_media_empate_modelo": 23.9,
+        "freq_real_empate": 25.4
+      },
+      "placar_e_btts": {
+        "placar_exato_top1_acerto_pct": 16.7,
+        "placar_exato_n": 342,
+        "btts_acerto_pct": 53.2,
+        "btts_n": 342
+      }
+    },
+    "Serie A Italia": {
+      "n_jogos": 380,
+      "modelo_1x2": {
+        "n": 380,
+        "acuracia": 52.9,
+        "log_loss": 0.9973,
+        "brier": 0.595,
+        "ece": 4.04
+      },
+      "mercado_1x2": {
+        "n": 380,
+        "acuracia": 53.9,
+        "log_loss": 0.9783,
+        "brier": 0.5829,
+        "ece": 4.1
+      },
+      "modelo_1x2_no_conjunto_do_mercado": {
+        "n": 380,
+        "acuracia": 52.9,
+        "log_loss": 0.9973,
+        "brier": 0.595,
+        "ece": 4.04
+      },
+      "empates": {
+        "empates_reais": 99,
+        "empates_previstos_pelo_modelo": 0,
+        "acertos_quando_previu_empate": 0,
+        "prob_media_empate_modelo": 24.2,
+        "freq_real_empate": 26.1
+      },
+      "placar_e_btts": {
+        "placar_exato_top1_acerto_pct": 15.5,
+        "placar_exato_n": 380,
+        "btts_acerto_pct": 50.5,
+        "btts_n": 380
+      }
+    },
+    "Geral (ligas-alvo)": {
+      "n_jogos": 1474,
+      "modelo_1x2": {
+        "n": 1474,
+        "acuracia": 51.6,
+        "log_loss": 1.0026,
+        "brier": 0.599,
+        "ece": 2.1
+      },
+      "mercado_1x2": {
+        "n": 1448,
+        "acuracia": 52.6,
+        "log_loss": 0.9805,
+        "brier": 0.5854,
+        "ece": 2.16
+      },
+      "modelo_1x2_no_conjunto_do_mercado": {
+        "n": 1448,
+        "acuracia": 51.6,
+        "log_loss": 1.0024,
+        "brier": 0.5989,
+        "ece": 2.04
+      },
+      "empates": {
+        "empates_reais": 396,
+        "empates_previstos_pelo_modelo": 0,
+        "acertos_quando_previu_empate": 0,
+        "prob_media_empate_modelo": 24.3,
+        "freq_real_empate": 26.9
+      },
+      "placar_e_btts": {
+        "placar_exato_top1_acerto_pct": 14.7,
+        "placar_exato_n": 1474,
+        "btts_acerto_pct": 54.6,
+        "btts_n": 1474
+      }
+    }
+  }
+}

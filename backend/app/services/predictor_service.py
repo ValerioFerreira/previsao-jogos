@@ -595,7 +595,8 @@ def predict_match(payload: Any, scope: str = "selecao") -> dict[str, Any]:
     )
     res = {
         **raw,
-        "odds": enrich_with_odds(raw, predictor.meta.get("n_train", {})),
+        "odds": enrich_with_odds(raw, predictor.meta.get("n_train", {}),
+                                 getattr(predictor, "bias_correction", None)),
     }
     res = _json_safe(res)
 

@@ -1,0 +1,23 @@
+{
+  "headline": {
+    "fonte": "Validacao walk-forward out-of-sample (modelo nunca viu esses jogos no treino)",
+    "n_jogos": 91765,
+    "n_competicoes": 52,
+    "calibracao_ece_pct": 1.26,
+    "calibracao_ece_empate_pct": 1.21,
+    "log_loss": 1.008,
+    "acuracia_1x2_pct": 49.9,
+    "placar_exato_pct": 13.0,
+    "frase_calibracao": "Quando o modelo diz 70%, acontece perto de 70%.",
+    "explicacao_leiga": "Calibracao mede se as probabilidades sao honestas. Um erro de calibracao (ECE) de 1,26% significa que a probabilidade que mostramos quase nunca se descola da realidade."
+  },
+  "benchmark_literatura": {
+    "acuracia_1x2": "~50-55% e o teto pratico (o proprio mercado acerta nessa faixa)",
+    "placar_exato": "~10-13% e considerado forte",
+    "ece": "abaixo de 2% ja e considerado bem calibrado; o nosso e 1,26%"
+  },
+  "jogo_responsavel": {
+    "aviso": "Apostas sao para maiores de 18 anos e envolvem risco real de perda. No longo prazo, apostar contra a margem das casas (vig) tende a dar prejuizo — inclusive seguindo um bom modelo. Nossos numeros mostram probabilidades honestas para voce decidir melhor, nunca uma promessa de lucro.",
+    "dado": "Pesquisas apontam alto indice de comportamento de risco entre apostadores no Brasil; use com controle e limite."
+  }
+}
