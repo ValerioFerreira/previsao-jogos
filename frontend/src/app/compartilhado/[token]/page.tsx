@@ -121,10 +121,10 @@ export default function SharedAnalysisPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
             <div className="min-w-0 flex-1">
-              <TeamRecentBlock teamId={data.away_team} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} error={errorAway} teamIds={teamIds} onOpenMatch={openMatch(data.away_team)} />
+              <TeamRecentBlock teamId={data.home_team} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} error={errorHome} teamIds={teamIds} onOpenMatch={openMatch(data.home_team)} />
             </div>
             <div className="min-w-0 flex-1">
-              <TeamRecentBlock teamId={data.home_team} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} error={errorHome} teamIds={teamIds} onOpenMatch={openMatch(data.home_team)} />
+              <TeamRecentBlock teamId={data.away_team} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} error={errorAway} teamIds={teamIds} onOpenMatch={openMatch(data.away_team)} />
             </div>
           </div>
         </motion.div>

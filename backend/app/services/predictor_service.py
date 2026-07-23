@@ -1038,24 +1038,32 @@ _COMP_BUCKETS: dict[str, list[str]] = {
 
 def _club_competition_benchmark(tournament: str) -> dict[str, Any]:
     empty = {"attack_mean": 0.0, "attack_std": 0.0, "defense_mean": 0.0,
-             "defense_std": 0.0, "n_teams": 0, "scope": "global"}
+             "defense_std": 0.0, "n_teams": 0, "scope": "global", "team_stats": {}}
     df = _load_club_matches_long()
     if df.empty:
         return empty
-    # 'tournament' vem cru do frontend (fx.tournament, mesma string de club_features_enriched)
-    # -- casa exato com a coluna 'competition' de club_matches_long.
-    teams_in = set(df.loc[df["competition"] == tournament, "team"].unique())
+
+    df_comp = df[df["competition"] == tournament].copy()
     scope_out = "competition"
-    if len(teams_in) < 4:
-        teams_in = set(df["team"].unique())
+
+    if df_comp.empty or df_comp["team"].nunique() < 4:
+        df_comp = df.copy()
         scope_out = "global"
-    sub = df[df["team"].isin(teams_in)]
-    per = sub.groupby("team").agg(atk=("goals_scored", "mean"),
-                                  dff=("goals_conceded", "mean"),
-                                  n=("goals_scored", "size"))
-    per = per[per["n"] >= 5]
+    else:
+        df_comp["year"] = pd.to_datetime(df_comp["date"]).dt.year
+        max_year = df_comp["year"].max()
+        sub = df_comp[df_comp["year"] == max_year]
+        if sub["team"].nunique() < 4:
+            sub = df_comp[df_comp["year"] >= (max_year - 1)]
+        df_comp = sub
+
+    per = df_comp.groupby("team").agg(atk=("goals_scored", "mean"),
+                                      dff=("goals_conceded", "mean"),
+                                      n=("goals_scored", "size"))
+    per = per[per["n"] >= 1]
     if per.empty:
         return empty
+
     out = {
         "attack_mean": round(float(per["atk"].mean()), 3),
         "attack_std": round(float(per["atk"].std(ddof=0)), 3),
@@ -1064,8 +1072,16 @@ def _club_competition_benchmark(tournament: str) -> dict[str, Any]:
         "n_teams": int(len(per)),
         "scope": scope_out,
     }
-    out["team_stats"] = {team: {"attack": round(float(row["atk"]), 3), "defense": round(float(row["dff"]), 3)}
-                          for team, row in per.iterrows()}
+
+    team_stats = {}
+    from predictor import TEAM_ALIASES
+    for team, row in per.iterrows():
+        norm_t = TEAM_ALIASES.get(str(team), str(team))
+        team_stats[norm_t] = {
+            "attack": round(float(row["atk"]), 3),
+            "defense": round(float(row["dff"]), 3)
+        }
+    out["team_stats"] = team_stats
     return out
 
 
@@ -1075,7 +1091,7 @@ def get_competition_benchmark(tournament: str, scope: str = "selecao") -> dict[s
     Escopo 'clube': lê club_matches_long.parquet (local, ver build_club_local_history.py)
     e filtra pela competição exata (fx.tournament cru vindo do frontend)."""
     empty0 = {"attack_mean": 0.0, "attack_std": 0.0, "defense_mean": 0.0,
-              "defense_std": 0.0, "n_teams": 0, "scope": "global"}
+              "defense_std": 0.0, "n_teams": 0, "scope": "global", "team_stats": {}}
     if scope == "clube":
         return _club_competition_benchmark(tournament)
     key = tournament or "_"
@@ -1085,13 +1101,13 @@ def get_competition_benchmark(tournament: str, scope: str = "selecao") -> dict[s
     from app.db.connection import engine
     from app.services import aggregates
     agg = aggregates.read_benchmark(engine, tournament)
-    if agg is not None:  # tabela precomputada -> lê bytes
+    if agg is not None and agg.get("team_stats"):  # tabela precomputada com team_stats
         agg.pop("_hit", None)
         _COMP_BENCH_MEMO[key] = agg
         return agg
 
     empty = {"attack_mean": 0.0, "attack_std": 0.0, "defense_mean": 0.0,
-             "defense_std": 0.0, "n_teams": 0, "scope": "global"}
+             "defense_std": 0.0, "n_teams": 0, "scope": "global", "team_stats": {}}
     try:
         df = pd.read_sql("SELECT team, competition, goals_scored, goals_conceded FROM matches", con=engine)
     except Exception as e:
@@ -1101,7 +1117,7 @@ def get_competition_benchmark(tournament: str, scope: str = "selecao") -> dict[s
         return empty
 
     patterns = _COMP_BUCKETS.get(tournament)
-    scope = "global"
+    scope_val = "global"
     if patterns:
         if tournament == "Copa do Mundo":
             mask = df["competition"] == "World Cup"
@@ -1111,7 +1127,7 @@ def get_competition_benchmark(tournament: str, scope: str = "selecao") -> dict[s
             mask = df["competition"].apply(lambda c: any(p in str(c) for p in patterns))
         teams_in = set(df.loc[mask, "team"].unique())
         if len(teams_in) >= 4:
-            scope = "competition"
+            scope_val = "competition"
         else:
             teams_in = set(df["team"].unique())
     else:
@@ -1130,17 +1146,19 @@ def get_competition_benchmark(tournament: str, scope: str = "selecao") -> dict[s
         "defense_mean": round(float(per["dff"].mean()), 3),
         "defense_std": round(float(per["dff"].std(ddof=0)), 3),
         "n_teams": int(len(per)),
-        "scope": scope,
+        "scope": scope_val,
     }
-    
+
     team_stats = {}
+    from predictor import TEAM_ALIASES
     for team, row in per.iterrows():
-        team_stats[team] = {
+        norm_t = TEAM_ALIASES.get(str(team), str(team))
+        team_stats[norm_t] = {
             "attack": round(float(row["atk"]), 3),
             "defense": round(float(row["dff"]), 3)
         }
     out["team_stats"] = team_stats
-    
+
     _COMP_BENCH_MEMO[key] = out
     return out
 

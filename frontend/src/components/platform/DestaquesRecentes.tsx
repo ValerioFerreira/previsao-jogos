@@ -30,7 +30,7 @@ function highlights(team: string, ms: RecentMatch[]): { tone: "g" | "r" | "y" | 
   const out: { tone: "g" | "r" | "y" | "n"; text: string; prio: number }[] = [];
   out.push({ tone: w >= 3 ? "g" : d >= 3 ? "r" : "n", text: `${w}V · ${e}E · ${d}D nos últimos ${n} jogos`, prio: 5 });
   out.push({ tone: scored >= n - 1 ? "g" : "n", text: `Marcou em ${scored} dos ${n} · média ${gf.toFixed(1)} gol/jogo`, prio: scored >= n - 1 ? 4 : 2 });
-  out.push({ tone: conceded >= n ? "r" : conceded <= 1 ? "g" : "n", text: conceded <= 1 ? `Gol invicto em ${n - conceded} dos ${n} · sofre ${ga.toFixed(1)}/jogo` : `Sofreu em ${conceded} dos ${n} · média ${ga.toFixed(1)} sofrido/jogo`, prio: conceded <= 1 || conceded >= n ? 4 : 1 });
+  out.push({ tone: conceded <= 1 ? "g" : "n", text: conceded <= 1 ? `Meta invicta em ${n - conceded} dos ${n} · sofre ${ga.toFixed(1)}/jogo` : `Sofreu em ${conceded} dos ${n} · média ${ga.toFixed(1)} sofrido/jogo`, prio: conceded <= 1 || conceded >= n ? 4 : 1 });
   out.push({ tone: over25 >= Math.ceil(n * 0.6) ? "y" : "n", text: `Mais de 2,5 gols em ${over25} dos ${n} jogos`, prio: over25 >= Math.ceil(n * 0.6) ? 3 : 1 });
   out.push({ tone: btts >= Math.ceil(n * 0.6) ? "y" : "n", text: `Ambas marcam em ${btts} dos ${n} jogos`, prio: btts >= Math.ceil(n * 0.6) ? 3 : 1 });
   out.push({ tone: "n", text: `Média ${sh.toFixed(0)} finalizações (${sot.toFixed(0)} a gol) por jogo`, prio: 2 });

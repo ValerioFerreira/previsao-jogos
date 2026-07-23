@@ -195,17 +195,19 @@ export default function Estatisticas() {
   }, [benchmark, homeTeamId, awayTeamId]);
 
   const eloHistoryData = useMemo(() => {
-    if (!homeHistory?.elo_history || !awayHistory?.elo_history) return [];
+    const hElo = homeHistory?.elo_history || [];
+    const aElo = awayHistory?.elo_history || [];
+    if (hElo.length === 0 && aElo.length === 0) return [];
     try {
       // "date" no formato mensal "AAAA-MM" (scripts/build_elo_history.py).
       const months = Array.from(new Set([
-        ...homeHistory.elo_history.map(e => e.date),
-        ...awayHistory.elo_history.map(e => e.date)
+        ...hElo.map(e => e.date),
+        ...aElo.map(e => e.date)
       ])).sort();
 
       return months.map(m => {
-        const hPoint = homeHistory.elo_history.find(e => e.date === m);
-        const aPoint = awayHistory.elo_history.find(e => e.date === m);
+        const hPoint = hElo.find(e => e.date === m);
+        const aPoint = aElo.find(e => e.date === m);
         return {
           month: m,
           [homeTeamId]: hPoint ? hPoint.elo : null,
@@ -216,6 +218,30 @@ export default function Estatisticas() {
       console.error("Error formatting elo history", e);
       return [];
     }
+  }, [homeHistory, awayHistory, homeTeamId, awayTeamId]);
+
+  const cornersChartData = useMemo(() => {
+    const hFreq = homeHistory?.corners_freq || [];
+    const aFreq = awayHistory?.corners_freq || [];
+    const allLabels = Array.from(new Set([...hFreq.map(x => x.label), ...aFreq.map(x => x.label)]))
+      .sort((a, b) => Number(a) - Number(b));
+    return allLabels.map(lbl => ({
+      value: lbl,
+      [homeTeamId]: hFreq.find(x => x.label === lbl)?.frequency || 0,
+      [awayTeamId]: aFreq.find(x => x.label === lbl)?.frequency || 0,
+    }));
+  }, [homeHistory, awayHistory, homeTeamId, awayTeamId]);
+
+  const cardsChartData = useMemo(() => {
+    const hFreq = homeHistory?.cards_freq || [];
+    const aFreq = awayHistory?.cards_freq || [];
+    const allLabels = Array.from(new Set([...hFreq.map(x => x.label), ...aFreq.map(x => x.label)]))
+      .sort((a, b) => Number(a) - Number(b));
+    return allLabels.map(lbl => ({
+      value: lbl,
+      [homeTeamId]: hFreq.find(x => x.label === lbl)?.frequency || 0,
+      [awayTeamId]: aFreq.find(x => x.label === lbl)?.frequency || 0,
+    }));
   }, [homeHistory, awayHistory, homeTeamId, awayTeamId]);
 
   // "AAAA-MM" -> "MM/AA" p/ eixo do gráfico de Elo.
@@ -488,11 +514,7 @@ export default function Estatisticas() {
               <p className="text-xs text-muted-foreground mb-4">Últimos 20 jogos</p>
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart margin={{ top: 5, right: 8, bottom: 22, left: 4 }} data={(homeHistory.corners_freq || []).map(h => ({
-                    value: h.label,
-                    [homeTeamId]: h.frequency,
-                    [awayTeamId]: (awayHistory.corners_freq || []).find(a => a.label === h.label)?.frequency || 0,
-                  }))}>
+                  <BarChart margin={{ top: 5, right: 8, bottom: 22, left: 4 }} data={cornersChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
                     <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Escanteios na partida', position: 'insideBottom', offset: -10, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Nº de jogos', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
@@ -514,11 +536,7 @@ export default function Estatisticas() {
               <p className="text-xs text-muted-foreground mb-4">Últimos 20 jogos</p>
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart margin={{ top: 5, right: 8, bottom: 22, left: 4 }} data={(homeHistory.cards_freq || []).map(h => ({
-                    value: h.label,
-                    [homeTeamId]: h.frequency,
-                    [awayTeamId]: (awayHistory.cards_freq || []).find(a => a.label === h.label)?.frequency || 0,
-                  }))}>
+                  <BarChart margin={{ top: 5, right: 8, bottom: 22, left: 4 }} data={cardsChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
                     <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Cartões na partida', position: 'insideBottom', offset: -10, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Nº de jogos', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />

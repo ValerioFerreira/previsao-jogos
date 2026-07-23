@@ -629,13 +629,13 @@ export default function Previsoes() {
                     <p className="text-sm text-muted-foreground italic">Não há confrontos diretos entre estas equipes em nossa base de dados</p>
                   </div>
 
-                  {/* Cards dos últimos 5 jogos: Visitante à esquerda e Mandante à direita */}
+                  {/* Cards dos últimos 5 jogos: Mandante à esquerda e Visitante à direita */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
                     <div className="min-w-0 flex-1">
-                      <TeamRecentBlock teamId={awayTeamId} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} error={errorAway} teamIds={teamIds} onOpenMatch={openMatch(awayTeamId)} />
+                      <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} error={errorHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <TeamRecentBlock teamId={homeTeamId} form={homeForm} anomalies={homeAnomalies} label="Mandante" loading={loadingHome} error={errorHome} teamIds={teamIds} onOpenMatch={openMatch(homeTeamId)} />
+                      <TeamRecentBlock teamId={awayTeamId} form={awayForm} anomalies={awayAnomalies} label="Visitante" loading={loadingAway} error={errorAway} teamIds={teamIds} onOpenMatch={openMatch(awayTeamId)} />
                     </div>
                   </div>
                 </motion.div>
