@@ -15,7 +15,7 @@ import { competitionPt } from '@/lib/competitionNames';
 import { MatchPickerModal } from '@/components/platform/MatchPickerModal';
 import { MatchHeader } from '@/components/platform/MatchHeader';
 import Link from 'next/link';
-import { Coins, Sparkles } from 'lucide-react';
+import { Coins, Sparkles, FileText, PenTool } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { analysisApi } from '@/lib/monetizationApi';
 import BetBuilder from '@/components/platform/BetBuilder';
@@ -663,21 +663,48 @@ export default function Previsoes() {
           </div>
         )}
         
-        {/* Badge Análise Aprofundada (Exibido ANTES de gerar a análise quando a partida possuir análise aprofundada cadastrada) */}
+        {/* Badge Flutuante de Análise Aprofundada (Exibido ANTES de gerar a análise quando a partida possuir análise aprofundada cadastrada) */}
         {(() => {
           if (loading || analysis || !deepAnalysisInfo?.hasDeep || !deepAnalysisInfo?.analystName) return null;
           return (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-slate-900 border-2 border-indigo-500/40 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.15)] my-4 max-w-xl w-full text-left"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative group my-2.5"
             >
-              <div className="bg-indigo-500/10 px-4 py-2.5 border-b border-indigo-500/20 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
-                <h3 className="font-heading font-bold text-xs sm:text-sm text-indigo-100 tracking-wide uppercase">Análise Aprofundada Detalhada</h3>
+              {/* Badge Principal */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/90 border border-indigo-500/40 text-indigo-100 shadow-[0_0_15px_rgba(99,102,241,0.2)] hover:shadow-[0_0_22px_rgba(99,102,241,0.35)] hover:border-indigo-400/80 transition-all cursor-help select-none">
+                <div className="relative w-5 h-5 flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5 text-indigo-400" />
+                  <motion.div
+                    animate={{
+                      x: [-1, 3, -1],
+                      y: [1, -2, 1],
+                      rotate: [-5, 12, -5],
+                    }}
+                    transition={{
+                      duration: 1.8,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                    className="absolute -top-1 -right-1 text-cyan-300 drop-shadow-[0_0_6px_rgba(34,211,238,0.8)]"
+                  >
+                    <PenTool className="w-3.5 h-3.5" />
+                  </motion.div>
+                </div>
+                <span className="text-xs font-bold tracking-wide uppercase text-indigo-200">
+                  Contém Análise Detalhada
+                </span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse ml-0.5 shrink-0" />
               </div>
-              <div className="p-4 text-xs sm:text-sm text-indigo-200/90 leading-relaxed text-justify">
-                Esta partida contém uma análise aprofundada, feita por <strong className="text-indigo-300 font-semibold">{deepAnalysisInfo.analystName}</strong>. Gere uma análise para conferi-la!
+
+              {/* Balão de Informação ao Hover */}
+              <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-72 p-3.5 bg-slate-900 border border-indigo-500/50 rounded-xl shadow-2xl shadow-indigo-950/90 text-xs text-indigo-100 z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 scale-95 group-hover:scale-100 origin-bottom text-left leading-relaxed">
+                <p>
+                  Esta partida contém uma análise aprofundada, feita por{" "}
+                  <strong className="text-indigo-300 font-semibold">{deepAnalysisInfo.analystName}</strong>. Gere uma análise para conferi-la!
+                </p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-indigo-500/50" />
               </div>
             </motion.div>
           );
