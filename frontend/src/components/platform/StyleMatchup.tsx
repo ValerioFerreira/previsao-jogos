@@ -58,7 +58,7 @@ export default function StyleMatchup({ home, away, homeMatches, awayMatches, tar
       </div>
       
       <p className="text-[9.5px] text-muted-foreground leading-normal mt-4 pt-3 border-t border-border/25">
-        * Quanto maior o valor de Ataque, mais gols a equipe marca por jogo. Quanto menor o valor de Defesa, mais gols a equipe evita sofrer.
+        * Quanto maior o valor de Ataque, mais gols a equipe marca por jogo. Quanto menor o valor de defesa, menos gols a equipe sofre por jogo.
       </p>
     </div>
   );

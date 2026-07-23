@@ -1,0 +1,104 @@
+{
+  "r2_goals_holdout": -0.0009345489740579804,
+  "r2_cards_holdout": 0.0008091504992385756,
+  "weight_goals": 0.5,
+  "weight_cards": 0.5,
+  "p2t_mean": 0.6080115342618414,
+  "p2t_min": 0.47909009857754814,
+  "p2t_max": 0.7510112029191205,
+  "top_features_goals_2t_share": [
+    [
+      "home_matches_played_before",
+      0.05823983020809263
+    ],
+    [
+      "away_style_ppda_l5",
+      0.04610323498710587
+    ],
+    [
+      "home_style_fouls_suff_ratio_l10",
+      0.03997455018081743
+    ],
+    [
+      "home_style_ppda_l5",
+      0.0396239033164432
+    ],
+    [
+      "gap_shots_exp_home",
+      0.029994714651122894
+    ],
+    [
+      "diff_matches_played_before",
+      0.028772154159729436
+    ],
+    [
+      "away_style_fouls_suff_ratio_l5",
+      0.028462811338803986
+    ],
+    [
+      "gap_shots_away_def",
+      0.02630117840129155
+    ],
+    [
+      "away_matches_played_before",
+      0.02351113391950256
+    ],
+    [
+      "away_style_fouls_suff_ratio_l10",
+      0.022184177939282394
+    ]
+  ],
+  "top_features_cards_2t_share": [
+    [
+      "home_style_ppda_l5",
+      0.06689648057985091
+    ],
+    [
+      "away_style_ppda_l10",
+      0.06093380801037803
+    ],
+    [
+      "gap_shots_home_att",
+      0.036183855144632085
+    ],
+    [
+      "away_days_rest",
+      0.02985746025389441
+    ],
+    [
+      "elo_home_winprob",
+      0.027653953815544117
+    ],
+    [
+      "home_style_fouls_suff_ratio_l10",
+      0.026638350847499475
+    ],
+    [
+      "gap_corners_exp_away",
+      0.02634047938950757
+    ],
+    [
+      "days_since_last_h2h",
+      0.025938134759031253
+    ],
+    [
+      "diff_matches_played_before",
+      0.025763350429689084
+    ],
+    [
+      "gap_shots_home_def",
+      0.025740950649859096
+    ]
+  ],
+  "n_fixtures": 48580,
+  "n_train_goals": 176243,
+  "n_train_cards": 147378,
+  "target_tournaments": [
+    "La Liga",
+    "Champions League",
+    "Bundesliga",
+    "Ligue 1",
+    "Premier League",
+    "Serie A Italia"
+  ]
+}

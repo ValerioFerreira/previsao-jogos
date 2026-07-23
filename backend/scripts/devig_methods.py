@@ -54,8 +54,12 @@ def shin_devig(odds: list[float], tol: float = 1e-12) -> list[float]:
     S = pi.sum()
 
     def f(z):
-        pn = pi / S  # prob. implicita normalizada (soma 1) — base do ajuste de Shin
-        inside = z ** 2 + 4.0 * (1.0 - z) * (pn ** 2)
+        # forma fechada padrao (Shin 1992/93): pi_i^2/S, NAO (pi_i/S)^2 -- usar a
+        # prob. implicita crua dividida por UM fator de S (bug historico corrigido
+        # 2026-07-22, ver backend/data/reports/adhoc_valuebet_w1/critica.md: a
+        # versao normalizada duas vezes fazia brentq nunca achar raiz e cair
+        # sempre no fallback power_devig, silenciosamente).
+        inside = z ** 2 + 4.0 * (1.0 - z) * (pi ** 2) / S
         p = (np.sqrt(np.maximum(inside, 0.0)) - z) / (2.0 * (1.0 - z))
         return p.sum() - 1.0
 
@@ -70,8 +74,7 @@ def shin_devig(odds: list[float], tol: float = 1e-12) -> list[float]:
         # margem grande demais para a forma fechada padrao (raro) -- cai no power
         return power_devig(odds)
 
-    pn = pi / S
-    inside = z ** 2 + 4.0 * (1.0 - z) * (pn ** 2)
+    inside = z ** 2 + 4.0 * (1.0 - z) * (pi ** 2) / S
     p = (np.sqrt(np.maximum(inside, 0.0)) - z) / (2.0 * (1.0 - z))
     p = np.clip(p, 1e-9, None)
     return list(p / p.sum())
@@ -126,6 +129,17 @@ def run_tests():
                      {"prop": p_prop, "power": p_power}))
     results.append(("enviesado/shin_sobe_favorito_desce_zebra_vs_proporcional", ok_shin,
                      {"prop": p_prop, "shin": p_shin}))
+
+    # 2b) Regressao: shin tem que ser um metodo GENUINAMENTE DIFERENTE de power,
+    #     nao um fallback disfarçado. Bug historico (corrigido 2026-07-22, ver
+    #     backend/data/reports/adhoc_valuebet_w1/critica.md): formula errada
+    #     (pi/S)^2 em vez de pi^2/S fazia brentq nunca achar raiz -> shin_devig
+    #     caia sempre no `except: return power_devig(odds)` silenciosamente, e
+    #     os testes acima "passavam" porque so checam DIRECAO (sobe favorito/
+    #     desce zebra), que power tambem satisfaz. Este teste pega isso.
+    ok_shin_not_power = not _approx(p_shin[0], p_power[0], 1e-6)
+    results.append(("enviesado/shin_e_genuinamente_diferente_de_power", ok_shin_not_power,
+                     {"shin": p_shin, "power": p_power}))
 
     # 3) Todos os metodos devem somar 1
     for name, fn in METHODS.items():

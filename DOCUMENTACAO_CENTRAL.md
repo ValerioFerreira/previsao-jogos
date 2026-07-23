@@ -1308,3 +1308,162 @@ de ser concentrada em 2023+.
 Nenhuma promoção de modelo, nenhum push de mudança de modelo pra `main` (H4 reprovado,
 H1 é produto). Ver `RESUMO_BATERIA.md` para o detalhe completo e a lista de
 ações de produto/infra recomendadas (fora do escopo de código desta sessão).
+
+### 19.8 Fast-follow: retreino com 83 competições + bateria Tier 2/Tier 3 (2026-07-22)
+Fechamento das pendências deixadas em aberto pelo §19.1 ("as 15 ligas novas ainda não entraram
+no `club_features_enriched.parquet` nem no artefato de produção").
+
+**Retreino de produção**: `scripts/build_clubs_production_artifacts.py` rerodado —
+`model_artifacts_clubes/` agora tem **5589 times / 272918 jogos (272918 pra
+gols/resultado/BTTS/over2.5; 141919 pra chutes/escanteios/cartões) / 72 torneios** (subiu de 52).
+Mesma arquitetura/hiperparâmetros do §13 (sem mudança de modelo, só volume de dado). Smoke test
+(`Predictor(art_dir='model_artifacts_clubes')`, Real Madrid x Barcelona, La Liga): carrega sem
+erro, saída sã (H 39.2% / D 25.2% / A 35.6%, 3.0 gols esperados). **Artefato ainda não
+commitado** — pendente de decisão do dono (`model_artifacts_clubes/*.joblib` não é gitignored,
+mas troca o modelo em produção, então fica fora do escopo de "autorização geral" até
+confirmação explícita).
+
+**Tier 2 (features candidatas, gate §6, todas via `research_clubs/protocol.py`, 5 folds
+temporais)** — **nenhuma promovida**:
+- *Shot Quality Index* (chutes insidebox/outsidebox, `tier2_shot_quality/veredito.md`): cobertura
+  46.8% (bem acima do xG ~15%). 5/5 folds melhoram, mas Δlog-loss médio = **-0.00010** (limiar
+  -0.001) — **REPROVADO**, controle negativo limpo.
+- *Goalkeeper Saves* (`tier2_goalkeeper_saves/veredito.md`): cobertura 52.9% (risco de "muro de
+  dados", concentrada em anos recentes, mesmo padrão do xG). 5/5 folds melhoram, Δlog-loss médio
+  = **-0.00037** (abaixo do limiar) — **REPROVADO**, controle negativo limpo.
+- *Cartão de jogador + árbitro, combinação #3* (`tier2_player_cards_referee/veredito.md`): isola
+  o efeito marginal de `ref_strictness` dentro do modelo de jogador (scope clube, amostra bem
+  maior que seleção). AUC com-árbitro 0.6328 vs sem-árbitro 0.6301 (ganho +0.0026, 4/4 folds) —
+  fica abaixo do piso de promoção (AUC≥0.68) já usado pra esse prop — **REPROVADO**, mesmo padrão
+  das 2 combinações já testadas antes (isolado e agregado por equipe).
+- *blend_btts na seleção* (`tier2_blend_btts_selecao/veredito.md`): `0.5*DC-NB + 0.5*HistGBM` no
+  dataset de seleção (9954 jogos). 1/5 folds melhoram, Δlog-loss médio = **+0.0063** (piora), ECE
+  piora (2.84%→4.86%) — **REPROVADO**, pior resultado das 3 tentativas já feitas (clube 13 ligas,
+  clube 60 ligas, seleção) — confirma que blend BTTS não escala pra amostra pequena.
+- *Mercado de assistência (clube)*: tarefa marcada concluída no rastreamento desta sessão, mas
+  **nenhum artefato de relatório/veredito foi localizado** pra registrar aqui — só existe
+  `scripts/build_assist_model.py`, já commitado em 2026-07-19 (3 dias antes desta bateria,
+  código de produção pré-existente, não tocado nesta sessão). Não sei precisar o que foi
+  concluído nesse item sem mais contexto — **pendência de auditoria, não um veredito**.
+
+**Tier 3 (Passo 0 — só viabilidade/cobertura, sem treino de modelo)**:
+- `goals_prevented` (goleiro): cobertura agregada **4.92%** (pior que o xG) — **NOT VIABLE agora**.
+- `/predictions` da API-Football como baseline externo: log-loss 2.0953 em 40 fixtures (PIOR que
+  palpite uniforme constante ln(3)≈1.0986) — vendor devolve probabilidades genéricas/degeneradas
+  (só 6 combinações distintas em 40 casos) — **não serve de benchmark hoje**.
+- `/teams/statistics` por faixa de minuto: 12/12 combos com dado real, custo de coleta completa
+  ~2.300-7.500 chamadas (barato dentro da cota) — **viável como feature futura**, não implementado.
+
+**Item 13 revisitado (time-decay, dataset de 83 ligas)**: rerun de `time_decay_H2`/`H3` (mesma
+pergunta já fechada em `sweep-pesos-gols`, memória do agente) — log parado às 12:17 (processo
+não está mais rodando; sem erro visível, só sem impressão de conclusão do H2). H3 terminou com
+veredito explícito **REPROVADO** (0/5 folds melhoram, Δ+0.0003), consistente com o achado
+anterior ("time-decay não ajuda"). H2 não gerou veredito final (parou em fold_0.70 de 5) — não
+foi relançado nesta sessão (não bloqueante, resultado parcial já aponta na mesma direção do H3).
+
+### 19.9 Decisão (fast-follow)
+Nenhuma promoção de modelo nesta rodada (5/5 hipóteses Tier 2 reprovadas). Retreino de produção
+(mais dados, mesma arquitetura) verificado e são, mas **não commitado** — decisão do dono.
+Tier 3 fica só como mapa de viabilidade pra decisão futura de investimento de coleta.
+
+---
+
+## 20. Bateria de valor/CLV em escala + auditoria adversarial (2026-07-22)
+
+Pedido do dono: a partir dos achados do módulo de backtest (`scripts/backtest_*.py`, 8117
+fixtures de 2025 casadas com odds reais de `/data-test`, ver §19-adjacente/relatório de
+4 ligas Brasileirão+Premier League+La Liga+Serie A), rodar quantos agentes fossem
+necessários, cada linha de pesquisa com um crítico adversarial (discordar/tentar derrubar),
+testando tudo que pudesse aprimorar os modelos. 4 linhas (W1-W4), 8 agentes no total
+(proponente+crítico cada), execução paralela em background.
+
+### 20.1 Groundwork
+`scripts/adhoc_value_groundwork.py`: junta modelo (`prediction_json`) + odds reais abertura/
+fechamento (book "Avg") + de-vig (`devig_methods.py`) pros 8117 fixtures →
+`data/built/backtest_valuebet_dataset.parquet`. ~60x a amostra do H3 original (84 fixtures).
+
+### 20.2 W1 — Valor/edge de-vig em escala: **SEM EDGE** (confirma H3 com N grande)
+Estratégia "aposta quando `p_model - p_fair(devig) > limiar"` (1x2 e O/U 2,5), split
+cronológico honesto (metade antiga escolhe limiar, metade nova valida), bootstrap. ROI
+negativo out-of-sample nos dois mercados em todo limiar testado; CLV real (abertura vs
+fechamento) ~zero, sem assinatura de vantagem informacional; ROI piora no decil de edge mais
+alto (>10%, efeito real e distinguível de ruído nesse bucket específico, mas crítico
+corrigiu a narrativa original — não é gradiente suave, buckets intermediários são ruidosos).
+Estratégia alternativa "maior edge absoluto" (não só o favorito do próprio modelo) performa
+igual ou pior — descarta "o modelo só concorda com o favorito do book" como explicação.
+
+**Bug real achado e corrigido**: `devig_methods.py::shin_devig()` tinha erro de fórmula
+(`(pi/S)²` em vez de `pi²/S`) que fazia o solver `brentq` nunca achar raiz — caía sempre,
+silenciosamente, no fallback `power_devig()`. Confirmado: shin ≡ power em 99.98-100% dos
+casos reais testados. **Shin nunca foi genuinamente testado em nenhuma análise anterior do
+projeto, incluindo o H3 original (§19.5)** — a "recomendação Shin" do H3 era, na prática, uma
+recomendação de power. Corrigido nesta sessão (fórmula `pi²/S`); testes unitários do arquivo
+não pegavam o bug (só checavam direção do ajuste, não que shin≠power) — teste de regressão
+`enviesado/shin_e_genuinamente_diferente_de_power` adicionado. Reprocessado com Shin corrigido:
+conclusão de fundo não muda (ROI na mesma faixa, correlação de edge shin-corrigido×power >0.998).
+
+Decisão: **não construir feature de "aposta de valor automática"** em cima da saída atual
+do modelo/mercado.
+
+### 20.3 W2 — Confiança do modelo em O/U não ajuda; discordância favoritismo×placar_exato é artefato do empate
+Hipótese "confiança alta = eco do mercado, sem edge" **rejeitada na forma literal**
+(divergência `|p_model-p_fair|` é igual em alta/média confiança, Mann-Whitney p=0.60) — mas
+filtrar "modelo escolhe O/U" por divergência alta também não gera ROI robusto out-of-sample
+(overfitting de limiar confirmado por placebo de 5000 amostras: resultado do treino cai no
+percentil 87 de sorte pura).
+
+Discordância entre `favoritismo` e `placar_exato` é **sempre** o placar_exato escolhendo
+Empate (nunca troca H↔A), em 71.22% dos 8117 jogos — crítico confirmou ser artefato
+matemático de proximidade (jogos com margem `p_model[favorito]-p_model[D]` pequena), não um
+achado independente do modelo. Teste extra do crítico: apostar **sempre** em Empate (todo
+jogo, não só nos de discordância) tem ROI estatisticamente igual à estratégia mais elaborada
+— reforça o achado de produto já documentado em §19.3 (mostrar P(empate)+odd justa ao lado
+do argmax), sem justificar uma regra de decisão nova.
+
+**Pista nova, não validada**: em jogos de discordância, o modelo esperava EV melhor pro
+favorito (-1.8%) que pro empate (-9.87%), mas o oposto aconteceu na realidade — sugere
+miscalibração LOCAL (favorito superestimado / empate subestimado, ~2.3pp cada) especificamente
+em jogos de margem apertada, não capturada pelo ECE agregado (1.21%, §19.3). Não testado com
+holdout — fica como hipótese pra próxima rodada, não é decisão de produto ainda.
+
+### 20.4 W3 — Robustez estatística: os 2 casos "positivos" da análise de 4 ligas são ruído; achado extra de vazamento localizado
+Bootstrap 20.000 reamostragens: os 2 ROI positivos da análise de 4 ligas (Brasileirão/
+favoritismo +1.97%, La Liga/placar_exato +0.52%) têm IC 95% que engloba folgadamente zero —
+indistinguíveis de sorte (p=0.75 e p=0.96). Correção de comparações múltiplas (Bonferroni e
+BH/FDR, 17 testes): **0 sobrevivem**. O sinal agregado mais forte é NEGATIVO (pooled N=6122,
+ROI -5.10%, IC 95% [-7.73%,-2.45%] exclui zero — consistente com o vig da casa, não com edge).
+
+**Achado**: 93 dos 306 jogos do Brasileirão (análise de 4 ligas) são anteriores ao corte de
+treino do modelo congelado (2025-07-01) — potencial vazamento treino/teste. Crítico confirmou
+com query própria e **escopou corretamente**: localizado só no Brasileirão (calendário civil
+brasileiro cruza o corte de julho; as 3 ligas europeias começam a temporada em agosto, 0 jogos
+pré-corte, sem contaminação). Mesmo vazamento existe no `backtest_dashboard.html` principal
+(mesmo `backtest_predictions.parquet`), mas impacto pequeno nas métricas de acurácia lá
+(~0.3-0.7pp) — nota de rodapé adicionada ao dashboard e ao relatório de 4 ligas. **Não invalida
+W1/W2** (excluem Brasil estruturalmente — sem odds de abertura na fonte pra essa liga).
+
+Poder estatístico: detectar edge de 2% de ROI com 80% de poder precisaria de ~18.700 apostas
+(temos 1.102 nas 3 ligas europeias limpas) — faltam ~17.500, equivalente a ~15 temporadas
+adicionais por liga. Fora de alcance por acúmulo orgânico de dado nesse horizonte.
+
+### 20.5 W4 — Lacuna de O/U no Brasileirão: fechável via API-Football, cron já corrigido
+API-Football já suporta O/U pro Brasileirão — confirmado com 848 jogos já coletados com
+mercado `gols_over_under` nos snapshots existentes (`data/odds/club_snapshots/`). Cota: plano
+Ultra, 40.701/75.000 restante hoje, válido até 2026-08-19. `collect_odds_task.cmd` **já chama**
+`collect_club_odds_forward.py` (commit `59b8ddb`, o gap do H2/§19.4 já foi corrigido antes
+desta sessão) — cron rodando de fato, ~2-3% da cota diária. Gap adicional achado pelo crítico:
+`collect_club_odds_forward.py` não anexa `model_snapshot` (diferente do coletor de seleção) —
+recomendado como fast-follow, não implementado aqui (fora do escopo autorizado desta bateria).
+
+Recomendação: não buscar fonte paga alternativa — deixar o coletor forward (já corrigido)
+acumular Brasileirão prospectivamente; revisitar quando houver amostra suficiente.
+
+### 20.6 Decisão
+Nenhuma promoção de modelo, nenhuma feature nova de aposta/valor construída — nenhuma das 4
+linhas achou edge robusto que justificasse. 1 bug de código real corrigido
+(`devig_methods.py::shin_devig`, com teste de regressão novo). 1 nota de caveat adicionada ao
+dashboard e ao relatório de 4 ligas (vazamento localizado no Brasileirão). Pista de
+miscalibração local (favorito/empate em jogos de margem apertada) fica para validação futura
+com holdout adequado — não é ação imediata. Scripts novos (`scripts/adhoc_*`) e relatórios
+(`data/reports/adhoc_valuebet_w{1,2,3,4}/`) preservados; sem commit/push desta bateria (pendente
+de decisão do dono).

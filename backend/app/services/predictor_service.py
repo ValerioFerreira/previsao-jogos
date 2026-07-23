@@ -229,24 +229,129 @@ def _fixture_index_norm() -> dict[str, str]:
     return idx
 
 
-def get_match_detail(home: str, away: str, date: str) -> dict[str, Any]:
+def get_match_detail(home: str, away: str, date: str, scope: str = "selecao") -> dict[str, Any]:
     """Wrapper defensivo: NUNCA propaga exceção (um 500 não leva header CORS e o
     browser mascara como erro de CORS). Em qualquer falha, devolve found=False."""
     try:
-        return _match_detail_impl(home, away, date)
+        return _match_detail_impl(home, away, date, scope=scope)
     except Exception as e:
         print(f"[ERRO match_detail] {home} x {away} {date}: {type(e).__name__}: {e}")
         return {"found": False}
 
 
-def _match_detail_impl(home: str, away: str, date: str) -> dict[str, Any]:
-    """Detalhe completo de uma partida JÁ DISPUTADA: cache(Neon) -> .gz local -> API.
+def _match_detail_impl(home: str, away: str, date: str, scope: str = "selecao") -> dict[str, Any]:
+    """Detalhe completo de uma partida JÁ DISPUTADA: cache(Neon) -> .gz local -> API / base local de clubes.
     Robusto a dados ausentes (jogos antigos/ligas menores).
     """
     import gzip
     from app.services.fixture_fetch import cache_get, get_or_fetch_detail
     d10 = date[:10]
     key = f"{d10}|{_norm(home)}|{_norm(away)}"
+
+    if scope == "clube":
+        df = _load_club_matches_long()
+        if not df.empty:
+            from predictor import TEAM_ALIASES
+            nhome = TEAM_ALIASES.get(home, home)
+            naway = TEAM_ALIASES.get(away, away)
+            df_match = df[(df["date"].dt.strftime("%Y-%m-%d") == d10) & 
+                          (((df["team"] == nhome) & (df["opponent"] == naway)) | 
+                           ((df["team"] == naway) & (df["opponent"] == nhome)))]
+            if not df_match.empty:
+                home_row = df_match[df_match["team"] == nhome]
+                away_row = df_match[df_match["team"] == naway]
+                if home_row.empty and not away_row.empty:
+                    ar = away_row.iloc[0]
+                    h_goals = int(ar["goals_conceded"])
+                    a_goals = int(ar["goals_scored"])
+                    comp = str(ar["competition"])
+                    h_shots, a_shots = 0.0, float(ar["sb_shots"]) if pd.notna(ar.get("sb_shots")) else 0.0
+                    h_sot, a_sot = 0.0, float(ar["sb_shots_on_target"]) if pd.notna(ar.get("sb_shots_on_target")) else 0.0
+                    h_corners, a_corners = 0.0, float(ar["sb_corners"]) if pd.notna(ar.get("sb_corners")) else 0.0
+                    h_cards, a_cards = 0.0, float(ar["sb_cards"]) if pd.notna(ar.get("sb_cards")) else 0.0
+                    h_fouls, a_fouls = 0.0, float(ar["sb_fouls"]) if pd.notna(ar.get("sb_fouls")) else 0.0
+                    h_offsides, a_offsides = 0.0, float(ar["sb_offsides"]) if pd.notna(ar.get("sb_offsides")) else 0.0
+                    h_poss, a_poss = 0.0, float(ar["sb_possession"]) if pd.notna(ar.get("sb_possession")) else 0.0
+                    h_passes, a_passes = 0.0, float(ar["sb_passes"]) if pd.notna(ar.get("sb_passes")) else 0.0
+                else:
+                    hr = home_row.iloc[0]
+                    h_goals = int(hr["goals_scored"])
+                    a_goals = int(hr["goals_conceded"])
+                    comp = str(hr["competition"])
+                    h_shots = float(hr["sb_shots"]) if pd.notna(hr.get("sb_shots")) else 0.0
+                    h_sot = float(hr["sb_shots_on_target"]) if pd.notna(hr.get("sb_shots_on_target")) else 0.0
+                    h_corners = float(hr["sb_corners"]) if pd.notna(hr.get("sb_corners")) else 0.0
+                    h_cards = float(hr["sb_cards"]) if pd.notna(hr.get("sb_cards")) else 0.0
+                    h_fouls = float(hr["sb_fouls"]) if pd.notna(hr.get("sb_fouls")) else 0.0
+                    h_offsides = float(hr["sb_offsides"]) if pd.notna(hr.get("sb_offsides")) else 0.0
+                    h_poss = float(hr["sb_possession"]) if pd.notna(hr.get("sb_possession")) else 0.0
+                    h_passes = float(hr["sb_passes"]) if pd.notna(hr.get("sb_passes")) else 0.0
+
+                    if not away_row.empty:
+                        ar = away_row.iloc[0]
+                        a_shots = float(ar["sb_shots"]) if pd.notna(ar.get("sb_shots")) else 0.0
+                        a_sot = float(ar["sb_shots_on_target"]) if pd.notna(ar.get("sb_shots_on_target")) else 0.0
+                        a_corners = float(ar["sb_corners"]) if pd.notna(ar.get("sb_corners")) else 0.0
+                        a_cards = float(ar["sb_cards"]) if pd.notna(ar.get("sb_cards")) else 0.0
+                        a_fouls = float(ar["sb_fouls"]) if pd.notna(ar.get("sb_fouls")) else 0.0
+                        a_offsides = float(ar["sb_offsides"]) if pd.notna(ar.get("sb_offsides")) else 0.0
+                        a_poss = float(ar["sb_possession"]) if pd.notna(ar.get("sb_possession")) else 0.0
+                        a_passes = float(ar["sb_passes"]) if pd.notna(ar.get("sb_passes")) else 0.0
+                    else:
+                        a_shots = a_sot = a_corners = a_cards = a_fouls = a_offsides = a_poss = a_passes = 0.0
+
+                return {
+                    "found": True,
+                    "info": {
+                        "date": d10,
+                        "status": "Match Finished",
+                        "referee": None,
+                        "venue": None,
+                        "city": None,
+                        "league": comp,
+                        "league_logo": None,
+                        "country": None,
+                        "season": d10[:4],
+                        "round": None,
+                        "home": nhome,
+                        "home_id": None,
+                        "away": naway,
+                        "away_id": None,
+                    },
+                    "goals": {"home": h_goals, "away": a_goals},
+                    "score": {"fulltime": {"home": h_goals, "away": a_goals}},
+                    "statistics": [
+                        {
+                            "team": nhome,
+                            "stats": {
+                                "Shots on Goal": h_sot,
+                                "Total Shots": h_shots,
+                                "Corner Kicks": h_corners,
+                                "Fouls": h_fouls,
+                                "Yellow Cards": h_cards,
+                                "Offsides": h_offsides,
+                                "Ball Possession": f"{h_poss:.0f}%" if h_poss else None,
+                                "Total passes": h_passes,
+                            }
+                        },
+                        {
+                            "team": naway,
+                            "stats": {
+                                "Shots on Goal": a_sot,
+                                "Total Shots": a_shots,
+                                "Corner Kicks": a_corners,
+                                "Fouls": a_fouls,
+                                "Yellow Cards": a_cards,
+                                "Offsides": a_offsides,
+                                "Ball Possession": f"{a_poss:.0f}%" if a_poss else None,
+                                "Total passes": a_passes,
+                            }
+                        }
+                    ],
+                    "events": [],
+                    "lineups": [],
+                    "players": []
+                }
 
     d = cache_get(key)  # 1) cache no Neon (preenchido pela API/precache)
     if d is None:       # 2) .gz local (dev)
@@ -258,7 +363,7 @@ def _match_detail_impl(home: str, away: str, date: str) -> dict[str, Any]:
             except Exception:
                 d = None
     if d is None:       # 3) API ao vivo (e cacheia no Neon para a próxima)
-        d = get_or_fetch_detail(_norm(home), _norm(away), d10, key, get_team_ids())
+        d = get_or_fetch_detail(_norm(home), _norm(away), d10, key, get_team_ids(scope))
     if d is None:
         return {"found": False}
 

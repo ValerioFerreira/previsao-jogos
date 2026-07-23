@@ -5,8 +5,9 @@
 
 Plataforma de **previsão probabilística de partidas** — **produção: seleções E clubes**
 (mercados de clube lançados em 2026-07-18, mesmo menu de mercados de seleção, ver §14 do
-doc-mestre; coleta de clube em 68 competições — 60 completas, 8 novas ~92% coletadas, ver §17;
-artefato de produção cobre 52 torneios, DC-NB de clube com GAP ratings desde 2026-07-19, ver §17).
+doc-mestre; coleta de clube em 83 competições, ver §19.1; artefato de produção retreinado
+2026-07-22 cobre **72 torneios/5589 times/272918 jogos**, DC-NB de clube com GAP ratings, ver
+§19.8 — smoke test confirmado, **ainda não commitado** aguardando decisão do dono).
 Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/frontend`**
 (Next.js, deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 
@@ -34,7 +35,13 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   **§19 bateria H1-H4 (empate/valor/de-vig/xG, 2026-07-21/22) — nenhuma promoção de modelo (H4 xG
   reprovado pela 3ª vez, H1 é achado de produto); coleta 68→83 competições de clube (cota resetou
   no meio da sessão, aproveitada); achado de infra: coleta forward de odds de clube não está no
-  cron. Relatório completo em `backend/data/reports/RESUMO_BATERIA.md`**.
+  cron. Relatório completo em `backend/data/reports/RESUMO_BATERIA.md`**, **§20 bateria de
+  valor/CLV em escala (2026-07-22, 8 agentes proponente+crítico, 4 linhas W1-W4) — SEM edge
+  robusto em nenhum mercado/liga (confirma H3 com ~60x a amostra); bug real corrigido em
+  `devig_methods.py::shin_devig` (nunca tinha sido testado de verdade, caía em power); vazamento
+  treino/teste achado e escopado (só Brasileirão, 93/306 jogos pré-corte — não contamina as 3
+  ligas europeias nem W1/W2); lacuna de O/U do Brasileirão é fechável via API-Football (cron já
+  corrigido). Relatórios em `backend/data/reports/adhoc_valuebet_w{1,2,3,4}/`**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa
@@ -60,10 +67,11 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   `_predictor_for(scope)` escolhe entre `get_predictor()`/`get_club_predictor()`; endpoints sem
   base de dado de clube ainda (recent/history/benchmark/goal-timing) degradam vazio p/ clube.
 - `scripts/build_clubs_production_artifacts.py` + `model_artifacts_clubes/*.joblib` — artefato de
-  produção de clube (2.326 times/191.580 jogos/52 torneios, retreino 2026-07-19 §17), mesma
-  arquitetura/hiperparâmetros da §13 **+ GAP ratings de chutes/escanteios no DC-NB** (158→170
-  `base_feats`, único achado que passou o gate na bateria do §16/§17 — `meta["gap_ratings_state"]`
-  guarda o rating final por time, servido em `predictor.py::build_row()` no mesmo padrão do Elo).
+  produção de clube (**5589 times/272918 jogos/72 torneios, retreino 2026-07-22 §19.8** — fast-
+  follow das 83 competições coletadas em §19.1; mesma arquitetura/hiperparâmetros da §13
+  **+ GAP ratings de chutes/escanteios no DC-NB** (158→170 `base_feats`, único achado que passou
+  o gate na bateria do §16/§17 — `meta["gap_ratings_state"]` guarda o rating final por time,
+  servido em `predictor.py::build_row()` no mesmo padrão do Elo).
   Nomes de time desambiguados por colisão real (`"Nome (Liga)"`); `team_ids` (p/ escudo)
   resolvido do próprio `meta.json`, não do Neon (que só tem seleção).
 - `app/services/aggregates.py` + `raw_cache.py` — **otimização do Neon**: precompute de agregados
@@ -147,8 +155,8 @@ teste de UI autenticado.
 - **Promoção de modelo** exige o **gate §6** (CV temporal, reduzir log-loss sem piorar ECE, consistente).
   Pesquisa em branch (`clubs` ou nova) **não dá push para `main`** a menos que bata a produção real
   sob o gate — é a exceção documentada em §13.
-- **Coleta:** exaurir a cota diária (75k) com propósito; seleções saturaram, clubes em 68
-  competições (60 completas + 8 novas ~92%, ver §17.6), artefato treinado cobre 52 torneios.
+- **Coleta:** exaurir a cota diária (75k) com propósito; seleções saturaram, clubes em 83
+  competições (ver §19.1), artefato treinado cobre 72 torneios (retreino 2026-07-22, §19.8).
   **Checar a validade da assinatura da API-Football** (`GET /status` → `subscription.end`) antes de
   planejar coleta de vários dias — ela tem prazo, não é indefinida.
 - **Neon:** não reintroduzir varredura de blobs (`SELECT raw FROM match_detail_cache`) em runtime — use

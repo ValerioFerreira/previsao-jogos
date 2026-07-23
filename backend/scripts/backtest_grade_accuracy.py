@@ -185,6 +185,11 @@ def main():
                                       pred=g[0], actual=real_val, linha=g[1], correct=(g[0] != "PUSH")))
 
     grades = pd.DataFrame(rows)
+    # "actual" mistura tipo por mercado (nome de time/"Empate"/"Sim"-"Nao" pros
+    # mercados de classificacao, numero pros over/under) -- parquet/arrow nao aceita
+    # coluna object com tipos misturados, converte pra string (so uso descritivo/
+    # auditoria aqui, "correct" ja vem computado a parte).
+    grades["actual"] = grades["actual"].astype(str)
     OUT_GRADES.parent.mkdir(parents=True, exist_ok=True)
     grades.to_parquet(OUT_GRADES, index=False)
     print(f">> {len(grades)} avaliacoes de mercado -> {OUT_GRADES}")

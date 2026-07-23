@@ -349,8 +349,8 @@ def past_fixtures(limit: int = Query(100000)) -> dict:
 
 
 @app.get("/api/match-detail")
-def match_detail(home: str = Query(...), away: str = Query(...), date: str = Query(...)) -> dict:
-    return get_match_detail(home, away, date)
+def match_detail(home: str = Query(...), away: str = Query(...), date: str = Query(...), scope: str = Query("selecao")) -> dict:
+    return get_match_detail(home, away, date, scope=scope)
 
 
 @app.get("/api/pmf-preview", response_model=PmfPreviewResponse)

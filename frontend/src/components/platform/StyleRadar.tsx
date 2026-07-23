@@ -30,7 +30,16 @@ function profile(ms: RecentMatch[]) {
   };
 }
 
-// Explicação de cada vértice (balão no hover via <title> SVG nativo).
+// Ícone e explicação de cada vértice
+const METRIC_META: Record<string, { icon: string; desc: string }> = {
+  "Ataque": { icon: "⚽", desc: "Média de gols marcados" },
+  "Finalização": { icon: "🎯", desc: "Média de chutes no gol" },
+  "Volume ofensivo": { icon: "⚡", desc: "Total de finalizações criadas" },
+  "Pressão": { icon: "🚩", desc: "Média de escanteios cobrados" },
+  "Solidez defensiva": { icon: "🛡️", desc: "Eficiência (menos sofridos)" },
+  "Disciplina": { icon: "🟨", desc: "Inverso de cartões recebidos" },
+};
+
 const EXPLAIN: Record<string, string> = {
   "Ataque": "Gols marcados por jogo (escala: 2,5 gols = 100).",
   "Finalização": "Chutes a gol por jogo (escala: 6 = 100).",
@@ -42,13 +51,27 @@ const EXPLAIN: Record<string, string> = {
 
 function AngleTick({ x, y, cx, cy, payload }: any) {
   const label: string = payload?.value ?? "";
+  const meta = METRIC_META[label];
+  const icon = meta?.icon || "•";
+  
+  // Posiciona a bolha de ícone centralizada sobre o ponto do ângulo
   const anchor = x > cx + 6 ? "start" : x < cx - 6 ? "end" : "middle";
-  const dx = x > cx + 6 ? 4 : x < cx - 6 ? -4 : 0;
+  const dx = x > cx + 6 ? 2 : x < cx - 6 ? -2 : 0;
   return (
-    <text x={x + dx} y={y} dy={4} textAnchor={anchor} fontSize={9.5} fill="hsl(var(--muted-foreground))" style={{ cursor: "help" }}>
-      <title>{EXPLAIN[label] || label}</title>
-      {label}
-    </text>
+    <g transform={`translate(${x + dx},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={4}
+        textAnchor="middle"
+        fontSize={13}
+        className="select-none cursor-pointer hover:scale-125 transition-transform"
+        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }}
+      >
+        <title>{label}: {EXPLAIN[label] || label}</title>
+        {icon}
+      </text>
+    </g>
   );
 }
 
@@ -57,9 +80,13 @@ function AngleTick({ x, y, cx, cy, payload }: any) {
 function VertexTooltip({ active, payload, home, away }: any) {
   if (!active || !payload || !payload.length) return null;
   const metric: string = payload[0]?.payload?.metric ?? "";
+  const meta = METRIC_META[metric];
   return (
     <div className="rounded-lg border border-border bg-popover shadow-xl p-2.5 text-xs max-w-[220px]">
-      <p className="font-semibold mb-1">{metric}</p>
+      <p className="font-semibold mb-1 flex items-center gap-1.5">
+        <span>{meta?.icon}</span>
+        <span>{metric}</span>
+      </p>
       {EXPLAIN[metric] && <p className="text-muted-foreground mb-1.5 leading-snug">{EXPLAIN[metric]}</p>}
       {payload.map((p: any) => (
         <p key={p.dataKey} className="flex items-center justify-between gap-3">
@@ -87,50 +114,35 @@ export default function StyleRadar({ home, away, homeMatches, awayMatches, targe
       <div className="flex flex-col flex-1">
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
           Radar de Estilo
-          <InfoTooltip text="Perfil comparativo (0–100) das duas equipes nos jogos recentes. Passe o mouse sobre cada vértice para ver o que o indicador mede. Quanto mais para fora, mais forte naquele quesito." />
+          <InfoTooltip text="Perfil comparativo (0–100) das duas equipes nos jogos recentes. Passe o mouse sobre os ícones nos vértices para ver o indicador medido. Quanto mais para fora, mais forte naquele quesito." />
         </h3>
-        <p className="text-xs text-muted-foreground mb-2">Passe o mouse nos vértices para detalhes</p>
-        <div className="w-full h-[280px] relative">
+        <p className="text-xs text-muted-foreground mb-2">Passe o mouse nos ícones dos vértices para detalhes</p>
+        
+        {/* Container do gráfico expandido e centralizado */}
+        <div className="w-full flex-1 min-h-[300px] relative flex items-center justify-center">
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={data} outerRadius="68%" margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+            <RadarChart data={data} cx="50%" cy="50%" outerRadius="82%" margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
               <PolarGrid stroke="hsl(var(--border))" opacity={0.5} />
               <PolarAngleAxis dataKey="metric" tick={<AngleTick />} />
               <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }} angle={90} />
               <Radar name={teamPt(home)} dataKey={home} stroke="#10b981" fill="#10b981" fillOpacity={0.3} dot={{ r: 3, fill: "#10b981", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
               <Radar name={teamPt(away)} dataKey={away} stroke="#f97316" fill="#f97316" fillOpacity={0.25} dot={{ r: 3, fill: "#f97316", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
-              <Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: "11px" }} />
+              <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: "11px" }} />
               <RTooltip content={<VertexTooltip home={home} away={away} />} />
             </RadarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Legenda dos Vértices */}
+      {/* Legenda dos Vértices com Ícones ao lado do nome */}
       <div className="mt-auto pt-4 border-t border-border/30 text-[10px] text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-2 leading-relaxed">
-        <div>
-          <span className="font-semibold text-foreground/90 block sm:inline">Ataque:</span>
-          <span className="sm:ml-1">Média de gols marcados</span>
-        </div>
-        <div>
-          <span className="font-semibold text-foreground/90 block sm:inline">Solidez Defensiva:</span>
-          <span className="sm:ml-1">Eficiência (menos sofridos)</span>
-        </div>
-        <div>
-          <span className="font-semibold text-foreground/90 block sm:inline">Finalização:</span>
-          <span className="sm:ml-1">Média de chutes no gol</span>
-        </div>
-        <div>
-          <span className="font-semibold text-foreground/90 block sm:inline">Disciplina:</span>
-          <span className="sm:ml-1">Inverso de cartões recebidos</span>
-        </div>
-        <div>
-          <span className="font-semibold text-foreground/90 block sm:inline">Volume Ofensivo:</span>
-          <span className="sm:ml-1">Total de finalizações criadas</span>
-        </div>
-        <div>
-          <span className="font-semibold text-foreground/90 block sm:inline">Pressão:</span>
-          <span className="sm:ml-1">Média de escanteios cobrados</span>
-        </div>
+        {Object.entries(METRIC_META).map(([name, { icon, desc }]) => (
+          <div key={name} className="flex items-center gap-1.5 truncate">
+            <span className="text-xs shrink-0">{icon}</span>
+            <span className="font-semibold text-foreground/90 truncate">{name}:</span>
+            <span className="truncate opacity-80">{desc}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -453,8 +453,8 @@ export const api = {
   featuredMatches: () => request<{ items: UpcomingFixture[] }>("/api/featured-matches"),
   sharedAnalysis: (token: string) =>
     request<SharedAnalysisPublic>(`/public/shared-analyses/${encodeURIComponent(token)}`),
-  matchDetail: (home: string, away: string, date: string) =>
-    request<MatchDetail>(`/api/match-detail?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&date=${encodeURIComponent(date)}`),
+  matchDetail: (home: string, away: string, date: string, scope: Scope = "selecao") =>
+    request<MatchDetail>(`/api/match-detail?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&date=${encodeURIComponent(date)}&scope=${scope}`),
   scorers: (home: string, away: string, scope: Scope = "selecao") =>
     request<ScorersResponse>(`/api/scorers?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&scope=${scope}`),
   checkDeepAnalysis: (params: { fixture_id?: number | string; home?: string; away?: string }) => {

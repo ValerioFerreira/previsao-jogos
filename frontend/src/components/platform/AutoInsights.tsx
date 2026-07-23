@@ -68,6 +68,25 @@ function buildInsights(
     out.push({ text: `Tendência de poucas finalizações cedidas por ${hName} (${hs.avgShots.toFixed(0)}/jogo), o que pode reduzir o potencial ofensivo de ${aName} apesar do volume de jogo.`, prio: 2 });
   }
 
+  // Achados do Radar de Estilo (comparações marcantes entre as equipes).
+  if (hs.avgShots >= as.avgShots + 4.5 && hs.n >= 3) {
+    out.push({ text: `${hName} apresenta volume ofensivo bastante superior no radar de estilo (média de ${hs.avgShots.toFixed(0)} finalizações/jogo vs ${as.avgShots.toFixed(0)} de ${aName}).`, prio: 4 });
+  } else if (as.avgShots >= hs.avgShots + 4.5 && as.n >= 3) {
+    out.push({ text: `${aName} apresenta volume ofensivo bastante superior no radar de estilo (média de ${as.avgShots.toFixed(0)} finalizações/jogo vs ${hs.avgShots.toFixed(0)} de ${hName}).`, prio: 4 });
+  }
+
+  if (hs.avgGoalsConceded <= as.avgGoalsConceded - 0.5 && hs.n >= 3) {
+    out.push({ text: `${hName} destaca-se pela solidez defensiva no radar de estilo, sofrendo significativamente menos gols (${hs.avgGoalsConceded.toFixed(1)}/jogo) que ${aName} (${as.avgGoalsConceded.toFixed(1)}/jogo).`, prio: 4 });
+  } else if (as.avgGoalsConceded <= hs.avgGoalsConceded - 0.5 && as.n >= 3) {
+    out.push({ text: `${aName} destaca-se pela solidez defensiva no radar de estilo, sofrendo significativamente menos gols (${as.avgGoalsConceded.toFixed(1)}/jogo) que ${hName} (${hs.avgGoalsConceded.toFixed(1)}/jogo).`, prio: 4 });
+  }
+
+  if (hs.avgCards >= as.avgCards + 1.2 && hs.n >= 3) {
+    out.push({ text: `${hName} possui menor índice de disciplina no radar (${hs.avgCards.toFixed(1)} cartões/jogo), elevando o potencial de sanções na partida.`, prio: 3 });
+  } else if (as.avgCards >= hs.avgCards + 1.2 && as.n >= 3) {
+    out.push({ text: `${aName} possui menor índice de disciplina no radar (${as.avgCards.toFixed(1)} cartões/jogo), elevando o potencial de sanções na partida.`, prio: 3 });
+  }
+
   // BTTS como conclusão de fechamento.
   if (hs.bttsPct >= 60 && as.bttsPct >= 60) {
     out.push({ text: `Ambas as equipes marcam com frequência (BTTS em ${hs.bttsPct}% dos jogos de ${hName} e ${as.bttsPct}% dos de ${aName}) — cenário favorável a "Ambas Marcam".`, prio: 2 });

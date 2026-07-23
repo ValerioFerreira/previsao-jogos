@@ -19,8 +19,20 @@ export default function InactivityWatcher() {
   const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warningOpenRef = useRef(false);
 
-  const doLogout = useCallback(() => {
+  const doLogout = useCallback(async () => {
     setWarningOpen(false);
+    try {
+      const { analysisApi, betsApi } = await import("@/lib/monetizationApi");
+      const list = await analysisApi.list(10, 0);
+      const reservedList = (list?.items || []).filter(
+        (a) => a.type === "future_match" && a.status === "reserved"
+      );
+      for (const res of reservedList) {
+        await betsApi.create(res.id, []).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Auto-selection before logout best-effort:", e);
+    }
     logout();
     router.push("/");
   }, [logout, router]);
