@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Check } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { teamLogoUrl, leagueLogoUrl, onImgError } from '@/lib/api';
 import { teamPt } from '@/lib/teamNames';
@@ -85,6 +85,21 @@ const OldMatchBadge = () => (
   </TooltipProvider>
 );
 
+const H2HBadge = () => (
+  <TooltipProvider delayDuration={150}>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white shadow-md border-2 border-background ring-1 ring-emerald-500/30 shrink-0">
+          <Check className="w-3 h-3 stroke-[3]" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-[11px] bg-slate-900 border border-emerald-500/40 text-emerald-200 shadow-xl">
+        Confronto direto disponível no banco de dados
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
+
 export type PickerFixture = {
   fixture_id: string;
   home: string;
@@ -95,6 +110,7 @@ export type PickerFixture = {
   league_name?: string;
   league_id?: number | null;
   scope?: 'selecao' | 'clube';
+  has_h2h?: boolean;
 };
 
 function fmtDateTime(iso: string): string {
@@ -348,7 +364,12 @@ export function MatchPickerModal({
               {selectedMatches.slice(0, 80).map(f => (
                 <button key={f.fixture_id}
                   onClick={() => { onSelect(f); onOpenChange(false); }}
-                  className="text-left p-3 rounded-lg border border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60 transition-colors">
+                  className="relative text-left p-3 rounded-lg border border-border/50 bg-muted/30 hover:border-cyan-500/40 hover:bg-muted/60 transition-colors group">
+                  {f.has_h2h && (
+                    <div className="absolute -top-2 -right-2 z-10">
+                      <H2HBadge />
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Flag name={f.home} ids={teamIds} />

@@ -464,6 +464,55 @@ export const api = {
     if (params.away) q.set("away", params.away);
     return request<{ has_deep_analysis: boolean; analyst_name: string | null; fixture_id: number | null }>(`/api/deep-analysis/check?${q.toString()}`);
   },
+  performance: () => request<PerformanceOverview>(`/api/performance`),
+};
+
+// ---- Vitrine de desempenho (/desempenho) ----
+export type PerfHitrate = {
+  n_jogos: number;
+  modelo_1x2: { n: number; acuracia: number; log_loss: number; brier: number; ece: number };
+  mercado_1x2: { n: number; acuracia: number; log_loss: number; brier: number; ece: number } | null;
+  modelo_1x2_no_conjunto_do_mercado: { acuracia: number; log_loss: number } | null;
+  empates: {
+    empates_reais: number; empates_previstos_pelo_modelo: number;
+    prob_media_empate_modelo: number; freq_real_empate: number;
+  };
+  placar_e_btts: {
+    placar_exato_top1_acerto_pct: number | null; placar_exato_n: number;
+    btts_acerto_pct: number | null; btts_n: number;
+  };
+};
+export type PerfStrategy = { n: number; hit_rate: number | null; roi_pct: number | null };
+export type PerfFairOddsLeague = {
+  n: number;
+  vies_prob_pp: number;
+  precisao_mae_pp: number;
+  precisao_rmse_pp: number;
+  breakeven_uplift_mediano_pct: number;
+  breakeven_uplift_medio_pct: number;
+  gap_melhor_casa_mediano_pct: number | null;
+  gap_cobertura_n: number;
+};
+export type PerformanceOverview = {
+  disponivel: boolean;
+  fair_odds?: {
+    metodo?: string; nota_margem?: string; nota_honestidade?: string;
+    mercados?: Record<string, { ligas?: Record<string, PerfFairOddsLeague> }>;
+  };
+  overview: {
+    headline?: {
+      n_jogos: number; n_competicoes: number; calibracao_ece_pct: number;
+      calibracao_ece_empate_pct: number; log_loss: number; acuracia_1x2_pct: number;
+      placar_exato_pct: number; frase_calibracao: string; explicacao_leiga: string;
+    };
+    benchmark_literatura?: Record<string, string>;
+    jogo_responsavel?: { aviso: string; dado: string };
+  };
+  hitrates: { ligas?: Record<string, PerfHitrate>; benchmark_literatura?: Record<string, string> };
+  model_vs_naive: {
+    ligas?: Record<string, { n_jogos: number; estrategias: Record<string, PerfStrategy> }>;
+    aviso?: string;
+  };
 };
 
 // Prop "jogador a marcar": P(marca | joga) calibrada + odd justa.
@@ -517,6 +566,8 @@ export type UpcomingFixture = {
   scope: Scope;
   // Nome do analista, presente se a partida tiver Análise Aprofundada cadastrada no admin.
   deep_analyst?: string;
+  // Indica se as equipes possuem no mínimo 1 confronto direto no banco de dados.
+  has_h2h?: boolean;
 };
 
 export type SharedAnalysisPublic = {

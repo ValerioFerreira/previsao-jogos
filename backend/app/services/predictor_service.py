@@ -180,6 +180,22 @@ PAST_FIXTURES_PATH = REPO_ROOT / "data" / "built" / "past_fixtures.json"
 
 
 @_cache_nonempty
+def _get_h2h_pairs() -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    """Conjuntos de pares (home, away) com histórico no banco (para seleções e clubes)."""
+    try:
+        p_sel = get_predictor()
+        p_clu = get_club_predictor()
+        r_sel = p_sel.h2h_results if getattr(p_sel, 'h2h_results', None) is not None else p_sel.results
+        r_clu = p_clu.h2h_results if getattr(p_clu, 'h2h_results', None) is not None else p_clu.results
+        s_sel = set(zip(r_sel['home_team'], r_sel['away_team'])) | set(zip(r_sel['away_team'], r_sel['home_team']))
+        s_clu = set(zip(r_clu['home_team'], r_clu['away_team'])) | set(zip(r_clu['away_team'], r_clu['home_team']))
+        return s_sel, s_clu
+    except Exception as e:
+        print(f"[ERRO _get_h2h_pairs] {e}")
+        return set(), set()
+
+
+@_cache_nonempty
 def get_past_fixtures() -> list[dict[str, Any]]:
     """Lista de partidas já disputadas (para o seletor de Partidas Passadas)."""
     from app.db.connection import engine
@@ -191,6 +207,7 @@ def get_past_fixtures() -> list[dict[str, Any]]:
         print(f"[ERRO DB] past_fixtures: {e}")
         raw = []
         
+    s_sel, s_clu = _get_h2h_pairs()
     for f in raw:
         f["home"] = _norm(f.get("home"))
         f["away"] = _norm(f.get("away"))
@@ -204,6 +221,8 @@ def get_past_fixtures() -> list[dict[str, Any]]:
                 "fa cup", "primeira liga", "eredivisie"
             ])
             f["scope"] = "clube" if is_club else "selecao"
+        pairs = s_clu if f.get("scope") == "clube" else s_sel
+        f["has_h2h"] = (f.get("home"), f.get("away")) in pairs
     return raw
 
 
@@ -529,6 +548,11 @@ def get_upcoming_fixtures() -> list[dict[str, Any]]:
             "league_id": info.get("league_id"),
             "scope": "clube",
         })
+
+    s_sel, s_clu = _get_h2h_pairs()
+    for f in out:
+        pairs = s_clu if f.get("scope") == "clube" else s_sel
+        f["has_h2h"] = (f.get("home"), f.get("away")) in pairs
 
     out.sort(key=lambda x: x["date"] or "")
     return out
