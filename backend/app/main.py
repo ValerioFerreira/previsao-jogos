@@ -271,23 +271,67 @@ def upcoming_fixtures(db: Session = Depends(get_db)) -> dict:
 
 @app.get("/api/featured-matches")
 def featured_matches(db: Session = Depends(get_db)) -> dict:
-    """Partidas fixadas pelo admin pra home -- pública, sem auth. Pula silenciosamente
-    qualquer destaque cujo fixture_id já não esteja mais entre os próximos jogos
-    (partida já ocorreu ou saiu da janela coletada)."""
+    """Partidas fixadas pelo admin pra home -- pública, sem auth. Exclui automaticamente
+    da base de dados qualquer destaque cujo fixture_id já tenha iniciado/ocorrido."""
     from app.domains.admin.models import FeaturedMatch
 
     rows = db.execute(select(FeaturedMatch).order_by(FeaturedMatch.sort_order)).scalars().all()
     if not rows:
         return {"items": []}
-    # get_upcoming_fixtures() usa fixture_id em string (chave do registry); FeaturedMatch
-    # guarda int -- normaliza os dois lados pra string antes de casar.
+    
     upcoming = {str(f["fixture_id"]): f for f in get_upcoming_fixtures()}
     items = []
+    to_delete = []
     for r in rows:
         fx = upcoming.get(str(r.fixture_id))
-        if fx:
+        if not fx:
+            to_delete.append(r)
+        else:
             items.append(fx)
+
+    if to_delete:
+        for r in to_delete:
+            db.delete(r)
+        db.commit()
+
     return {"items": items}
+
+
+@app.get("/api/deep-analysis/check")
+def check_deep_analysis(
+    fixture_id: int | None = Query(None),
+    home: str | None = Query(None),
+    away: str | None = Query(None),
+    db: Session = Depends(get_db)
+) -> dict:
+    """Verifica se há uma Análise Aprofundada cadastrada para uma partida (por fixture_id ou por times)."""
+    from app.domains.admin.models import MatchDeepAnalysis
+    da = None
+    if fixture_id:
+        try:
+            da = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id == int(fixture_id))).scalar_one_or_none()
+        except Exception:
+            pass
+    
+    if not da and home and away:
+        fixtures = get_upcoming_fixtures()
+        from predictor import TEAM_ALIASES
+        def norm(n): return TEAM_ALIASES.get(n, n).lower().strip()
+        nh, na = norm(home), norm(away)
+        matched_fid = None
+        for f in fixtures:
+            if norm(f.get("home", "")) == nh and norm(f.get("away", "")) == na:
+                matched_fid = f.get("fixture_id")
+                break
+        if matched_fid:
+            try:
+                da = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id == int(matched_fid))).scalar_one_or_none()
+            except Exception:
+                pass
+
+    if da:
+        return {"has_deep_analysis": True, "analyst_name": da.analyst_name, "fixture_id": da.fixture_id}
+    return {"has_deep_analysis": False, "analyst_name": None, "fixture_id": None}
 
 
 @app.get("/public/shared-analyses/{token}")

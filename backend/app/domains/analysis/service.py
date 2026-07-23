@@ -208,8 +208,22 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
     db.commit()
 
     res_snapshot = dict(snapshot)
-    if req.fixture_id:
-        da = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id == req.fixture_id)).scalar_one_or_none()
+    target_fid = req.fixture_id
+    if not target_fid:
+        from app.services.predictor_service import get_upcoming_fixtures
+        from predictor import TEAM_ALIASES
+        def norm(n): return TEAM_ALIASES.get(n, n).lower().strip()
+        nh, na = norm(home), norm(away)
+        for f in get_upcoming_fixtures():
+            if norm(f.get("home", "")) == nh and norm(f.get("away", "")) == na:
+                try:
+                    target_fid = int(f.get("fixture_id"))
+                    break
+                except Exception:
+                    pass
+
+    if target_fid:
+        da = db.execute(select(MatchDeepAnalysis).where(MatchDeepAnalysis.fixture_id == target_fid)).scalar_one_or_none()
         if da:
             res_snapshot["deep_analysis"] = {"analyst_name": da.analyst_name, "markdown_content": da.markdown_content}
 

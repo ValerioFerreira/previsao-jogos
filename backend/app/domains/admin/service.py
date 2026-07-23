@@ -1329,17 +1329,34 @@ def list_featured_matches(db: Session) -> dict:
     from app.services.predictor_service import get_upcoming_fixtures
 
     rows = db.execute(select(FeaturedMatch).order_by(FeaturedMatch.sort_order)).scalars().all()
-    # get_upcoming_fixtures() usa fixture_id em string (chave do registry); FeaturedMatch
-    # guarda int -- normaliza os dois lados pra string antes de casar.
     upcoming = {str(f["fixture_id"]): f for f in get_upcoming_fixtures()}
     items = []
+    to_delete = []
     for r in rows:
         fx = upcoming.get(str(r.fixture_id))
-        items.append({**_featured_match_out(r), "fixture": fx})
+        if not fx:
+            to_delete.append(r)
+        else:
+            items.append({**_featured_match_out(r), "fixture": fx})
+
+    if to_delete:
+        for r in to_delete:
+            db.delete(r)
+        db.commit()
+
     return {"items": items}
 
 
 def create_featured_match(db: Session, admin: User, data: schemas.FeaturedMatchRequest, ip) -> dict:
+    from app.services.predictor_service import get_upcoming_fixtures
+    # Limpa partidas iniciadas/passadas antes de verificar limite
+    upcoming_ids = {str(f["fixture_id"]) for f in get_upcoming_fixtures()}
+    rows = db.execute(select(FeaturedMatch)).scalars().all()
+    for r in rows:
+        if str(r.fixture_id) not in upcoming_ids:
+            db.delete(r)
+    db.commit()
+
     count = db.execute(select(func.count(FeaturedMatch.id))).scalar_one()
     if count >= _FEATURED_MATCH_LIMIT:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,

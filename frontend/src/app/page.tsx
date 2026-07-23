@@ -390,6 +390,44 @@ export default function Previsoes() {
     }
   }, [awayTeamId, scope]);
 
+  const [deepAnalysisInfo, setDeepAnalysisInfo] = useState<{ hasDeep: boolean; analystName: string | null; fixtureId: number | null } | null>(null);
+
+  React.useEffect(() => {
+    if (!homeTeamId || !awayTeamId) {
+      setDeepAnalysisInfo(null);
+      return;
+    }
+    const matched = (upcoming || []).find(f => (fixtureId && String(f.fixture_id) === String(fixtureId)) || (f.home === homeTeamId && f.away === awayTeamId))
+      || (featured || []).find(f => (fixtureId && String(f.fixture_id) === String(fixtureId)) || (f.home === homeTeamId && f.away === awayTeamId));
+
+    if (matched?.deep_analyst) {
+      setDeepAnalysisInfo({
+        hasDeep: true,
+        analystName: matched.deep_analyst,
+        fixtureId: matched.fixture_id ? Number(matched.fixture_id) : null,
+      });
+      return;
+    }
+
+    let cancelled = false;
+    api.checkDeepAnalysis({ fixture_id: fixtureId ? Number(fixtureId) : undefined, home: homeTeamId, away: awayTeamId })
+      .then(res => {
+        if (cancelled) return;
+        if (res.has_deep_analysis && res.analyst_name) {
+          setDeepAnalysisInfo({
+            hasDeep: true,
+            analystName: res.analyst_name,
+            fixtureId: res.fixture_id,
+          });
+        } else {
+          setDeepAnalysisInfo(null);
+        }
+      })
+      .catch(() => { if (!cancelled) setDeepAnalysisInfo(null); });
+
+    return () => { cancelled = true; };
+  }, [homeTeamId, awayTeamId, fixtureId, upcoming, featured]);
+
   const canGenerate = homeTeamId && awayTeamId && homeTeamId !== awayTeamId;
 
   const handleGenerate = useCallback(async () => {
@@ -399,6 +437,8 @@ export default function Previsoes() {
     setErrMsg(null);
     setAnalysis(null);
 
+    const resolvedFixtureId = fixtureId ? Number(fixtureId) : (deepAnalysisInfo?.fixtureId ? Number(deepAnalysisInfo.fixtureId) : null);
+
     try {
       const a = await analysisApi.create({
         home_team: homeTeamId,
@@ -407,7 +447,7 @@ export default function Previsoes() {
         neutral: neutralField,
         scope,
         type: mode === 'futura' ? 'future_match' : 'independent',
-        fixture_id: mode === 'futura' ? fixtureId : null,
+        fixture_id: resolvedFixtureId,
       });
       setAnalysis(a); // persiste no contexto — não some ao navegar e voltar
       await refreshWallet();
@@ -416,7 +456,7 @@ export default function Previsoes() {
     } finally {
       setLoading(false);
     }
-  }, [canGenerate, user, homeTeamId, awayTeamId, competition, neutralField, scope, mode, fixtureId, refreshWallet, router, setAnalysis]);
+  }, [canGenerate, user, homeTeamId, awayTeamId, competition, neutralField, scope, mode, fixtureId, deepAnalysisInfo, refreshWallet, router, setAnalysis]);
 
   return (
     <div className="space-y-6">
@@ -623,24 +663,21 @@ export default function Previsoes() {
           </div>
         )}
         
-        {/* Card Mensagem Análise Aprofundada (substituindo o carimbo) */}
+        {/* Badge Análise Aprofundada (Exibido ANTES de gerar a análise quando a partida possuir análise aprofundada cadastrada) */}
         {(() => {
-          const activeFx = (upcoming || []).find(f => (fixtureId && String(f.fixture_id) === String(fixtureId)) || (homeTeamId && awayTeamId && f.home === homeTeamId && f.away === awayTeamId))
-            || (featured || []).find(f => (fixtureId && String(f.fixture_id) === String(fixtureId)) || (homeTeamId && awayTeamId && f.home === homeTeamId && f.away === awayTeamId));
-          const analystName = activeFx?.deep_analyst;
-          if (loading || analysis || !analystName) return null;
+          if (loading || analysis || !deepAnalysisInfo?.hasDeep || !deepAnalysisInfo?.analystName) return null;
           return (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-slate-900 border-2 border-indigo-500/40 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.15)] mb-3 max-w-md w-full text-left"
+              className="bg-slate-900 border-2 border-indigo-500/40 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.15)] my-4 max-w-xl w-full text-left"
             >
               <div className="bg-indigo-500/10 px-4 py-2.5 border-b border-indigo-500/20 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
                 <h3 className="font-heading font-bold text-xs sm:text-sm text-indigo-100 tracking-wide uppercase">Análise Aprofundada Detalhada</h3>
               </div>
               <div className="p-4 text-xs sm:text-sm text-indigo-200/90 leading-relaxed text-justify">
-                Essa partida contém uma Análise Aprofundada Detalhada, feita por <strong className="text-indigo-300 font-semibold">{analystName}</strong>. Gere a análise para conferir!
+                Esta partida contém uma análise aprofundada, feita por <strong className="text-indigo-300 font-semibold">{deepAnalysisInfo.analystName}</strong>. Gere uma análise para conferi-la!
               </div>
             </motion.div>
           );

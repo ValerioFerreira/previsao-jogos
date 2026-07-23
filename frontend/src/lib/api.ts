@@ -457,6 +457,13 @@ export const api = {
     request<MatchDetail>(`/api/match-detail?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&date=${encodeURIComponent(date)}`),
   scorers: (home: string, away: string, scope: Scope = "selecao") =>
     request<ScorersResponse>(`/api/scorers?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&scope=${scope}`),
+  checkDeepAnalysis: (params: { fixture_id?: number | string; home?: string; away?: string }) => {
+    const q = new URLSearchParams();
+    if (params.fixture_id) q.set("fixture_id", String(params.fixture_id));
+    if (params.home) q.set("home", params.home);
+    if (params.away) q.set("away", params.away);
+    return request<{ has_deep_analysis: boolean; analyst_name: string | null; fixture_id: number | null }>(`/api/deep-analysis/check?${q.toString()}`);
+  },
 };
 
 // Prop "jogador a marcar": P(marca | joga) calibrada + odd justa.
