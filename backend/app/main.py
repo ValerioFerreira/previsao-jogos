@@ -137,6 +137,19 @@ def cron_refresh_fixtures(token: str = Query(default="")) -> dict:
     return res
 
 
+@app.get("/api/cron/refresh-upcoming")
+def cron_refresh_upcoming(days: int = Query(default=10), token: str = Query(default="")) -> dict:
+    """Atualiza as partidas futuras (seleções + clubes) e odds no Neon a cada 3 horas.
+    Protegido por CRON_TOKEN (se a env var estiver setada)."""
+    import os
+    expected = os.getenv("CRON_TOKEN")
+    if expected and token != expected:
+        raise HTTPException(status_code=403, detail="Token inválido.")
+    from app.services.fixtures_refresh import refresh_upcoming_fixtures
+    return refresh_upcoming_fixtures(days=days)
+
+
+
 @app.post("/api/cron/settle-bets")
 def cron_settle_bets(token: str = Query(default="")) -> dict:
     """Liquida as apostas com partida encerrada (após o delay de segurança): consome o
@@ -459,3 +472,30 @@ def injuries(team_name: str, scope: str = Query("selecao")) -> InjuriesResponse:
         raise HTTPException(status_code=404, detail="Time nao encontrado.")
 
     return InjuriesResponse(**get_injuries(team_match, scope=scope))
+
+
+# ==============================================================================
+# SCHEDULER AUTOMÁTICO EM BACKGROUND (A CADA 3 HORAS)
+# ==============================================================================
+def _start_3h_scheduler():
+    import threading
+    import time
+    def _loop():
+        # Aguarda 15s no boot para não competir com a subida inicial da aplicação
+        time.sleep(15)
+        while True:
+            try:
+                print("[BACKGROUND CRON] Executando ciclo de atualização de partidas (3h)...")
+                from app.services.fixtures_refresh import refresh_upcoming_fixtures, refresh_past_fixtures
+                refresh_upcoming_fixtures(days=10)
+                refresh_past_fixtures(days_back=3)
+                print("[BACKGROUND CRON] Ciclo de 3h concluído com sucesso.")
+            except Exception as e:
+                print(f"[BACKGROUND CRON ERRO] {e}")
+            time.sleep(3 * 3600)
+
+    t = threading.Thread(target=_loop, daemon=True, name="3h_fixture_collector")
+    t.start()
+
+_start_3h_scheduler()
+

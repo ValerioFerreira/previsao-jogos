@@ -88,3 +88,27 @@ def refresh_past_fixtures(days_back: int = 3) -> dict:
 
     return {"ok": True, "dias_consultados": dias_consultados, "novos_jogos": len(new_rows),
             "novos_times": len(new_teams), "ligas_rastreadas": len(tracked)}
+
+
+def refresh_upcoming_fixtures(days: int = 10) -> dict:
+    """Atualiza as partidas futuras e odds de seleções e clubes (odds_registry & club_odds_registry
+    no Neon), e limpa os caches em memória."""
+    try:
+        from scripts.collect_odds_forward import collect as collect_sel
+        from scripts.collect_club_odds_forward import collect as collect_club
+        from app.services.predictor_service import _READER_MEMO
+
+        res_sel = collect_sel(days=days, dry_run=False)
+        res_club = collect_club(days=days, dry_run=False)
+
+        _READER_MEMO.clear()
+
+        return {
+            "ok": True,
+            "selecoes": res_sel,
+            "clubes": res_club,
+        }
+    except Exception as e:
+        print(f"[ERRO refresh_upcoming_fixtures] {e}")
+        return {"ok": False, "erro": str(e)}
+
