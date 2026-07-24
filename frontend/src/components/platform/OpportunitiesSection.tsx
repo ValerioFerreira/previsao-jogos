@@ -156,16 +156,16 @@ export default function OpportunitiesSection({ prediction, home, away, fixtureId
     const list: OpportunityRow[] = [];
     if (odds) {
       pushBinaryComparisons(list, bookmakerOdds, "resultado", "Home", "Resultado", "Resultado (Vitória)", teamPt(home), odds.vencedor?.[home]);
-      pushBinaryComparisons(list, bookmakerOdds, "resultado", "Draw", "Resultado", "Resultado (Empate)", "—", odds.vencedor?.["Empate"]);
+      pushBinaryComparisons(list, bookmakerOdds, "resultado", "Draw", "Resultado", "Resultado (Empate)", "Partida", odds.vencedor?.["Empate"]);
       pushBinaryComparisons(list, bookmakerOdds, "resultado", "Away", "Resultado", "Resultado (Vitória)", teamPt(away), odds.vencedor?.[away]);
-      pushBinaryComparisons(list, bookmakerOdds, "btts", "Yes", "Ambas Marcam", "Ambas Marcam (Sim)", "—", odds.ambas_marcam?.sim);
-      pushBinaryComparisons(list, bookmakerOdds, "btts", "No", "Ambas Marcam", "Ambas Marcam (Não)", "—", odds.ambas_marcam?.nao);
-      pushLineComparisons(list, bookmakerOdds, "gols_over_under", "Gols", "—", odds.linhas_numericas?.gols);
+      pushBinaryComparisons(list, bookmakerOdds, "btts", "Yes", "Ambas Marcam", "Ambas Marcam (Sim)", "Partida", odds.ambas_marcam?.sim);
+      pushBinaryComparisons(list, bookmakerOdds, "btts", "No", "Ambas Marcam", "Ambas Marcam (Não)", "Partida", odds.ambas_marcam?.nao);
+      pushLineComparisons(list, bookmakerOdds, "gols_over_under", "Gols", "Partida", odds.linhas_numericas?.gols);
       pushLineComparisons(list, bookmakerOdds, "escanteios_mandante", "Escanteios", teamPt(home), odds.linhas_numericas?.escanteios?.[home]);
-      pushLineComparisons(list, bookmakerOdds, "escanteios_total", "Escanteios", "—", odds.linhas_numericas?.escanteios?.total);
+      pushLineComparisons(list, bookmakerOdds, "escanteios_total", "Escanteios", "Partida", odds.linhas_numericas?.escanteios?.total);
       pushLineComparisons(list, bookmakerOdds, "escanteios_visitante", "Escanteios", teamPt(away), odds.linhas_numericas?.escanteios?.[away]);
       pushLineComparisons(list, bookmakerOdds, "cartoes_mandante", "Cartões", teamPt(home), odds.linhas_numericas?.cartoes?.[home]);
-      pushLineComparisons(list, bookmakerOdds, "cartoes_total", "Cartões", "—", odds.linhas_numericas?.cartoes?.total);
+      pushLineComparisons(list, bookmakerOdds, "cartoes_total", "Cartões", "Partida", odds.linhas_numericas?.cartoes?.total);
       pushLineComparisons(list, bookmakerOdds, "cartoes_visitante", "Cartões", teamPt(away), odds.linhas_numericas?.cartoes?.[away]);
     }
     list.sort((a, b) => b.ev - a.ev);
@@ -265,8 +265,8 @@ export default function OpportunitiesSection({ prediction, home, away, fixtureId
                       {r.mercadoLabel}
                     </td>
                     <td className="py-2.5 px-3">
-                      {r.equipe === "—" ? (
-                        <span className="text-muted-foreground/40 font-mono">—</span>
+                      {r.equipe === "Partida" ? (
+                        <span className="text-muted-foreground/80 font-medium italic">Partida</span>
                       ) : (
                         <span className="text-foreground">{r.equipe}</span>
                       )}
