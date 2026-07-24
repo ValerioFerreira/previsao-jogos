@@ -49,6 +49,7 @@ from app.services.predictor_service import (
     get_match_detail,
     get_past_fixtures,
 )
+from app.services.odds_bookmaker_service import get_bookmaker_odds
 
 
 app = FastAPI(
@@ -233,6 +234,16 @@ def aggregate(team_a: str = Query(...), team_b: str = Query(...),
     if tournament not in predictor.meta["tournament_weights"]:
         raise HTTPException(status_code=400, detail="Competicao invalida.")
     return predictor.predict_aggregate(team_a, team_b, tournament=tournament)
+
+
+@app.get("/api/odds/bookmakers")
+def odds_bookmakers(fixture_id: int = Query(...), scope: str = Query("selecao")) -> dict:
+    """Verificador de Bets: odds por casa de apostas (identidade preservada) para o
+    fixture, já ordenadas decrescente por odd em cada mercado/outcome. Não recalcula
+    odd justa -- o frontend cruza com prediction.odds (faixa_odd_justa) vindo de
+    /predict. 'disponivel': False quando o fixture está fora da janela de retenção
+    da api-football (1-14 dias antes do jogo) ou ainda não foi coletado."""
+    return get_bookmaker_odds(fixture_id, scope=scope)
 
 
 @app.get("/api/referees")

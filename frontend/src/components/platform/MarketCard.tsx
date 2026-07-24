@@ -18,6 +18,9 @@ type MarketCardProps = {
   // Quando há variantes por tipo de cartão (amarelo/ambos/vermelho), cada uma com seu
   // próprio mapa de períodos; vira um seletor independente no topo do card.
   cardKinds?: Partial<Record<CardKind, Record<string, Distrib | undefined>>>;
+  // Verificador de Bets: badge opcional (BookmakerOddsBadge) renderizado no header,
+  // ao lado do InfoTooltip. Composição livre — o card não conhece odds por casa.
+  bookmakerBadge?: React.ReactNode;
 };
 
 type CardKind = 'amarelo' | 'ambos' | 'vermelho';
@@ -48,7 +51,7 @@ function overProb(dist: number[], line: number): number {
   return Math.min(1, Math.max(0, s));
 }
 
-export function MarketCard({ title, subtitle, prediction, periods, icon, cardKinds }: MarketCardProps) {
+export function MarketCard({ title, subtitle, prediction, periods, icon, cardKinds, bookmakerBadge }: MarketCardProps) {
   const [viewMode, setViewMode] = useState<'prob' | 'odd'>('prob');
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -94,6 +97,7 @@ export function MarketCard({ title, subtitle, prediction, periods, icon, cardKin
           {icon}
           {subtitle ?? title}
           <InfoTooltip text="Quantidade prevista é o valor esperado. A linha em destaque é a mais próxima dela. A faixa de odd justa vai da odd com 7% de margem até a odd prevista (1/probabilidade)." />
+          {bookmakerBadge}
         </h3>
         <div className="flex justify-between items-center gap-2 mt-1.5 flex-wrap">
           <p className="text-xs text-muted-foreground">

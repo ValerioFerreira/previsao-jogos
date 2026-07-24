@@ -405,6 +405,20 @@ export type PmfPreviewResponse = {
 export type InjuryPlayer = { player_id: number | null; name: string | null; reason: string | null; type: string | null };
 export type InjuriesResponse = { team: string; season: number | null; players: InjuryPlayer[] };
 
+// Verificador de Bets: odds por casa de apostas (identidade preservada), lidas de
+// odds_bookmaker_latest/club_odds_bookmaker_latest (Neon) via GET /api/odds/bookmakers.
+// Já vem ordenada decrescente por odd (ver odds_bookmaker_service.py). Não recalcula
+// odd justa -- o cruzamento com prediction.odds (faixa_odd_justa) é feito no cliente.
+export type BookmakerOddEntry = { casa: string; odd: number };
+export type BookmakerOddsResponse =
+  | { disponivel: false }
+  | {
+      disponivel: true;
+      fixture_id: number;
+      atualizado_em: string | null;
+      mercados: Record<string, Record<string, BookmakerOddEntry[]>>;
+    };
+
 export type RefereeStatsResponse = {
   referee: string;
   n_matches: number;
@@ -465,6 +479,8 @@ export const api = {
     return request<{ has_deep_analysis: boolean; analyst_name: string | null; fixture_id: number | null }>(`/api/deep-analysis/check?${q.toString()}`);
   },
   performance: () => request<PerformanceOverview>(`/api/performance`),
+  getBookmakerOdds: (fixtureId: number, scope: Scope = "selecao") =>
+    request<BookmakerOddsResponse>(`/api/odds/bookmakers?fixture_id=${fixtureId}&scope=${scope}`),
 };
 
 // ---- Vitrine de desempenho (/desempenho) ----

@@ -41,7 +41,14 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   `devig_methods.py::shin_devig` (nunca tinha sido testado de verdade, caía em power); vazamento
   treino/teste achado e escopado (só Brasileirão, 93/306 jogos pré-corte — não contamina as 3
   ligas europeias nem W1/W2); lacuna de O/U do Brasileirão é fechável via API-Football (cron já
-  corrigido). Relatórios em `backend/data/reports/adhoc_valuebet_w{1,2,3,4}/`**.
+  corrigido). Relatórios em `backend/data/reports/adhoc_valuebet_w{1,2,3,4}/`**, **§21 nosso
+  modelo vs `/predictions` nativo da API-Football em escala (8117 jogos, 2026-07-23/24) — nosso
+  modelo ganha em log-loss/Brier/ECE/acurácia em 26 de 26 competições; decisão: sem badge de
+  ensemble/convergência com o vendor. Relatório em
+  `backend/data/reports/adhoc_compare_apifootball/RELATORIO_FINAL.md`**, **§22 "Verificador de
+  Bets" (odds por casa nos cards, `GET /api/odds/bookmakers`, tabelas Neon
+  `{,club_}odds_bookmaker_latest`) + seção "Oportunidades Encontradas" (EV positivo,
+  100% client-side) na Análise, mesmo dia**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa

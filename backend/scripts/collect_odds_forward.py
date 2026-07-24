@@ -49,7 +49,9 @@ try:
 except Exception:
     pass
 
-from scripts.fetch_odds import BASE, BET_MAP, load_key, parse_fixture_odds  # noqa: E402
+from scripts.fetch_odds import (  # noqa: E402
+    BASE, BET_MAP, load_key, parse_fixture_odds, parse_fixture_odds_by_bookmaker,
+)
 from scripts import quota_tracker  # noqa: E402
 
 FIXTURES_DIR = ROOT / "data" / "raw" / "fixtures"
@@ -166,6 +168,31 @@ def sync_registry_to_db(registry: dict) -> None:
         print(f"[AVISO] Falha ao sincronizar odds_registry no Neon: {exc}")
 
 
+def sync_bookmaker_odds_to_db(rows: list[dict]) -> None:
+    """Espelha a odd por casa (mais recente por fixture, com identidade da casa
+    preservada) na tabela odds_bookmaker_latest do Neon -- alimenta o Verificador de
+    Bets (GET /api/odds/bookmakers). Só fixtures com odds coletadas NESTA execução
+    entram em `rows`; o upsert mantém, por fixture, o snapshot mais recente entre
+    execuções (nunca mistura com club_odds_bookmaker_latest, tabela separada do
+    coletor de clubes). Falha aqui não interrompe a coleta local."""
+    if not rows:
+        return
+    try:
+        import pandas as pd
+        from app.db.connection import engine, upsert_df
+        from sqlalchemy import text
+
+        with engine.begin() as c:
+            c.execute(text(
+                "CREATE TABLE IF NOT EXISTS odds_bookmaker_latest ("
+                "fixture_id TEXT PRIMARY KEY, odds_by_bookmaker TEXT, updated_at TEXT)"
+            ))
+        upsert_df(pd.DataFrame(rows), "odds_bookmaker_latest", engine, unique_keys=["fixture_id"])
+        print(f">> odds_bookmaker_latest sincronizada no Neon: {len(rows)} jogos")
+    except Exception as exc:  # pragma: no cover - robustez de coleta
+        print(f"[AVISO] Falha ao sincronizar odds_bookmaker_latest no Neon: {exc}")
+
+
 def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: int = 50) -> dict:
     """`days` controla até onde ENUMERAMOS jogos (o quanto der -- não é um limite da
     api-football, é só o quanto pedimos; jogo listado não custa nada além da própria
@@ -191,6 +218,7 @@ def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: 
     odds_collected = 0
     remaining = None
     stopped_early = False
+    bookmaker_rows: list[dict] = []  # fixture_id -> odds_by_bookmaker (Neon, ver sync_bookmaker_odds_to_db)
 
     for offset in range(days):
         if quota_tracker.remaining() <= quota_buffer:
@@ -237,6 +265,7 @@ def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: 
             odds_json, remaining = api_get("/odds", key, fixture=fixture_id)
             resp = odds_json.get("response", [])
             odds = parse_fixture_odds(resp[0]) if resp else {}
+            odds_by_bookmaker = parse_fixture_odds_by_bookmaker(resp[0]) if resp else {}
             if not odds:
                 time.sleep(0.25)
                 continue
@@ -253,6 +282,7 @@ def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: 
                 "tournament": tournament,
                 "neutral": neutral,
                 "odds": odds,
+                "odds_by_bookmaker": odds_by_bookmaker,
                 "model": pred,
             }
             odds_collected += 1
@@ -262,12 +292,19 @@ def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: 
                     fh.write(json.dumps(snapshot, ensure_ascii=False) + "\n")
                 registry[str(fixture_id)]["last_collected"] = snapshot["collected_at"]
                 registry[str(fixture_id)]["n_snapshots"] = registry[str(fixture_id)].get("n_snapshots", 0) + 1
+                if odds_by_bookmaker:
+                    bookmaker_rows.append({
+                        "fixture_id": str(fixture_id),
+                        "odds_by_bookmaker": json.dumps(odds_by_bookmaker, ensure_ascii=False),
+                        "updated_at": snapshot["collected_at"],
+                    })
             time.sleep(0.25)  # freio gentil
 
     if not dry_run and seen_fixtures:
         ODDS_DIR.mkdir(parents=True, exist_ok=True)
         REGISTRY.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
         sync_registry_to_db(registry)
+        sync_bookmaker_odds_to_db(bookmaker_rows)
 
     return {
         "dias": days,

@@ -1,19 +1,40 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, ChevronDown, ShieldAlert, ShieldCheck, Sliders, Sparkles, Target } from "lucide-react";
-import type { PlacarMotivo, PredictionResponse, ScorersResponse } from "@/lib/api";
-import { onImgError, teamLogoUrl } from "@/lib/api";
+import type { BookmakerOddEntry, BookmakerOddsResponse, NumericLineMarket, PlacarMotivo, PredictionResponse, Scope, ScorersResponse } from "@/lib/api";
+import { api, onImgError, teamLogoUrl } from "@/lib/api";
 import { teamPt } from "@/lib/teamNames";
 import InfoTooltip from "@/components/platform/InfoTooltip";
 import { MarketCard } from "@/components/platform/MarketCard";
+import BookmakerOddsBadge from "@/components/platform/BookmakerOddsBadge";
 import {
   DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard,
   VitoriaSemSofrerCard, TimeAMarcarPrimeiroCard, MataMataAgregadoCard,
 } from "@/components/platform/DerivedMarkets";
 import ScorersCard from "@/components/platform/ScorersCard";
 import BetLab from "@/components/platform/BetLab";
+
+// Verificador de Bets: mercados/outcomes de odds por casa (api-football) usam o
+// formato "Over 2.5"/"Under 2.5" -- a linha do modelo é sempre x.5 (ver
+// numeric_line_market/corners_line_market em app/services/odds.py), então basta
+// formatar com 1 casa decimal para casar com a chave que o coletor gravou.
+export function lineOutcomeKey(side: "Over" | "Under", linha: number): string {
+  return `${side} ${linha.toFixed(1)}`;
+}
+
+// Busca a lista casa+odd de um mercado/outcome específico na resposta de
+// /api/odds/bookmakers -- [] quando indisponível (fixture fora da janela de
+// retenção, ainda não coletado, ou mercado/outcome sem odds daquela casa).
+export function bmEntries(
+  data: BookmakerOddsResponse | null,
+  mercado: string,
+  outcome: string,
+): BookmakerOddEntry[] {
+  if (!data || !data.disponivel) return [];
+  return data.mercados?.[mercado]?.[outcome] ?? [];
+}
 
 // Faixa de odd justa (margem de 7% para menos até 1/prob) a partir de uma prob em %.
 export function oddRangeStr(probPct: number): string {
@@ -23,6 +44,32 @@ export function oddRangeStr(probPct: number): string {
   const hi = Math.max(1, odd);
   const lo = Math.max(1, odd * 0.93);
   return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
+}
+
+// Badge duplo (Acima/Abaixo) para mercados de linha numérica (gols totais, escanteios,
+// cartões) -- a linha do modelo (market.linha) já é a única que temos faixa_odd_justa
+// pra comparar, então só essa linha específica é cruzada com as odds por casa.
+function NumericLineBadges({ market, mercadoKey, bookmakerOdds, labelPrefix }: {
+  market: NumericLineMarket | undefined;
+  mercadoKey: string;
+  bookmakerOdds: BookmakerOddsResponse | null;
+  labelPrefix: string;
+}) {
+  if (!market || !market.disponivel) return null;
+  return (
+    <>
+      <BookmakerOddsBadge
+        label={`${labelPrefix} — Acima de ${market.linha}`}
+        entries={bmEntries(bookmakerOdds, mercadoKey, lineOutcomeKey("Over", market.linha))}
+        fairMin={market.over.faixa_odd_justa.min}
+      />
+      <BookmakerOddsBadge
+        label={`${labelPrefix} — Abaixo de ${market.linha}`}
+        entries={bmEntries(bookmakerOdds, mercadoKey, lineOutcomeKey("Under", market.linha))}
+        fairMin={market.under.faixa_odd_justa.min}
+      />
+    </>
+  );
 }
 
 export function SectionDivider({ children }: { children: React.ReactNode }) {
@@ -260,14 +307,29 @@ function DeepAnalysisCard({ deepAnalysis }: { deepAnalysis: { analyst_name: stri
   );
 }
 
-export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }: {
+export function AnalysisResultsView({ prediction, home, away, teamIds, scorers, fixtureId, scope }: {
   prediction: PredictionResponse;
   home: string;
   away: string;
   teamIds: Record<string, number>;
   scorers: ScorersResponse | null;
+  fixtureId?: number | null;
+  scope?: Scope;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Verificador de Bets: 1 chamada (não 1 por card) a /api/odds/bookmakers quando
+  // há fixture_id -- o cache TTL/dedup de lib/api.ts cuida do resto. Sem fixture_id
+  // (análise independente, sem jogo agendado casado) não há odds reais pra mostrar.
+  const [bookmakerOdds, setBookmakerOdds] = useState<BookmakerOddsResponse | null>(null);
+  useEffect(() => {
+    if (!fixtureId) { setBookmakerOdds(null); return; }
+    let cancelled = false;
+    api.getBookmakerOdds(fixtureId, scope || "selecao")
+      .then(res => { if (!cancelled) setBookmakerOdds(res); })
+      .catch(() => { if (!cancelled) setBookmakerOdds(null); });
+    return () => { cancelled = true; };
+  }, [fixtureId, scope]);
 
   return (
     <div className="space-y-6">
@@ -296,12 +358,26 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }
               )}
               <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(home)}</p>
               <p className="text-3xl font-bold font-mono text-emerald-400">{prediction.vencedor.probabilidades[home]}%</p>
-              <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(prediction.vencedor.probabilidades[home])}</p>
+              <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center">
+                odd justa: {oddRangeStr(prediction.vencedor.probabilidades[home])}
+                <BookmakerOddsBadge
+                  label={`Resultado — Vitória de ${teamPt(home)}`}
+                  entries={bmEntries(bookmakerOdds, "resultado", "Home")}
+                  fairMin={prediction.odds?.vencedor?.[home]?.faixa_odd_justa?.min}
+                />
+              </p>
             </div>
             <div className="text-center w-[30%] min-w-[82px] border-x border-border/50">
               <p className="text-sm font-medium text-muted-foreground mb-1">Empate</p>
               <p className="text-2xl font-bold font-mono text-muted-foreground">{prediction.vencedor.probabilidades["Empate"]}%</p>
-              <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(prediction.vencedor.probabilidades["Empate"])}</p>
+              <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center">
+                odd justa: {oddRangeStr(prediction.vencedor.probabilidades["Empate"])}
+                <BookmakerOddsBadge
+                  label="Resultado — Empate"
+                  entries={bmEntries(bookmakerOdds, "resultado", "Draw")}
+                  fairMin={prediction.odds?.vencedor?.["Empate"]?.faixa_odd_justa?.min}
+                />
+              </p>
             </div>
             <div className="text-center w-[30%] min-w-[82px]">
               {teamLogoUrl(teamIds[away]) && (
@@ -309,7 +385,14 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }
               )}
               <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(away)}</p>
               <p className="text-3xl font-bold font-mono text-cyan-400">{prediction.vencedor.probabilidades[away]}%</p>
-              <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(prediction.vencedor.probabilidades[away])}</p>
+              <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center">
+                odd justa: {oddRangeStr(prediction.vencedor.probabilidades[away])}
+                <BookmakerOddsBadge
+                  label={`Resultado — Vitória de ${teamPt(away)}`}
+                  entries={bmEntries(bookmakerOdds, "resultado", "Away")}
+                  fairMin={prediction.odds?.vencedor?.[away]?.faixa_odd_justa?.min}
+                />
+              </p>
             </div>
           </div>
         </div>
@@ -325,12 +408,26 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Sim</p>
                 <p className="text-2xl font-mono font-bold text-emerald-400">{prediction.ambas_marcam.prob_sim}%</p>
-                <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(prediction.ambas_marcam.prob_sim)}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center">
+                  odd justa: {oddRangeStr(prediction.ambas_marcam.prob_sim)}
+                  <BookmakerOddsBadge
+                    label="Ambas Marcam — Sim"
+                    entries={bmEntries(bookmakerOdds, "btts", "Yes")}
+                    fairMin={prediction.odds?.ambas_marcam?.sim?.faixa_odd_justa?.min}
+                  />
+                </p>
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Não</p>
                 <p className="text-2xl font-mono font-bold text-blue-400">{(100 - prediction.ambas_marcam.prob_sim).toFixed(1)}%</p>
-                <p className="text-[10px] text-muted-foreground mt-1">odd justa: {oddRangeStr(100 - prediction.ambas_marcam.prob_sim)}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center">
+                  odd justa: {oddRangeStr(100 - prediction.ambas_marcam.prob_sim)}
+                  <BookmakerOddsBadge
+                    label="Ambas Marcam — Não"
+                    entries={bmEntries(bookmakerOdds, "btts", "No")}
+                    fairMin={prediction.odds?.ambas_marcam?.nao?.faixa_odd_justa?.min}
+                  />
+                </p>
               </div>
             </div>
           </div>
@@ -358,7 +455,9 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }
           <CollapsibleMarket title="Gols" tip="Gols marcados na partida. Use o seletor de cada cartão para ver partida inteira, 1º ou 2º tempo." tipHref="/como-funciona#mercado-gols">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <MarketCard title="Gols" subtitle={teamPt(home)} periods={goalPeriods(prediction, home)} />
-              <MarketCard title="Gols" subtitle="Totais (Partida)" periods={goalPeriods(prediction, 'total')} />
+              <MarketCard title="Gols" subtitle="Totais (Partida)" periods={goalPeriods(prediction, 'total')}
+                bookmakerBadge={<NumericLineBadges market={prediction.odds?.linhas_numericas?.gols} mercadoKey="gols_over_under" bookmakerOdds={bookmakerOdds} labelPrefix="Gols (Partida)" />}
+              />
               <MarketCard title="Gols" subtitle={teamPt(away)} periods={goalPeriods(prediction, away)} />
             </div>
             {prediction.mercados_derivados && (
@@ -402,9 +501,15 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }
         {prediction.escanteios && prediction.escanteios.total && (
           <CollapsibleMarket title="Escanteios" tip="Soma dos tiros de canto efetivamente cobrados durante a partida. Escanteios assinalados pelo árbitro, mas não cobrados antes do apito final, geralmente não entram na conta." tipHref="/como-funciona#mercado-escanteios">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <MarketCard title="Escanteios" subtitle={teamPt(home)} prediction={prediction.escanteios[home]} />
-              <MarketCard title="Escanteios" subtitle="Totais (Partida)" prediction={prediction.escanteios.total} />
-              <MarketCard title="Escanteios" subtitle={teamPt(away)} prediction={prediction.escanteios[away]} />
+              <MarketCard title="Escanteios" subtitle={teamPt(home)} prediction={prediction.escanteios[home]}
+                bookmakerBadge={<NumericLineBadges market={prediction.odds?.linhas_numericas?.escanteios?.[home]} mercadoKey="escanteios_mandante" bookmakerOdds={bookmakerOdds} labelPrefix={`Escanteios (${teamPt(home)})`} />}
+              />
+              <MarketCard title="Escanteios" subtitle="Totais (Partida)" prediction={prediction.escanteios.total}
+                bookmakerBadge={<NumericLineBadges market={prediction.odds?.linhas_numericas?.escanteios?.total} mercadoKey="escanteios_total" bookmakerOdds={bookmakerOdds} labelPrefix="Escanteios (Partida)" />}
+              />
+              <MarketCard title="Escanteios" subtitle={teamPt(away)} prediction={prediction.escanteios[away]}
+                bookmakerBadge={<NumericLineBadges market={prediction.odds?.linhas_numericas?.escanteios?.[away]} mercadoKey="escanteios_visitante" bookmakerOdds={bookmakerOdds} labelPrefix={`Escanteios (${teamPt(away)})`} />}
+              />
             </div>
           </CollapsibleMarket>
         )}
@@ -413,9 +518,15 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers }
         {prediction.cartoes && prediction.cartoes.total && (
           <CollapsibleMarket title="Cartões" tip="Contagem de cartões amarelos e vermelhos aplicados aos jogadores ativos em campo. Use o seletor 🟨/Ambos/🟥 em cada card para ver amarelos e vermelhos isolados. Cartões mostrados para jogadores no banco de reservas ou para a comissão técnica não são contabilizados." tipHref="/como-funciona#mercado-cartoes">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <MarketCard title="Cartões" subtitle={teamPt(home)} cardKinds={cardKindsFor(prediction, home)} />
-              <MarketCard title="Cartões" subtitle="Totais (Partida)" cardKinds={cardKindsFor(prediction, 'total')} />
-              <MarketCard title="Cartões" subtitle={teamPt(away)} cardKinds={cardKindsFor(prediction, away)} />
+              <MarketCard title="Cartões" subtitle={teamPt(home)} cardKinds={cardKindsFor(prediction, home)}
+                bookmakerBadge={<NumericLineBadges market={prediction.odds?.linhas_numericas?.cartoes?.[home]} mercadoKey="cartoes_mandante" bookmakerOdds={bookmakerOdds} labelPrefix={`Cartões (${teamPt(home)})`} />}
+              />
+              <MarketCard title="Cartões" subtitle="Totais (Partida)" cardKinds={cardKindsFor(prediction, 'total')}
+                bookmakerBadge={<NumericLineBadges market={prediction.odds?.linhas_numericas?.cartoes?.total} mercadoKey="cartoes_total" bookmakerOdds={bookmakerOdds} labelPrefix="Cartões (Partida)" />}
+              />
+              <MarketCard title="Cartões" subtitle={teamPt(away)} cardKinds={cardKindsFor(prediction, away)}
+                bookmakerBadge={<NumericLineBadges market={prediction.odds?.linhas_numericas?.cartoes?.[away]} mercadoKey="cartoes_visitante" bookmakerOdds={bookmakerOdds} labelPrefix={`Cartões (${teamPt(away)})`} />}
+              />
             </div>
           </CollapsibleMarket>
         )}

@@ -81,6 +81,36 @@ def parse_fixture_odds(item):
             for mkt, outs in agg.items()}
 
 
+def parse_fixture_odds_by_bookmaker(item):
+    """Como parse_fixture_odds, mas preserva a identidade da casa em vez de agregar
+    por mediana -- usada pelo Verificador de Bets (badge por card com odds por casa +
+    destaque das que pagam acima da faixa de odd justa do modelo, ver
+    app/services/odds_bookmaker_service.py). Mesmo escopo de mercados de BET_MAP,
+    NÃO expande para mercados novos.
+
+    Retorna {mercado: {outcome: [{"casa": nome, "odd": valor}, ...]}}. Não recorre a
+    parse_fixture_odds nem é chamada por ela -- ambas leem o mesmo `item` de resposta
+    da api-football de forma independente, para não alterar o comportamento/assinatura
+    já em uso por outros scripts."""
+    agg = {}  # market -> outcome -> [{"casa":..., "odd":...}, ...]
+    for bm in item.get("bookmakers", []):
+        casa = bm.get("name")
+        if not casa:
+            continue
+        for bet in bm.get("bets", []):
+            mkt = BET_MAP.get(bet.get("id"))
+            if not mkt:
+                continue
+            for v in bet.get("values", []):
+                outcome = str(v.get("value"))
+                try:
+                    odd = float(v.get("odd"))
+                except (TypeError, ValueError):
+                    continue
+                agg.setdefault(mkt, {}).setdefault(outcome, []).append({"casa": casa, "odd": odd})
+    return agg
+
+
 def fetch_fixture(fixture_id, key, store=True):
     j = api_get("/odds", key, fixture=fixture_id)
     resp = j.get("response", [])

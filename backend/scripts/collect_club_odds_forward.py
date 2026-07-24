@@ -38,7 +38,7 @@ try:
 except Exception:
     pass
 
-from scripts.fetch_odds import BASE, load_key, parse_fixture_odds  # noqa: E402
+from scripts.fetch_odds import BASE, load_key, parse_fixture_odds, parse_fixture_odds_by_bookmaker  # noqa: E402
 from scripts.prefetch_clubs import LEAGUES  # noqa: E402
 from scripts import quota_tracker  # noqa: E402
 
@@ -153,6 +153,28 @@ def sync_registry_to_db(registry: dict) -> None:
         print(f"[AVISO] Falha ao sincronizar club_odds_registry no Neon: {exc}")
 
 
+def sync_bookmaker_odds_to_db(rows: list[dict]) -> None:
+    """Mesmo padrão de collect_odds_forward.py::sync_bookmaker_odds_to_db, mas em
+    tabela separada (club_odds_bookmaker_latest) -- nunca mistura com a de seleções.
+    Alimenta o Verificador de Bets pro escopo scope='clube'."""
+    if not rows:
+        return
+    try:
+        import pandas as pd
+        from app.db.connection import engine, upsert_df
+        from sqlalchemy import text
+
+        with engine.begin() as c:
+            c.execute(text(
+                "CREATE TABLE IF NOT EXISTS club_odds_bookmaker_latest ("
+                "fixture_id TEXT PRIMARY KEY, odds_by_bookmaker TEXT, updated_at TEXT)"
+            ))
+        upsert_df(pd.DataFrame(rows), "club_odds_bookmaker_latest", engine, unique_keys=["fixture_id"])
+        print(f">> club_odds_bookmaker_latest sincronizada no Neon: {len(rows)} jogos")
+    except Exception as exc:
+        print(f"[AVISO] Falha ao sincronizar club_odds_bookmaker_latest no Neon: {exc}")
+
+
 def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: int = 16) -> dict:
     """`days` = até onde ENUMERAMOS jogos (o quanto der -- descoberta é barata, 1
     request/dia cobre TODAS as ligas de uma vez). `odds_window_days` = até onde
@@ -212,6 +234,7 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: 
     odds_candidates = [c for c in candidates if c[7] <= odds_window_days]
     odds_candidates.sort(key=lambda c: _priority_rank(c[3]))
     odds_collected = 0
+    bookmaker_rows: list[dict] = []  # fixture_id -> odds_by_bookmaker (Neon, ver sync_bookmaker_odds_to_db)
 
     for fixture_id, home, away, league_name, lid, date, status, offset in odds_candidates:
         if quota_tracker.remaining() <= quota_buffer:
@@ -222,6 +245,7 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: 
         odds_json, remaining = api_get("/odds", key, fixture=fixture_id)
         resp = odds_json.get("response", [])
         odds = parse_fixture_odds(resp[0]) if resp else {}
+        odds_by_bookmaker = parse_fixture_odds_by_bookmaker(resp[0]) if resp else {}
         if not odds:
             time.sleep(0.2)
             continue
@@ -231,6 +255,7 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: 
             "fixture_date": date, "status": status,
             "home": home, "away": away, "league_id": lid,
             "league_name": league_name, "odds": odds,
+            "odds_by_bookmaker": odds_by_bookmaker,
         }
         odds_collected += 1
         if not dry_run:
@@ -239,12 +264,19 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: 
                 fh.write(json.dumps(snapshot, ensure_ascii=False) + "\n")
             registry[str(fixture_id)]["last_collected"] = snapshot["collected_at"]
             registry[str(fixture_id)]["n_snapshots"] = registry[str(fixture_id)].get("n_snapshots", 0) + 1
+            if odds_by_bookmaker:
+                bookmaker_rows.append({
+                    "fixture_id": str(fixture_id),
+                    "odds_by_bookmaker": json.dumps(odds_by_bookmaker, ensure_ascii=False),
+                    "updated_at": snapshot["collected_at"],
+                })
         time.sleep(0.2)
 
     if not dry_run and seen_fixtures:
         ODDS_DIR.mkdir(parents=True, exist_ok=True)
         REGISTRY.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
         sync_registry_to_db(registry)
+        sync_bookmaker_odds_to_db(bookmaker_rows)
 
     return {"dias": days, "jogos_vistos": len(seen_fixtures), "odds_coletadas": odds_collected,
            "fixtures": seen_fixtures, "cota_restante": quota_tracker.remaining(), "dry_run": dry_run,

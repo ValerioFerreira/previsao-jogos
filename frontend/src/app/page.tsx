@@ -23,6 +23,7 @@ import H2HCard from '@/components/platform/H2HCard';
 import ScreenshotGuard from '@/components/platform/ScreenshotGuard';
 import type { ScorersResponse } from '@/lib/api';
 import { AnalysisResultsView, SectionDivider } from '@/components/platform/AnalysisResultsView';
+import OpportunitiesSection from '@/components/platform/OpportunitiesSection';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -463,6 +464,12 @@ export default function Previsoes() {
     }
   }, [canGenerate, user, homeTeamId, awayTeamId, competition, neutralField, scope, mode, fixtureId, deepAnalysisInfo, refreshWallet, router, setAnalysis]);
 
+  // Verificador de Bets / Oportunidades Encontradas precisam do fixture_id da partida
+  // exibida (mesma resolução usada em handleGenerate: seletor explícito > casado por
+  // deep-analysis). Sem fixture_id (análise independente, sem jogo agendado casado),
+  // os dois componentes simplesmente não renderizam odds reais.
+  const resolvedFixtureIdForOdds = fixtureId ? Number(fixtureId) : (deepAnalysisInfo?.fixtureId ? Number(deepAnalysisInfo.fixtureId) : null);
+
   return (
     <div className="space-y-6">
       {featured.length > 0 ? (
@@ -787,7 +794,10 @@ export default function Previsoes() {
           <ScreenshotGuard page="analise-resultado">
           <div className="space-y-6">
 
-            <AnalysisResultsView prediction={projection} home={homeTeamId} away={awayTeamId} teamIds={teamIds} scorers={scorers} />
+            <AnalysisResultsView prediction={projection} home={homeTeamId} away={awayTeamId} teamIds={teamIds} scorers={scorers} fixtureId={resolvedFixtureIdForOdds} scope={scope} />
+
+            {/* OPORTUNIDADES ENCONTRADAS — odds com EV positivo (Verificador de Bets) */}
+            <OpportunitiesSection prediction={projection} home={homeTeamId} away={awayTeamId} fixtureId={resolvedFixtureIdForOdds} scope={scope} />
 
             {/* MONTE SUA SELEÇÃO — oferta "ParcerIA" (Só Paga se Acertar) */}
             <SectionDivider>MONTE SUA SELEÇÃO</SectionDivider>

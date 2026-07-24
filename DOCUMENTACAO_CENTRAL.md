@@ -1467,3 +1467,83 @@ miscalibração local (favorito/empate em jogos de margem apertada) fica para va
 com holdout adequado — não é ação imediata. Scripts novos (`scripts/adhoc_*`) e relatórios
 (`data/reports/adhoc_valuebet_w{1,2,3,4}/`) preservados; sem commit/push desta bateria (pendente
 de decisão do dono).
+
+## 21. Nosso modelo vs `/predictions` da API-Football em escala (8117 jogos, 2026-07-23/24)
+
+Pedido do dono: avaliar se o endpoint nativo `/predictions` da API-Football (Poisson próprio +
+forma/H2H, sem usar odds) valeria algo como sinal de "ensemble/convergência" na produção — testar
+com TODAS as predições possíveis contra os mesmos mercados do nosso modelo, no mesmo conjunto de
+jogos, e reportar qual performa melhor.
+
+**Metodologia**: `scripts/fetch_predictions_baseline.py` coletou `/predictions?fixture=<id>` para
+os 8117 fixtures do backtest congelado 2025 (`data/built/backtest_predictions.parquet`, 2025-01-11
+a 2026-05-31, 26 competições) — coleta idempotente, retomável, ~8.100 chamadas de cota (folga
+diária, sem impacto nos coletores de produção). `scripts/adhoc_compare_apifootball_predictions.py`
+cruzou por `fixture_id` e rodou `research_clubs/protocol.py` (log-loss/Brier/ECE/acurácia
+multiclasse) dos dois lados no MESMO conjunto de jogos. Relatório completo:
+`data/reports/adhoc_compare_apifootball/RELATORIO_FINAL.md`.
+
+**Resultado — 1X2 (único mercado com probabilidade calibrada dos dois lados), N=8117**:
+
+| lado | log_loss | brier | ece | acurácia |
+|---|---|---|---|---|
+| nosso modelo (DC-NB) | 1,016 | 0,6087 | 1,22% | 49,1% |
+| `/predictions` API-Football | 1,593 | 0,7031 | 14,05% | 41,5% |
+
+Nosso modelo ganha em **26 de 26 competições** (log-loss), incluindo as 4 ligas-alvo do dono
+(Brasileirão/Premier/La Liga/Serie A Itália, N=1474: 1,0026 vs 1,649). Confirma o piloto anterior
+(n=40, log-loss vendor 2,0953 — pior que o palpite uniforme ln(3)≈1,0986). O/U total de gols: o
+vendor não expõe probabilidade calibrada, só uma sugestão binária (`under_over`) presente numa
+minoria das respostas — comparado honestamente só como acerto direcional (sem log-loss/Brier/ECE,
+que exigiriam probabilidade). BTTS, dupla chance e gols esperados por time: **sem equivalente
+probabilístico no vendor**, fora da comparação (não fabricada métrica sem dado do outro lado).
+
+**Decisão**: **não construir nenhum badge de "ensemble/convergência"** com o `/predictions` nativo
+em produção — o vendor não bate o nosso modelo em nenhuma métrica, em nenhuma das 26 competições
+testadas. Achado descartado por evidência, não por suposição.
+
+## 22. "Verificador de Bets" — odds por casa nos cards + seção Oportunidades Encontradas (2026-07-23/24)
+
+Pedido do dono: já que `/odds` da API-Football diferencia por casa de apostas (hoje só usávamos a
+MEDIANA entre casas, descartando a identidade), expor isso no produto — badge nos cards mostrando
+quantas casas têm odd cadastrada pra aquele mercado, com modal listando em ordem decrescente e
+destacando as que pagam acima/dentro da faixa de odd justa do modelo; e uma seção nova
+"OPORTUNIDADES ENCONTRADAS" (entre "Funções Avançadas de Análise" e "Monte sua Seleção") listando
+combinações mercado×casa com EV positivo segundo o modelo, ordenadas decrescente, com explicação de
+o que é EV e reforço de que não é garantia de lucro.
+
+**Achado de arquitetura**: o backend de produção (Render) nunca chama a API-Football nem lê os
+JSONL locais dos coletores forward (rodam via Task Scheduler numa máquina separada,
+`data/odds/` é gitignored). Solução: sincronizar o snapshot por-casa mais recente numa tabela nova e
+pequena no Neon (precompute, nunca blob — regra de ouro do projeto).
+
+**Implementado**:
+- `scripts/fetch_odds.py::parse_fixture_odds_by_bookmaker` — função nova, aditiva (não altera
+  `parse_fixture_odds`/mediana existente), usa `bm.get("name")` (antes descartado) pra preservar
+  odd por casa. Escopo: os 9 mercados já em `BET_MAP` (resultado, gols O/U, btts, escanteios×3,
+  cartões×3) — sem expandir mercados nesta rodada.
+- `collect_odds_forward.py`/`collect_club_odds_forward.py` — gravam `odds_by_bookmaker` no
+  snapshot JSONL (campo novo, lado a lado da mediana) e sincronizam com 2 tabelas novas no Neon
+  (`odds_bookmaker_latest`, `club_odds_bookmaker_latest`; `fixture_id` PK, JSON, `updated_at`) via
+  `upsert_df`. Rodados manualmente 1x pra popular dado real (3 fixtures de seleção + 31 de clube
+  sincronizados, ~35 chamadas de cota).
+- `app/services/odds_bookmaker_service.py` + `GET /api/odds/bookmakers?fixture_id=&scope=` — lê a
+  tabela Neon, devolve por mercado/outcome a lista casa+odd já ordenada decrescente. Não recalcula
+  odd justa (já vem do `/predict`).
+- Frontend: `fixtureId`/`scope` agora chegam até `AnalysisResultsView` (gap real — a página não
+  propagava, embora `resolvedFixtureId` já existisse). `BookmakerOddsBadge.tsx` (badge+tooltip+modal
+  via Radix, destaque verde para odd ≥ `faixa_odd_justa.min`) plugado nos cards de Resultado, Ambas
+  Marcam, Gols (só total da partida — API-Football não expõe O/U por time), Escanteios e Cartões (3
+  cards cada). `OpportunitiesSection.tsx` — nova seção entre `AnalysisResultsView` e "Monte sua
+  Seleção" em `page.tsx`, calcula `EV = odd_oferecida × p_model − 1` no cliente cruzando a resposta
+  do endpoint novo com `prediction.odds` já existente, filtra só EV>0, ordena decrescente, texto
+  educativo de EV + jogo responsável, não renderiza nada quando não há oportunidade real.
+
+**Testado**: `tsc --noEmit`/`npm run build` limpos; validado visualmente contra fixture real
+(Botafogo x Vitória, clube) — badges só nos cards certos, modal ordena e destaca corretamente,
+seção de oportunidades listou linhas reais com EV>0.
+
+**Nota honesta de cronograma**: cobertura de odds por-casa hoje é pequena (só os fixtures dentro da
+janela de retenção de 1-14 dias já processados manualmente durante o teste); o cron de produção
+(a cada ~3h) povoa as tabelas novas prospectivamente a partir do próximo deploy — sem retrofit
+retroativo possível (dado por-casa nunca foi persistido antes desta sessão).
