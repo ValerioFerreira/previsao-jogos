@@ -35,10 +35,24 @@ const BOOKMAKER_STYLES: Record<string, { bg: string; label: string }> = {
 };
 
 function BookmakerLogo({ name }: { name: string }) {
+  const [err, setErr] = useState(false);
+  const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, "");
   const style = BOOKMAKER_STYLES[name] || {
     bg: "bg-muted text-muted-foreground border-border/40",
     label: name.slice(0, 3).toUpperCase(),
   };
+
+  if (!err) {
+    return (
+      <img
+        src={`/bookmakers/${cleanName}.png`}
+        alt={name}
+        className="w-5 h-5 object-contain shrink-0 rounded bg-white/5 p-0.5 border border-white/10"
+        onError={() => setErr(true)}
+      />
+    );
+  }
+
   return (
     <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-extrabold border shrink-0 font-mono tracking-tighter ${style.bg}`}>
       {style.label}
