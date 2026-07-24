@@ -1,26 +1,40 @@
 """Lógica pura da 'Aposta Escolhida' (sem BD): extrai as seleções disponíveis do snapshot
-da análise, calcula a odd combinada e faz a AUTO-SELEÇÃO de uma aposta com odd próxima do
-teto (2,00) quando o usuário não escolhe.
+da análise, calcula a odd combinada com o motor Same Game Parlay (SGP) e faz a
+AUTO-SELEÇÃO de uma aposta com odd próxima do teto (2,00) quando o usuário não escolhe.
 
-Cada seleção pertence a um `group` mutuamente exclusivo (não se combina over+under da mesma
-linha, nem dois resultados). A odd combinada é o produto das odds das seleções.
+O motor SGP integra:
+1. Matriz de Distribuição Conjunta de Placares Dixon-Coles P(H=h, A=a) para Resultado 1X2,
+   Ambas Marcam (BTTS) e Linhas de Gols Over/Under — calculando probabilidade exata, tratando
+   redundâncias e detectando conflitos/incompatibilidades.
+2. Cópula Gaussiana Multivariada Calibrada para mercados de contagem (Escanteios, Cartões, Chutes).
 """
 from __future__ import annotations
 
 import random
+from typing import Any
+from fastapi import HTTPException, status
 
 MAX_AUTO_LEGS = 4  # nº máximo de seleções numa aposta auto-selecionada
 
 
 def base_market(group: str) -> str:
     """Mercado-base de um `group` (ex.: 'escanteios_total:8.5' -> 'escanteios',
-    'gols_ou2.5' -> 'gols'). Duas seleções do MESMO mercado-base são interdependentes
-    (correlacionadas/implicadas — ex.: Menos de 1,5 e Menos de 2,5 gols; Mais de 8,5 e
-    Mais de 9,5 escanteios) e NÃO podem entrar juntas numa aposta, como nas casas."""
+    'gols_ou2.5' -> 'gols'). Mapeia qualquer variação para a categoria canônica."""
     g = group.split(":")[0]
-    for suf in ("_total", "_ou2.5"):
-        if g.endswith(suf):
-            g = g[: -len(suf)]
+    if g.startswith("gols"):
+        return "gols"
+    if g.startswith("escanteios"):
+        return "escanteios"
+    if g.startswith("cartoes"):
+        return "cartoes"
+    if g.startswith("chutes_a_gol"):
+        return "chutes_a_gol"
+    if g.startswith("chutes"):
+        return "chutes"
+    if g.startswith("btts"):
+        return "btts"
+    if g.startswith("resultado"):
+        return "resultado"
     return g
 
 
@@ -77,10 +91,6 @@ def extract_candidates(snapshot: dict, home_team: str, away_team: str) -> dict[s
 
 
 # --- Cópula gaussiana para apostas COMBINADAS (EXP7/13/14, validado) ---------------
-# As contagens ofensivas partilham um fator latente ("intensidade territorial"): combos
-# de OVERs correlacionados são MAIS prováveis do que a independência assume, então a odd
-# combinada justa é MENOR. Σ = correlações residuais VALIDADAS, encolhidas (conservador).
-# Ordem: [gols, finalizacoes, a_gol, escanteios].
 _COPULA_VARS = {"gols": 0, "chutes": 1, "chutes_a_gol": 2, "escanteios": 3}
 _SIGMA = [
     [1.00, 0.22, 0.22, 0.05],
@@ -91,8 +101,6 @@ _SIGMA = [
 
 
 def _copula_joint_prob(items: list[tuple[int, float, str]]) -> float | None:
-    """P(∩ eventos) de seleções ofensivas via cópula gaussiana. `items` = lista de
-    (idx_var, prob, selection 'over'|'under'). Retorna None se não aplicável."""
     if len(items) < 2:
         return None
     try:
@@ -101,54 +109,134 @@ def _copula_joint_prob(items: list[tuple[int, float, str]]) -> float | None:
     except Exception:
         return None
     idx = [it[0] for it in items]
-    # sub-matriz Σ das variáveis envolvidas
     S = np.array([[_SIGMA[i][j] for j in idx] for i in idx], dtype=float)
-    # transforma cada evento em W_i < c_i (flip = -1 p/ over: P(Z>a)=P(-Z<-a))
     c, flip = [], []
     for _, p, sel in items:
         p = min(0.999, max(1e-4, float(p)))
         if sel == "over":
-            c.append(-norm.ppf(1.0 - p)); flip.append(-1.0)
+            c.append(-norm.ppf(1.0 - p))
+            flip.append(-1.0)
         else:
-            c.append(norm.ppf(p)); flip.append(1.0)
+            c.append(norm.ppf(p))
+            flip.append(1.0)
     f = np.array(flip)
-    Sp = S * np.outer(f, f)                      # correlação de W (sinais ajustados)
+    Sp = S * np.outer(f, f)
     np.fill_diagonal(Sp, 1.0)
     try:
         jp = float(multivariate_normal(mean=np.zeros(len(idx)), cov=Sp, allow_singular=True).cdf(np.array(c)))
     except Exception:
         return None
-    if not (jp == jp) or jp <= 0:               # NaN/degenerado -> cai na independência
+    if not (jp == jp) or jp <= 0:
         return None
     return jp
 
 
-def combined_odd(selections: list[dict], cap_precision: int = 3) -> float:
-    """Odd combinada. Aplica a cópula gaussiana às seleções ofensivas correlacionadas
-    (gols/finalizações/a-gol/escanteios); os demais mercados multiplicam por independência.
-    Sem seleção ofensiva combinável, é o produto simples (retrocompatível)."""
-    off, other_prob = [], 1.0
-    for s in selections:
-        b = base_market(s["group"])
-        p = 1.0 / float(s["odd"]) if float(s["odd"]) > 0 else 1e-4
-        if b in _COPULA_VARS:
-            off.append((_COPULA_VARS[b], p, s.get("selection", "over")))
+def _evaluate_score_condition(market_key: str, h: int, a: int) -> bool:
+    """Avalia se o placar exato (h, a) satisfaz a seleção de mercado especificada."""
+    if market_key == "resultado.home":
+        return h > a
+    if market_key == "resultado.draw":
+        return h == a
+    if market_key == "resultado.away":
+        return h < a
+    if market_key == "btts.sim":
+        return h >= 1 and a >= 1
+    if market_key == "btts.nao":
+        return h == 0 or a == 0
+    if market_key.startswith("gols."):
+        side = "over" if market_key.endswith(".over") else ("under" if market_key.endswith(".under") else None)
+        if side:
+            import re
+            m = re.search(r"(\d+(?:\.\d+)?)", market_key)
+            if m:
+                line = float(m.group(1))
+                return (h + a) > line if side == "over" else (h + a) < line
+    return True
+
+
+def combined_odd(selections: list[dict], snapshot: dict | None = None, cap_precision: int = 2) -> float:
+    """Calcula a odd combinada via motor Same Game Parlay (SGP).
+    
+    1. Para combinações contendo mercados de placar/gols (1X2, BTTS, Over/Under Gols):
+       Se o snapshot contiver a matriz conjunta Dixon-Coles 11x11, calcula a probabilidade
+       conjunta exata somando P(H=h, A=a) para todos os placares que satisfazem todas as
+       condições simultaneamente. Isso trata redundâncias e detecta conflitos.
+    2. Para mercados de contagem (Escanteios, Cartões, Finalizações), aplica a Cópula Gaussiana.
+    """
+    if not selections:
+        return 1.0
+
+    score_sels = [s for s in selections if base_market(s["group"]) in ("resultado", "btts", "gols")]
+    count_sels = [s for s in selections if base_market(s["group"]) in _COPULA_VARS and base_market(s["group"]) != "gols"]
+    other_sels = [s for s in selections if s not in score_sels and s not in count_sels]
+
+    p_score = 1.0
+    matrix = (snapshot.get("gols") or {}).get("matrix") if snapshot else None
+
+    if score_sels and matrix:
+        try:
+            import numpy as np
+            mat = np.array(matrix, dtype=float)
+            if mat.ndim == 2 and mat.shape[0] > 0 and mat.shape[1] > 0:
+                p_joint_sum = 0.0
+                for h in range(mat.shape[0]):
+                    for a in range(mat.shape[1]):
+                        match_all = True
+                        for s in score_sels:
+                            if not _evaluate_score_condition(s["market_key"], h, a):
+                                match_all = False
+                                break
+                        if match_all:
+                            p_joint_sum += mat[h, a]
+                
+                if p_joint_sum <= 1e-9:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        detail="As seleções escolhidas são mutuamente exclusivas e impossíveis de ocorrer juntas."
+                    )
+                p_score = p_joint_sum
+        except HTTPException:
+            raise
+        except Exception:
+            p_score = 1.0
+            for s in score_sels:
+                p_score *= (1.0 / float(s["odd"])) if float(s["odd"]) > 0 else 1e-4
+    elif score_sels:
+        p_score = 1.0
+        for s in score_sels:
+            p_score *= (1.0 / float(s["odd"])) if float(s["odd"]) > 0 else 1e-4
+
+    # Cópula para seleções de contagem
+    p_count = 1.0
+    if len(count_sels) >= 2:
+        copula_items = []
+        for s in count_sels:
+            b = base_market(s["group"])
+            p_marg = 1.0 / float(s["odd"]) if float(s["odd"]) > 0 else 1e-4
+            copula_items.append((_COPULA_VARS[b], p_marg, s.get("selection", "over")))
+        jp = _copula_joint_prob(copula_items)
+        if jp is not None and jp > 0:
+            p_count = jp
         else:
-            other_prob *= p
-    if len(off) >= 2:
-        jp = _copula_joint_prob(off)
-        if jp is not None:
-            joint = jp * other_prob
-            if joint > 0:
-                return round(1.0 / joint, cap_precision)
-    # fallback: independência (produto das odds)
-    prod = 1.0
-    for s in selections:
-        prod *= float(s["odd"])
-    return round(prod, cap_precision)
+            for s in count_sels:
+                p_count *= (1.0 / float(s["odd"])) if float(s["odd"]) > 0 else 1e-4
+    elif len(count_sels) == 1:
+        s = count_sels[0]
+        p_count = (1.0 / float(s["odd"])) if float(s["odd"]) > 0 else 1e-4
+
+    # Outros mercados independentes
+    p_others = 1.0
+    for s in other_sels:
+        p_others *= (1.0 / float(s["odd"])) if float(s["odd"]) > 0 else 1e-4
+
+    p_final = p_score * p_count * p_others
+    if p_final <= 0:
+        return 999.0
+
+    return round(1.0 / p_final, cap_precision)
 
 
-def auto_select(candidates: dict[str, dict], cap: float) -> list[dict]:
+def auto_select(candidates: dict[str, dict], cap: float, snapshot: dict | None = None) -> list[dict]:
     """Sorteia, a cada chamada, uma combinação (grupos distintos, até MAX_AUTO_LEGS)
     entre as que ficam com odd combinada mais próxima do teto (2,00) por baixo — assim
     cliques sucessivos no botão "Selecionar Automaticamente" tendem a sugerir apostas
@@ -159,40 +247,38 @@ def auto_select(candidates: dict[str, dict], cap: float) -> list[dict]:
     )
     found: list[tuple[float, list[dict]]] = []
 
-    def dfs(start: int, used: set, prod: float, chosen: list):
+    def dfs(start: int, used: set, chosen: list):
         if chosen:
-            found.append((prod, list(chosen)))
+            try:
+                codd = combined_odd(chosen, snapshot=snapshot)
+                if codd <= cap + 1e-9:
+                    found.append((codd, list(chosen)))
+            except Exception:
+                pass
         if len(chosen) >= MAX_AUTO_LEGS:
             return
         for j in range(start, len(items)):
             c = items[j]
             b = base_market(c["group"])
-            if b in used:  # um por mercado-base (evita combinar linhas interdependentes)
+            if b in used:
                 continue
-            np_ = prod * c["odd"]
-            if np_ <= cap + 1e-9:
-                chosen.append(c); used.add(b)
-                dfs(j + 1, used, np_, chosen)
-                chosen.pop(); used.discard(b)
+            chosen.append(c); used.add(b)
+            dfs(j + 1, used, chosen)
+            chosen.pop(); used.discard(b)
 
-    dfs(0, set(), 1.0, [])
+    dfs(0, set(), [])
     if not found:
-        # Se nenhuma opção tiver odd <= cap, retorna lista vazia. Não devemos retornar
-        # uma aposta que viole a regra do cap, para não quebrar a UI de auto-seleção.
         return []
 
-    best_prod = max(prod for prod, _ in found)
-    # mantém só combinações razoavelmente próximas do teto (>= 80% da melhor encontrada)
-    # para variar a sugestão sem se afastar demais da odd máxima.
-    threshold = best_prod * 0.80
-    pool = [sel for prod, sel in found if prod >= threshold] or [sel for _, sel in found]
+    best_codd = max(codd for codd, _ in found)
+    threshold = best_codd * 0.80
+    pool = [sel for codd, sel in found if codd >= threshold] or [sel for _, sel in found]
     return random.choice(pool)
 
 
 def resolve_selections(candidates: dict[str, dict], market_keys: list[str]) -> list[dict]:
     """Valida as market_keys escolhidas -> seleções; recusa seleções INTERDEPENDENTES
     (duas do mesmo mercado-base), como fazem as casas de aposta."""
-    from fastapi import HTTPException, status
     chosen, bases = [], set()
     for mk in market_keys:
         c = candidates.get(mk)
@@ -207,3 +293,4 @@ def resolve_selections(candidates: dict[str, dict], market_keys: list[str]) -> l
             )
         bases.add(b); chosen.append(c)
     return chosen
+

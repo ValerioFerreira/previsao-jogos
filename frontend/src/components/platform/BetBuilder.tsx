@@ -58,10 +58,15 @@ export default function BetBuilder({ analysisId, home, away, isFree, onConfirmed
 
   const runPreview = useCallback(async (keys: string[]) => {
     try {
+      setErr(null);
       const p = await betsApi.preview(analysisId, keys);
       setCombined(p.combined_odd); setValid(p.valid); setExceeds(p.exceeds_cap);
       if (keys.length === 0) setAutoPreview(p.selections.map((s) => ({ label: s.label, odd: s.odd })));
-    } catch (e) { setErr((e as Error).message); }
+    } catch (e) {
+      setCombined(null);
+      setValid(false);
+      setErr((e as Error).message);
+    }
   }, [analysisId]);
 
   const regenerateAuto = useCallback(async () => {

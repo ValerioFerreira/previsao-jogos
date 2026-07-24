@@ -542,7 +542,8 @@ class Predictor:
             "estimativa": round(expected_goals, 1),
             "intervalo": [round(q10, 1), round(q90, 1)],
             "confianca": conf_label,
-            "distribuicao": [round(float(x), 6) for x in prob_total_goals]
+            "distribuicao": [round(float(x), 6) for x in prob_total_goals],
+            "matrix": np.asarray(P_joint_single, dtype=float).tolist(),
         }
 
         # Gols por equipe (marginais da matriz conjunta do Dixon-Coles)

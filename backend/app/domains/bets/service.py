@@ -86,8 +86,8 @@ def preview(db: Session, user: User, analysis_id: str, market_keys: list[str]) -
     a = _load_reserved_analysis(db, user, analysis_id)
     cands = _candidates(a)
     auto = not market_keys
-    sels = markets.auto_select(cands, CAP) if auto else markets.resolve_selections(cands, market_keys)
-    codd = markets.combined_odd(sels)
+    sels = markets.auto_select(cands, CAP, snapshot=a.snapshot) if auto else markets.resolve_selections(cands, market_keys)
+    codd = markets.combined_odd(sels, snapshot=a.snapshot)
     exceeds = codd > CAP + 1e-9
     return schemas.PreviewResponse(
         selections=_selection_outs(sels), combined_odd=codd, valid=(not exceeds and len(sels) > 0),
@@ -104,10 +104,10 @@ def create_bet(db: Session, user: User, analysis_id: str, market_keys: list[str]
 
     cands = _candidates(a)
     auto = not market_keys
-    sels = markets.auto_select(cands, CAP) if auto else markets.resolve_selections(cands, market_keys)
+    sels = markets.auto_select(cands, CAP, snapshot=a.snapshot) if auto else markets.resolve_selections(cands, market_keys)
     if not sels:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Nenhum mercado disponível para seleção.")
-    codd = markets.combined_odd(sels)
+    codd = markets.combined_odd(sels, snapshot=a.snapshot)
     if codd > CAP + 1e-9:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
