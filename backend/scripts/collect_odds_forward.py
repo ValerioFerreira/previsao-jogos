@@ -233,7 +233,7 @@ def collect(days: int, dry_run: bool, odds_window_days: int = 16, quota_buffer: 
                 continue
             fx = item.get("fixture", {})
             status = fx.get("status", {}).get("short")
-            if status not in ("NS", "TBD"):  # só jogos ainda não iniciados
+            if status not in ("NS", "TBD", "1H", "HT", "2H", "FT", "LIVE"):  # inclui jogos do dia
                 continue
             fixture_id = fx.get("id")
             teams = item.get("teams", {})

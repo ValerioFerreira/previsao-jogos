@@ -201,7 +201,7 @@ def collect(days: int, dry_run: bool, quota_buffer: int = 50, odds_window_days: 
                 continue
             fx = item.get("fixture", {})
             status = fx.get("status", {}).get("short")
-            if status not in ("NS", "TBD"):
+            if status not in ("NS", "TBD", "1H", "HT", "2H", "FT", "LIVE"):
                 continue
             teams = item.get("teams", {})
             home_name = _canonical_name(teams.get("home", {}).get("name"), teams.get("home", {}).get("id"))

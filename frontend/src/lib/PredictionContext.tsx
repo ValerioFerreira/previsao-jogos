@@ -45,7 +45,8 @@ type Persisted = {
 function isMatchExpired(dateStr?: string): boolean {
   if (!dateStr) return false;
   const d = new Date(dateStr).getTime();
-  return !isNaN(d) && d <= Date.now();
+  // Partida expira 3 horas após o apito inicial (após o encerramento da partida)
+  return !isNaN(d) && (d + 3 * 3600 * 1000) <= Date.now();
 }
 
 function loadPersisted(): Partial<Persisted> {

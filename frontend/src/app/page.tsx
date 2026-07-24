@@ -287,8 +287,10 @@ export default function Previsoes() {
   React.useEffect(() => {
     const checkStale = () => {
       const now = Date.now();
-      setUpcoming((prev) => prev.filter((f) => !f.date || new Date(f.date).getTime() > now));
-      if (mode === 'futura' && matchDate && new Date(matchDate).getTime() <= now) {
+      const cutoff24h = now - 24 * 3600 * 1000;
+      setUpcoming((prev) => prev.filter((f) => !f.date || new Date(f.date).getTime() > cutoff24h));
+      // Partida expira 3h após o apito inicial (após encerramento)
+      if (mode === 'futura' && matchDate && (new Date(matchDate).getTime() + 3 * 3600 * 1000) <= now) {
         setHomeTeamId('');
         setAwayTeamId('');
         setFixtureId(null);

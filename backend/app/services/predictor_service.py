@@ -511,14 +511,16 @@ def get_upcoming_fixtures() -> list[dict[str, Any]]:
     (odds_registry, scope='selecao') e clubes (club_odds_registry, scope='clube')
     -- o front deriva a análise correta (predictor/mercados) a partir de `scope`,
     sem o usuário precisar escolher manualmente."""
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    # Retém partidas das últimas 24h para que os jogos do dia de HOJE permaneçam visíveis
+    # e selecionáveis durante todo o dia, mesmo após o apito inicial.
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)).isoformat()
     out = []
 
     reg = _load_registry()
     for fid, info in reg.items():
         date = info.get("fixture_date", "")
-        if date and date < now:
-            continue  # já ocorreu
+        if date and date < cutoff:
+            continue
         out.append({
             "fixture_id": fid,
             "home": _norm(info.get("home")),
@@ -534,7 +536,7 @@ def get_upcoming_fixtures() -> list[dict[str, Any]]:
     club_reg = _load_club_registry()
     for fid, info in club_reg.items():
         date = info.get("fixture_date", "")
-        if date and date < now:
+        if date and date < cutoff:
             continue
         tournament = info.get("league_name") or "Clubes"
         out.append({
