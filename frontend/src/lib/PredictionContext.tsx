@@ -42,6 +42,12 @@ type Persisted = {
   scope: "selecao" | "clube";
 };
 
+function isMatchExpired(dateStr?: string): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr).getTime();
+  return !isNaN(d) && d <= Date.now();
+}
+
 function loadPersisted(): Partial<Persisted> {
   if (typeof window === "undefined") return {};
   try {
@@ -77,6 +83,12 @@ export function PredictionProvider({ children }: { children: ReactNode }) {
   // (React error #418) quando a análise salva diverge dos defaults.
   useEffect(() => {
     const init = loadPersisted();
+    if (init.matchDate && isMatchExpired(init.matchDate)) {
+      // Se a partida salva no localStorage já aconteceu, limpa e restaura o estado inicial.
+      try { window.localStorage.removeItem(LS_KEY); } catch {}
+      hydratedRef.current = true;
+      return;
+    }
     if (init.homeTeamId !== undefined) setHomeTeamId(init.homeTeamId);
     if (init.awayTeamId !== undefined) setAwayTeamId(init.awayTeamId);
     if (init.competition !== undefined) setCompetition(init.competition);
@@ -89,6 +101,32 @@ export function PredictionProvider({ children }: { children: ReactNode }) {
     hydratedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Verificação periódica automática a cada 10s: se a partida em exibição ultrapassar o horário (date/time > now),
+  // reseta o confronto e a análise automaticamente sem precisar de F5/refresh.
+  useEffect(() => {
+    if (!matchDate || !hydratedRef.current) return;
+
+    const checkExpiration = () => {
+      if (isMatchExpired(matchDate)) {
+        setHomeTeamId("");
+        setAwayTeamId("");
+        setCompetition("Copa do Mundo");
+        setNeutralField(false);
+        setScope("selecao");
+        setAnalysis(null);
+        setH2hData(null);
+        setMode("futura");
+        setFixtureId(null);
+        setMatchDate(undefined);
+        try { window.localStorage.removeItem(LS_KEY); } catch {}
+      }
+    };
+
+    checkExpiration();
+    const interval = setInterval(checkExpiration, 10000);
+    return () => clearInterval(interval);
+  }, [matchDate]);
 
   // Grava o subconjunto persistível sempre que algo relevante muda.
   useEffect(() => {

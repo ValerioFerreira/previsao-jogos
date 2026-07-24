@@ -289,14 +289,17 @@ export default function Previsoes() {
       const now = Date.now();
       setUpcoming((prev) => prev.filter((f) => !f.date || new Date(f.date).getTime() > now));
       if (mode === 'futura' && matchDate && new Date(matchDate).getTime() <= now) {
+        setHomeTeamId('');
+        setAwayTeamId('');
         setFixtureId(null);
         setMatchDate(undefined);
+        setAnalysis(null);
         setProjection(null);
         setErrMsg('Esta partida já aconteceu. Para informações sobre a mesma, vá à página de Estatísticas.');
       }
     };
     checkStale();
-    const id = setInterval(checkStale, 60000);
+    const id = setInterval(checkStale, 10000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, matchDate]);
