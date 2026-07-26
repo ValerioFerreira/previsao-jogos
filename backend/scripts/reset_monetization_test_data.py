@@ -60,7 +60,7 @@ def main() -> None:
     try:
         admin_emails = {
             u.email.lower() for u in db.execute(
-                select(User).where(User.role.in_([UserRole.admin, UserRole.superadmin]))
+                select(User).where(User.role.in_([UserRole.owner, UserRole.manager]))
             ).scalars()
         }
         partner_user_ids = [r[0] for r in db.execute(

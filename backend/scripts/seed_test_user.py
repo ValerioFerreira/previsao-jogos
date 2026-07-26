@@ -54,7 +54,7 @@ def main() -> None:
         if user is None:
             user = User(
                 full_name=args.full_name, email=email, cpf=args.cpf, phone=args.phone,
-                status=UserStatus.active, role=UserRole.admin if args.admin else UserRole.user,
+                status=UserStatus.active, role=UserRole.owner if args.admin else UserRole.user,
                 signup_ip="127.0.0.1",
             )
             db.add(user)
@@ -63,7 +63,7 @@ def main() -> None:
         else:
             created = False
             if args.admin:
-                user.role = UserRole.admin
+                user.role = UserRole.owner
 
         # garante conta plenamente utilizável (login direto, sem OTP)
         user.status = UserStatus.active

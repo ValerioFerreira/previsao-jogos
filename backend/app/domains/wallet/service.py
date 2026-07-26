@@ -25,6 +25,16 @@ def get_or_create_wallet(db: Session, user_id: uuid.UUID) -> Wallet:
         )
         db.add(wallet)
         db.flush()
+    
+    # Garantir que Proprietário, Gestor e Parceiro sempre tenham 100 créditos
+    from app.domains.users.models import User
+    from app.domains.enums import UserRole
+    user = db.get(User, user_id)
+    if user and (user.role in (UserRole.owner, UserRole.manager, UserRole.partner) or user.email == "valerioeducfin@gmail.com"):
+        if wallet.available_balance != Decimal("100.00"):
+            wallet.available_balance = Decimal("100.00")
+            db.flush()
+            
     return wallet
 
 
@@ -63,6 +73,14 @@ def post_transaction(
     wallet.available_balance = new_available
     wallet.reserved_balance = new_reserved
     wallet.promo_balance = new_promo
+
+    # Garantir que Proprietário, Gestor e Parceiro mantenham 100 créditos após transação
+    from app.domains.users.models import User
+    from app.domains.enums import UserRole
+    user = db.get(User, wallet.user_id)
+    if user and (user.role in (UserRole.owner, UserRole.manager, UserRole.partner) or user.email == "valerioeducfin@gmail.com"):
+        wallet.available_balance = Decimal("100.00")
+        new_available = Decimal("100.00")
 
     tx = CreditTransaction(
         wallet_id=wallet.id,

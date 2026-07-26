@@ -50,13 +50,13 @@ def is_owner_role(user: User) -> bool:
 
 
 def require_owner(user: User = Depends(get_current_user)) -> User:
-    if not (is_owner_role(user) or user.role in (UserRole.admin, UserRole.superadmin)):
+    if not is_owner_role(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Acesso restrito.")
     return user
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
-    if not (is_owner_role(user) or user.role in (UserRole.manager, UserRole.admin, UserRole.superadmin)):
+    if not (is_owner_role(user) or user.role == UserRole.manager):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Acesso restrito.")
     return user
 

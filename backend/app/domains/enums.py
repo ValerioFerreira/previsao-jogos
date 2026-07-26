@@ -13,8 +13,6 @@ class UserStatus(str, enum.Enum):
 
 class UserRole(str, enum.Enum):
     user = "user"
-    admin = "admin"
-    superadmin = "superadmin"
     partner = "partner"
     owner = "owner"
     manager = "manager"

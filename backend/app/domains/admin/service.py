@@ -408,7 +408,7 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
         db.add(user)
         db.flush()
     else:
-        if user.role not in (UserRole.owner, UserRole.manager, UserRole.admin, UserRole.superadmin):
+        if user.role not in (UserRole.owner, UserRole.manager):
             user.role = UserRole.partner
     affiliate.user_id = user.id
 

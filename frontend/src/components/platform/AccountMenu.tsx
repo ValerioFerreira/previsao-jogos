@@ -55,7 +55,7 @@ export default function AccountMenu() {
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel className="truncate">{user.email}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {(user.role === "admin" || user.role === "superadmin") && (
+          {(user.role === "owner" || user.role === "manager" || user.email === "valerioeducfin@gmail.com") && (
             <DropdownMenuItem asChild>
               <Link href="/admin" className="cursor-pointer font-medium text-emerald-600 dark:text-emerald-400">
                 Painel Admin

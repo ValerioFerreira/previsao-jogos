@@ -25,9 +25,9 @@ from app.domains.users.models import User
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("uso: make_admin.py email@dominio.com [--super]"); sys.exit(1)
+        print("uso: make_admin.py email@dominio.com [--owner]"); sys.exit(1)
     email = sys.argv[1].lower()
-    role = UserRole.superadmin if "--super" in sys.argv else UserRole.admin
+    role = UserRole.owner if "--owner" in sys.argv else UserRole.manager
     db = SessionLocal()
     try:
         u = db.execute(select(User).where(User.email == email)).scalar_one_or_none()

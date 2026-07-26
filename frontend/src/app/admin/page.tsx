@@ -156,7 +156,7 @@ function PartnerRevenueChart({ items }: { items: Record<string, unknown>[] }) {
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const isOwner = user && (user.role === "owner" || user.role === "admin" || user.role === "superadmin" || user.email === "valerioeducfin@gmail.com");
+  const isOwner = user && (user.role === "owner" || user.email === "valerioeducfin@gmail.com");
   const isManager = user && user.role === "manager";
   const isAdmin = isOwner || isManager;
 
@@ -869,7 +869,6 @@ export default function AdminPage() {
                             <option value="partner">Parceiro</option>
                             <option value="manager">Gestor</option>
                             <option value="owner">Proprietário</option>
-                            <option value="admin">Admin</option>
                           </select>
                         ) : (
                           <span className="text-xs text-muted-foreground font-semibold px-2">Proprietário Raiz</span>

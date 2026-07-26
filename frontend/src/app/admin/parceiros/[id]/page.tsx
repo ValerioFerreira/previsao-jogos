@@ -54,7 +54,7 @@ export default function PartnerDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = String(params.id);
-  const isAdmin = user && (user.role === "admin" || user.role === "superadmin");
+  const isAdmin = user && (user.role === "owner" || user.role === "manager" || user.email === "valerioeducfin@gmail.com");
 
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState<string | null>(null);

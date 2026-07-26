@@ -12,7 +12,7 @@ export default function ScreenshotGuard({ children, page }: { children: React.Re
   const { user } = useAuth();
   const [triggered, setTriggered] = useState(false);
   const [backgrounded, setBackgrounded] = useState(false);
-  const isAdmin = user && (user.role === "admin" || user.role === "superadmin");
+  const isAdmin = user && (user.role === "owner" || user.role === "manager" || user.email === "valerioeducfin@gmail.com");
 
   const report = useCallback((incident_type: IncidentType) => {
     if (!user) return; // só usuários autenticados geram análises protegidas

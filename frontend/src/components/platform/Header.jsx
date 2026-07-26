@@ -18,7 +18,7 @@ export default function Header() {
     setMounted(true);
   }, []);
 
-  const isOwner = user && (user.role === 'owner' || user.role === 'admin' || user.role === 'superadmin' || user.email === 'valerioeducfin@gmail.com');
+  const isOwner = user && (user.role === 'owner' || user.email === 'valerioeducfin@gmail.com');
   const isPartner = user && user.role === 'partner';
   const showPartnerView = isOwner || isPartner;
 
