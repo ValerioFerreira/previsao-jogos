@@ -279,6 +279,16 @@ def h2h(home: str = Query(...), away: str = Query(...), scope: str = Query("sele
     if home not in all_teams or away not in all_teams:
         raise HTTPException(status_code=404, detail="Time nao encontrado.")
     metrics = predictor.head_to_head(home, away)
+    if (metrics.get("h2h_played") or 0) == 0:
+        try:
+            from app.services.predictor_service import get_predictor, get_club_predictor
+            is_club = "clubes" in str(getattr(predictor, "art_dir", ""))
+            other = get_predictor() if is_club else get_club_predictor()
+            other_metrics = other.head_to_head(home, away)
+            if (other_metrics.get("h2h_played") or 0) > 0:
+                metrics = other_metrics
+        except Exception:
+            pass
     summary = metrics.pop("_resumo")
     return H2HResponse(home=home, away=away, summary=summary, metrics=metrics)
 
@@ -378,6 +388,7 @@ def featured_matches(db: Session = Depends(get_db)) -> dict:
     """Partidas fixadas pelo admin pra home -- pública, sem auth. Exclui automaticamente
     da base de dados qualquer destaque cujo fixture_id já tenha iniciado/ocorrido."""
     from app.domains.admin.models import FeaturedMatch
+    from app.services.predictor_service import _is_fixture_started
 
     rows = db.execute(select(FeaturedMatch).order_by(FeaturedMatch.sort_order)).scalars().all()
     if not rows:
@@ -388,7 +399,7 @@ def featured_matches(db: Session = Depends(get_db)) -> dict:
     to_delete = []
     for r in rows:
         fx = upcoming.get(str(r.fixture_id))
-        if not fx:
+        if not fx or _is_fixture_started(fx.get("date")):
             to_delete.append(r)
         else:
             items.append(fx)
@@ -481,10 +492,19 @@ def system_status() -> SystemStatusResponse:
 
 def _resolve_team(predictor, team_name: str) -> str | None:
     """Casamento case-insensitive do nome de time contra o roster do predictor
-    (seleção ou clube, conforme o predictor passado)."""
+    (seleção ou clube, com fallback cruzado para amistosos entre seleções e clubes)."""
     for t in predictor.teams():
         if t.lower() == team_name.lower():
             return t
+    try:
+        from app.services.predictor_service import get_predictor, get_club_predictor
+        is_club = "clubes" in str(getattr(predictor, "art_dir", ""))
+        other = get_predictor() if is_club else get_club_predictor()
+        for t in other.teams():
+            if t.lower() == team_name.lower():
+                return t
+    except Exception:
+        pass
     return None
 
 
@@ -556,6 +576,30 @@ def _start_3h_scheduler():
                 from app.services.fixtures_refresh import refresh_upcoming_fixtures, refresh_past_fixtures
                 refresh_upcoming_fixtures(days=10)
                 refresh_past_fixtures(days_back=3)
+
+                # Limpeza de partidas em destaque que já iniciaram
+                try:
+                    from app.db.connection import SessionLocal
+                    from app.domains.admin.models import FeaturedMatch
+                    from app.services.predictor_service import get_upcoming_fixtures, _is_fixture_started
+                    db = SessionLocal()
+                    try:
+                        rows = db.execute(select(FeaturedMatch)).scalars().all()
+                        upcoming = {str(f["fixture_id"]): f for f in get_upcoming_fixtures()}
+                        cleaned = 0
+                        for r in rows:
+                            fx = upcoming.get(str(r.fixture_id))
+                            if not fx or _is_fixture_started(fx.get("date")):
+                                db.delete(r)
+                                cleaned += 1
+                        if cleaned > 0:
+                            db.commit()
+                            print(f"[BACKGROUND CRON] Removidas {cleaned} partidas de destaque iniciadas do banco.")
+                    finally:
+                        db.close()
+                except Exception as ex:
+                    print(f"[BACKGROUND CRON AVISO] Falha ao limpar destaques: {ex}")
+
                 print("[BACKGROUND CRON] Ciclo de 3h concluído com sucesso.")
             except Exception as e:
                 print(f"[BACKGROUND CRON ERRO] {e}")

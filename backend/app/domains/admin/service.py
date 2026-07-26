@@ -1415,7 +1415,7 @@ def _featured_match_out(f: FeaturedMatch) -> dict:
 
 
 def list_featured_matches(db: Session) -> dict:
-    from app.services.predictor_service import get_upcoming_fixtures
+    from app.services.predictor_service import get_upcoming_fixtures, _is_fixture_started
 
     rows = db.execute(select(FeaturedMatch).order_by(FeaturedMatch.sort_order)).scalars().all()
     upcoming = {str(f["fixture_id"]): f for f in get_upcoming_fixtures()}
@@ -1423,7 +1423,7 @@ def list_featured_matches(db: Session) -> dict:
     to_delete = []
     for r in rows:
         fx = upcoming.get(str(r.fixture_id))
-        if not fx:
+        if not fx or _is_fixture_started(fx.get("date")):
             to_delete.append(r)
         else:
             items.append({**_featured_match_out(r), "fixture": fx})
@@ -1437,12 +1437,13 @@ def list_featured_matches(db: Session) -> dict:
 
 
 def create_featured_match(db: Session, admin: User, data: schemas.FeaturedMatchRequest, ip) -> dict:
-    from app.services.predictor_service import get_upcoming_fixtures
+    from app.services.predictor_service import get_upcoming_fixtures, _is_fixture_started
     # Limpa partidas iniciadas/passadas antes de verificar limite
-    upcoming_ids = {str(f["fixture_id"]) for f in get_upcoming_fixtures()}
+    upcoming = {str(f["fixture_id"]): f for f in get_upcoming_fixtures()}
     rows = db.execute(select(FeaturedMatch)).scalars().all()
     for r in rows:
-        if str(r.fixture_id) not in upcoming_ids:
+        fx = upcoming.get(str(r.fixture_id))
+        if not fx or _is_fixture_started(fx.get("date")):
             db.delete(r)
     db.commit()
 

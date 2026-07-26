@@ -186,9 +186,21 @@ export function MatchPickerModal({
     if (open) { setScope(defaultScope); setComp(''); setDateFilter(dateDefault === 'today' ? todayISO() : ''); }
   }, [open, defaultScope, dateDefault]);
 
+  const isPastMode = title.toLowerCase().includes('passada');
+
+  const filteredFixtures = useMemo(
+    () => fixtures.filter(f => {
+      if (!f.date) return false;
+      const matchTime = new Date(f.date).getTime();
+      if (isNaN(matchTime)) return false;
+      return isPastMode ? matchTime <= Date.now() : matchTime > Date.now();
+    }),
+    [fixtures, isPastMode]
+  );
+
   const scopedFixtures = useMemo(
-    () => fixtures.filter(f => (f.scope || 'selecao') === scope),
-    [fixtures, scope]
+    () => filteredFixtures.filter(f => (f.scope || 'selecao') === scope),
+    [filteredFixtures, scope]
   );
 
   const dateFiltered = useMemo(

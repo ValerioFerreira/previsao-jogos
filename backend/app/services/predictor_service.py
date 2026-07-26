@@ -123,10 +123,14 @@ def get_team_ids(scope: str = "selecao") -> dict[str, int]:
     Resolve grafias divergentes (ex.: 'Bosnia and Herzegovina' vs 'Bosnia & Herzegovina',
     'North Macedonia' vs 'FYR Macedonia') casando os nomes canônicos por normalização
     frouxa + aliases, para que todo time com id disponível fique acessível pelo nome.
-    A tabela `team_ids` do Neon só é preenchida para seleção (`build_referees_and_team_ids.py`,
-    fonte = cache de fixtures de seleção) -- clube resolve localmente a partir do próprio
-    `meta.json` do artefato (`team_ids`, já com nomes desambiguados/limpos, ver
-    `build_clubs_production_artifacts.py`), sem tocar o Neon."""
+    Suporta escopos 'todos', 'hybrid', 'amistoso' para combinar seleção e clube."""
+    if scope in ("todos", "hybrid", "amistoso"):
+        sel = get_team_ids("selecao")
+        clu = get_team_ids("clube")
+        res = dict(sel)
+        res.update(clu)
+        return res
+
     if scope in _TEAM_IDS_MEMO:
         return _TEAM_IDS_MEMO[scope]
 
@@ -173,6 +177,20 @@ def get_team_ids(scope: str = "selecao") -> dict[str, int]:
     if out:
         _TEAM_IDS_MEMO[scope] = out
     return out
+
+
+def get_team_id(team_name: str, scope: str = "selecao") -> int | None:
+    """Busca o team_id da equipe no escopo indicado e faz fallback no outro escopo caso não encontre."""
+    if not team_name:
+        return None
+    norm_name = _norm(team_name)
+    m_scope = get_team_ids(scope)
+    tid = m_scope.get(norm_name) or m_scope.get(team_name)
+    if tid:
+        return tid
+    other_scope = "clube" if scope != "clube" else "selecao"
+    m_other = get_team_ids(other_scope)
+    return m_other.get(norm_name) or m_other.get(team_name)
 
 
 FIXTURE_INDEX_PATH = REPO_ROOT / "data" / "built" / "fixture_index.json"
@@ -505,21 +523,30 @@ def _load_club_registry() -> dict[str, dict]:
     return {}
 
 
+def _is_fixture_started(date_str: str | None) -> bool:
+    """Verifica se a partida já iniciou/ocorreu usando conversão robusta para UTC."""
+    if not date_str:
+        return False
+    try:
+        dt = pd.to_datetime(date_str, utc=True)
+        if pd.isna(dt):
+            return False
+        now = pd.Timestamp.now(tz="UTC")
+        return dt <= now
+    except Exception:
+        return False
+
+
 def get_upcoming_fixtures() -> list[dict[str, Any]]:
     """Partidas futuras a partir do registry do coletor de odds (sem cota nova).
-    Já traz tournament/neutral mapeados para o nosso sistema. Mescla seleções
-    (odds_registry, scope='selecao') e clubes (club_odds_registry, scope='clube')
-    -- o front deriva a análise correta (predictor/mercados) a partir de `scope`,
-    sem o usuário precisar escolher manualmente."""
-    # Retém partidas das últimas 24h para que os jogos do dia de HOJE permaneçam visíveis
-    # e selecionáveis durante todo o dia, mesmo após o apito inicial.
-    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)).isoformat()
+    Filtra automaticamente partidas que já iniciaram para que apenas jogos que AINDA
+    NÃO INICIARAM sejam retornados."""
     out = []
 
     reg = _load_registry()
     for fid, info in reg.items():
         date = info.get("fixture_date", "")
-        if date and date < cutoff:
+        if _is_fixture_started(date):
             continue
         out.append({
             "fixture_id": fid,
@@ -536,7 +563,7 @@ def get_upcoming_fixtures() -> list[dict[str, Any]]:
     club_reg = _load_club_registry()
     for fid, info in club_reg.items():
         date = info.get("fixture_date", "")
-        if date and date < cutoff:
+        if _is_fixture_started(date):
             continue
         tournament = info.get("league_name") or "Clubes"
         out.append({
@@ -703,17 +730,7 @@ def _club_recent_matches(team_name: str) -> dict[str, Any]:
     return {"matches": matches, "total_matches": len(sub)}
 
 
-def get_recent_matches(team_name: str, scope: str = "selecao") -> dict[str, Any]:
-    """Consulta PostgreSQL e extrai as últimas 60 partidas reais da equipe.
-
-    60 (e não 10) para dar sinal suficiente aos cálculos de momentum/tendência da
-    página de Estatísticas (comparando os 10 mais recentes com os 50 anteriores).
-
-    Escopo 'clube': lê o equivalente local club_matches_long.parquet (ver
-    scripts/build_club_local_history.py) -- 100% local, sem tocar o Neon.
-    """
-    if scope == "clube":
-        return _club_recent_matches(team_name)
+def _postgres_recent_matches(team_name: str) -> dict[str, Any]:
     from app.db.connection import engine
     from sqlalchemy import text as _text
     try:
@@ -757,6 +774,20 @@ def get_recent_matches(team_name: str, scope: str = "selecao") -> dict[str, Any]
     return {"matches": matches, "total_matches": total_matches}
 
 
+def get_recent_matches(team_name: str, scope: str = "selecao") -> dict[str, Any]:
+    """Consulta partidas recentes da equipe com fallback cruzado entre seleções e clubes."""
+    if scope == "clube":
+        res = _club_recent_matches(team_name)
+        if res.get("total_matches", 0) > 0:
+            return res
+        return _postgres_recent_matches(team_name)
+    else:
+        res = _postgres_recent_matches(team_name)
+        if res.get("total_matches", 0) > 0:
+            return res
+        return _club_recent_matches(team_name)
+
+
 _ELO_HISTORY_MEMO: dict[str, pd.DataFrame] = {}
 _ELO_WINDOW_YEARS = {"selecao": 7, "clube": 3}
 
@@ -777,11 +808,7 @@ def _load_elo_history(scope: str) -> pd.DataFrame:
     return df
 
 
-def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
-    """Extrai histórico do time para os gráficos da página de Estatísticas.
-    Escopo 'clube': mesmo gap da `matches` que get_recent_matches -- estatísticas
-    reais (attack_avg/corners_freq/etc) seguem vazias por ora, mas o Elo histórico
-    já é servido (fonte independente, vem do dataset de treino de clubes)."""
+def _single_team_history(team_name: str, scope: str) -> dict[str, Any]:
     elo_df = _load_elo_history(scope)
     team_elo = elo_df[elo_df["team"] == team_name]
     years = _ELO_WINDOW_YEARS.get(scope, 7)
@@ -813,6 +840,18 @@ def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
         return {"team": team_name, "elo_history": elo_history, "attack_avg": 0.0, "defense_avg": 0.0, "corners_freq": [], "cards_freq": []}
 
     return _team_history_from_matches(team_name, df_team, elo_history)
+
+
+def get_team_history(team_name: str, scope: str = "selecao") -> dict[str, Any]:
+    """Extrai histórico do time com fallback cruzado seleções <-> clubes."""
+    res = _single_team_history(team_name, scope)
+    if res.get("attack_avg", 0) > 0 or len(res.get("goal_trend", [])) > 0:
+        return res
+    other_scope = "clube" if scope != "clube" else "selecao"
+    res_other = _single_team_history(team_name, other_scope)
+    if res_other.get("attack_avg", 0) > 0 or len(res_other.get("goal_trend", [])) > 0:
+        return res_other
+    return res
 
 
 def _team_history_from_matches(team_name: str, df_team: pd.DataFrame, elo_history: list) -> dict[str, Any]:
@@ -895,17 +934,87 @@ def _club_goal_timing(team_name: str) -> dict[str, Any]:
     }
 
 
-def get_goal_timing(team_name: str, scope: str = "selecao") -> dict[str, Any]:
-    """Distribuição de MINUTAGEM de gols (marcados e sofridos) por blocos de 15',
-    agregada do histórico já cacheado (match_detail_cache). Zero chamada à API.
-    Escopo 'clube': lê club_goal_timing.parquet (pré-computado localmente por
-    scripts/build_club_local_history.py a partir do club_raw_cache.sqlite)."""
+def _selecao_goal_timing(team_name: str) -> dict[str, Any]:
     blocks = [{"label": lbl, "scored": 0, "conceded": 0} for _, _, lbl in _TIMING_BLOCKS]
     empty = {"team": team_name, "n_matches": 0, "total_scored": 0, "total_conceded": 0, "blocks": blocks}
-    if scope == "clube":
-        return _club_goal_timing(team_name)
     if team_name in _GOAL_TIMING_MEMO:
         return _GOAL_TIMING_MEMO[team_name]
+
+    team_id = get_team_id(team_name, "selecao")
+    if not team_id:
+        return empty
+
+    from app.db.connection import engine
+    from sqlalchemy import text as _text
+    try:
+        query = _text("SELECT data FROM match_detail_cache WHERE data LIKE :pattern LIMIT 40")
+        df = pd.read_sql(query, con=engine, params={"pattern": f"%{team_id}%"})
+    except Exception as e:
+        print(f"[ERRO DB] goal_timing: {e}")
+        return empty
+
+    if df.empty:
+        return empty
+
+    n_matches = 0
+    t_scored = 0
+    t_conceded = 0
+    raw_blocks = [{"scored": 0, "conceded": 0} for _ in _TIMING_BLOCKS]
+
+    for _, row in df.iterrows():
+        try:
+            d = json.loads(row["data"])
+            events = d.get("events") or []
+            teams = d.get("teams") or {}
+            th = teams.get("home") or {}
+            ta = teams.get("away") or {}
+            h_id = th.get("id")
+            a_id = ta.get("id")
+            if h_id != team_id and a_id != team_id:
+                continue
+            n_matches += 1
+
+            for ev in events:
+                if ev.get("type") != "Goal":
+                    continue
+                detail = (ev.get("detail") or "").lower()
+                if "missed" in detail or "penalty missed" in detail:
+                    continue
+                ev_team_id = (ev.get("team") or {}).get("id")
+                elapsed = (ev.get("time") or {}).get("elapsed") or 0
+                idx = _timing_block_idx(elapsed)
+
+                if ev_team_id == team_id:
+                    raw_blocks[idx]["scored"] += 1
+                    t_scored += 1
+                elif ev_team_id is not None:
+                    raw_blocks[idx]["conceded"] += 1
+                    t_conceded += 1
+        except Exception:
+            continue
+
+    if n_matches == 0:
+        return empty
+
+    blocks = [{"label": lbl, "scored": raw_blocks[i]["scored"], "conceded": raw_blocks[i]["conceded"]}
+              for i, (_, _, lbl) in enumerate(_TIMING_BLOCKS)]
+    res = {"team": team_name, "n_matches": n_matches, "total_scored": t_scored, "total_conceded": t_conceded, "blocks": blocks}
+    _GOAL_TIMING_MEMO[team_name] = res
+    return res
+
+
+def get_goal_timing(team_name: str, scope: str = "selecao") -> dict[str, Any]:
+    """Distribuição de minutagem com fallback cruzado seleções <-> clubes."""
+    if scope == "clube":
+        res = _club_goal_timing(team_name)
+        if res.get("n_matches", 0) > 0:
+            return res
+        return _selecao_goal_timing(team_name)
+    else:
+        res = _selecao_goal_timing(team_name)
+        if res.get("n_matches", 0) > 0:
+            return res
+        return _club_goal_timing(team_name)
 
     team_id = get_team_ids().get(team_name)
     if not team_id:
@@ -1123,7 +1232,7 @@ def get_pmf_preview(home: str, away: str, neutral: bool = False,
 def get_injuries(team_name: str, scope: str = "selecao") -> dict[str, Any]:
     """Boletim de desfalques (lesões/suspensões) atual da equipe. Consulta a API
     com cache diário no Neon; deduplica por jogador (registro mais recente)."""
-    team_id = get_team_ids(scope).get(team_name)
+    team_id = get_team_id(team_name, scope)
     if not team_id:
         return {"team": team_name, "season": None, "players": []}
 
