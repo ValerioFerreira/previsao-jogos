@@ -60,10 +60,10 @@ def _get_affiliate_for_user(user: User, db: Session) -> Affiliate:
     affiliate = db.execute(select(Affiliate).where(Affiliate.user_id == user.id)).scalar_one_or_none()
     if affiliate is None:
         from app.domains.enums import UserRole
-        if user.role == UserRole.owner or user.email == "valerioeducfin@gmail.com":
+        if user.role in (UserRole.owner, UserRole.manager, UserRole.partner) or user.email == "valerioeducfin@gmail.com":
             prefix = service.suggest_code_prefix(db, user.full_name or "parceiro")
             affiliate = Affiliate(
-                name=user.full_name or "Proprietário",
+                name=user.full_name or "Parceiro",
                 code=f"{prefix}10",
                 user_id=user.id,
                 commission_pct=Decimal("20.000"),
@@ -79,6 +79,13 @@ def _get_affiliate_for_user(user: User, db: Session) -> Affiliate:
             db.refresh(affiliate)
         else:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Você não é um parceiro.")
+
+    if affiliate.status != "active":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Sua conta de Parceiro está desativada. Caso isso tenha sido um erro, envie uma mensagem para contato@safercode.com.br para analisarmos seu caso."
+        )
+
     return affiliate
 
 
@@ -114,6 +121,12 @@ def list_coupon_requests(user: User = Depends(get_current_user), db: Session = D
 def portal_referred_partners(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     affiliate = _get_affiliate_for_user(user, db)
     return schemas.ReferredPartnersResponse(**service.referred_partners_stats(db, affiliate))
+
+
+@router.get("/portal/referred-users")
+def portal_referred_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    affiliate = _get_affiliate_for_user(user, db)
+    return service.referred_users_stats(db, affiliate)
 
 
 @router.get("/resolve-coupon")

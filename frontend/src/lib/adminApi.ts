@@ -25,7 +25,13 @@ export const adminApi = {
   updateUserRole: (id: string, role: string) =>
     authFetch(`/admin/users/${id}/role`, { method: "POST", body: JSON.stringify({ role }) }),
 
-  payments: (limit = 50) => authFetch<{ items: Record<string, unknown>[]; total: number }>(`/admin/payments?limit=${limit}`),
+  payments: (limit = 50, user_query = "", date_from = "", date_to = "") => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (user_query) params.set("user_query", user_query);
+    if (date_from) params.set("date_from", date_from);
+    if (date_to) params.set("date_to", date_to);
+    return authFetch<{ items: Record<string, unknown>[]; total: number }>(`/admin/payments?${params.toString()}`);
+  },
   analyses: (limit = 50) => authFetch<{ items: Record<string, unknown>[]; total: number }>(`/admin/analyses?limit=${limit}`),
   bets: (limit = 50) => authFetch<{ items: Record<string, unknown>[]; total: number }>(`/admin/bets?limit=${limit}`),
 

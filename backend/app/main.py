@@ -235,11 +235,26 @@ def cron_poll_invoices(token: str = Query(default="")) -> dict:
         db.close()
 
 
+def _all_known_teams(predictor) -> set[str]:
+    res = set(predictor.teams())
+    try:
+        from app.services.predictor_service import get_predictor, get_club_predictor
+        is_club = "clubes" in str(getattr(predictor, "art_dir", ""))
+        other = get_predictor() if is_club else get_club_predictor()
+        res.update(other.teams())
+    except Exception:
+        pass
+    return res
+
+
 @app.get("/teams", response_model=TeamsResponse)
 def teams(scope: str = Query("selecao")) -> TeamsResponse:
     predictor = _predictor_for(scope)
+    t_list = predictor.teams()
+    if scope in ("todos", "hybrid", "amistoso"):
+        t_list = sorted(list(_all_known_teams(predictor)))
     return TeamsResponse(
-        teams=predictor.teams(),
+        teams=t_list,
         tournaments=list(predictor.meta["tournament_weights"].keys()),
     )
 
@@ -247,10 +262,11 @@ def teams(scope: str = Query("selecao")) -> TeamsResponse:
 @app.get("/team/{nome:path}", response_model=TeamResponse)
 def team(nome: str, scope: str = Query("selecao")) -> TeamResponse:
     predictor = _predictor_for(scope)
-    defaults = predictor.team_defaults(nome)
+    norm = predictor.norm_team(nome)
+    defaults = predictor.team_defaults(norm)
     if not defaults:
         raise HTTPException(status_code=404, detail="Time nao encontrado.")
-    return TeamResponse(team=nome, defaults=defaults, bases=predictor.bases())
+    return TeamResponse(team=norm, defaults=defaults, bases=predictor.bases())
 
 
 @app.get("/h2h", response_model=H2HResponse)
@@ -259,7 +275,8 @@ def h2h(home: str = Query(...), away: str = Query(...), scope: str = Query("sele
     home, away = predictor.norm_team(home), predictor.norm_team(away)
     if home == away:
         raise HTTPException(status_code=400, detail="Escolha duas equipes diferentes.")
-    if home not in predictor.teams() or away not in predictor.teams():
+    all_teams = _all_known_teams(predictor)
+    if home not in all_teams or away not in all_teams:
         raise HTTPException(status_code=404, detail="Time nao encontrado.")
     metrics = predictor.head_to_head(home, away)
     summary = metrics.pop("_resumo")
@@ -269,16 +286,18 @@ def h2h(home: str = Query(...), away: str = Query(...), scope: str = Query("sele
 @app.post("/predict")
 def predict(payload: PredictRequest) -> dict:
     predictor = _predictor_for(payload.scope)
-    # canoniza nomes (jogos futuros podem vir como "Czechia", "Türkiye", etc.)
+    # canoniza nomes (jogos futuros podem vir como "Czechia", "Türkiye", "Minnesota United FC", etc.)
     payload.home_team = predictor.norm_team(payload.home_team)
     payload.away_team = predictor.norm_team(payload.away_team)
     if payload.home_team == payload.away_team:
         raise HTTPException(status_code=400, detail="Escolha duas equipes diferentes.")
-    if payload.home_team not in predictor.teams() or payload.away_team not in predictor.teams():
+    all_teams = _all_known_teams(predictor)
+    if payload.home_team not in all_teams or payload.away_team not in all_teams:
         raise HTTPException(status_code=404, detail="Time nao encontrado.")
     if payload.tournament not in predictor.meta["tournament_weights"]:
         raise HTTPException(status_code=400, detail="Competicao invalida.")
     return predict_match(payload, scope=payload.scope)
+
 
 
 @app.get("/api/aggregate")

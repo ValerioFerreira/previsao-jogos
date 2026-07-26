@@ -29,7 +29,7 @@ export default function Header() {
   ];
 
   if (showPartnerView) {
-    navItems.push({ path: '/parceiro', label: 'Visão do Parceiro' });
+    navItems.push({ path: '/parceiro/dashboard', label: 'Dashboard' });
   }
 
   return (

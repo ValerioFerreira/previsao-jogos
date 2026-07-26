@@ -54,9 +54,16 @@ def update_user_role(user_id: str, data: schemas.UserRoleUpdateRequest, request:
 
 # ---------- financeiro / listagens ----------
 @router.get("/payments")
-def payments(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-             _: User = Depends(require_owner), db: Session = Depends(get_db)):
-    return service.list_payments(db, limit, offset)
+def payments(
+    user_query: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    _: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    return service.list_payments(db, limit, offset, user_query=user_query, date_from=date_from, date_to=date_to)
 
 
 @router.get("/transactions")

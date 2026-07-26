@@ -329,6 +329,15 @@ def login(db: Session, email: str, password: str, ip: str | None, ua: str | None
     if user.status != UserStatus.active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Conta não ativada.")
 
+    if user.role == UserRole.partner:
+        from app.domains.affiliates.models import Affiliate
+        affiliate = db.execute(select(Affiliate).where(Affiliate.user_id == user.id)).scalar_one_or_none()
+        if affiliate and affiliate.status != "active":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Sua conta de Parceiro está desativada. Caso isso tenha sido um erro, envie uma mensagem para contato@safercode.com.br para analisarmos seu caso."
+            )
+
     if not security.verify_password(password, user.password_hash):
         user.failed_login_count += 1
         if user.failed_login_count >= settings.login_max_attempts:

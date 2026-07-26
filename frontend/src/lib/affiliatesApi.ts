@@ -96,6 +96,7 @@ export type ReferredPartner = {
   name: string;
   code: string;
   status: string;
+  clicks: number;
   users_count: number;
   revenue_brl: string;
   override_due_brl: string;
@@ -105,6 +106,19 @@ export type ReferredPartnersResponse = {
   override_pct: string;
   total_override_due_brl: string;
   items: ReferredPartner[];
+};
+
+export type ReferredUser = {
+  id: string;
+  name: string;
+  email: string;
+  spent_brl: string;
+  created_at: string;
+};
+
+export type ReferredUsersResponse = {
+  total_users: number;
+  items: ReferredUser[];
 };
 
 /** Lê o código de indicação guardado (?ref=) para pré-preencher o cupom no checkout. */
@@ -142,6 +156,8 @@ export const affiliatesApi = {
   listCouponRequests: () => authFetch<CouponRequest[]>("/affiliates/coupon-requests"),
   // Parceiros indicados por este parceiro
   referredPartners: () => authFetch<ReferredPartnersResponse>("/affiliates/portal/referred-partners"),
+  // Usuários que usaram o link deste parceiro
+  referredUsers: () => authFetch<ReferredUsersResponse>("/affiliates/portal/referred-users"),
   // Resolve o cupom de convite a partir do ?ref= (pré-preenchimento no checkout)
   resolveCoupon: (ref: string) =>
     fetch(`${API_URL}/affiliates/resolve-coupon?ref=${encodeURIComponent(ref)}`)

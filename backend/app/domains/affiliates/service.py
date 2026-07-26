@@ -459,7 +459,7 @@ def list_coupon_requests_for_partner(db: Session, affiliate: Affiliate) -> list[
 
 def referred_partners_stats(db: Session, affiliate: Affiliate) -> dict:
     """Para cada parceiro indicado por `affiliate` (parent), retorna nº de usuários atrelados,
-    faturamento gerado e quanto o sistema deve ao indicador (override) por ele."""
+    cliques, faturamento gerado e quanto o sistema deve ao indicador (override) por ele."""
     children = db.execute(select(Affiliate).where(
         Affiliate.parent_affiliate_id == affiliate.id).order_by(Affiliate.created_at.desc())).scalars().all()
     items, total_override = [], Decimal("0")
@@ -473,12 +473,43 @@ def referred_partners_stats(db: Session, affiliate: Affiliate) -> dict:
         total_override += Decimal(override_due)
         items.append({
             "id": str(child.id), "name": child.name, "code": child.code, "status": child.status,
-            "users_count": s["buyers"], "revenue_brl": s["revenue_brl"],
+            "clicks": s["clicks"], "users_count": s["buyers"], "revenue_brl": s["revenue_brl"],
             "override_due_brl": str(override_due),
         })
     return {
         "override_pct": _partner_override_pct(db),
         "total_override_due_brl": str(total_override), "items": items,
+    }
+
+
+def referred_users_stats(db: Session, affiliate: Affiliate) -> dict:
+    """Retorna os usuários finais que utilizaram o link deste parceiro, com nome e valor gasto em compras."""
+    from app.domains.users.models import User
+    from app.domains.payments.models import PaymentOrder, PaymentStatus
+
+    # Usuários atrelados ao afiliado via AffiliateAttribution
+    rows = db.execute(
+        select(User, func.coalesce(func.sum(PaymentOrder.amount_brl), 0).label("spent"))
+        .join(AffiliateAttribution, AffiliateAttribution.user_id == User.id)
+        .outerjoin(PaymentOrder, (PaymentOrder.user_id == User.id) & (PaymentOrder.status == PaymentStatus.paid))
+        .where(AffiliateAttribution.affiliate_id == affiliate.id)
+        .group_by(User.id)
+        .order_by(User.created_at.desc())
+    ).all()
+
+    items = []
+    for user, spent in rows:
+        items.append({
+            "id": str(user.id),
+            "name": user.full_name or user.email.split("@")[0],
+            "email": user.email,
+            "spent_brl": str(spent),
+            "created_at": user.created_at.isoformat() if user.created_at else "",
+        })
+
+    return {
+        "total_users": len(items),
+        "items": items,
     }
 
 

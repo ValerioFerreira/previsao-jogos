@@ -206,14 +206,54 @@ class Predictor:
 
     # ----------------------------------------------------------------- normalização de nome
     def norm_team(self, name):
-        """Canoniza o nome da seleção: aplica alias e cai no nome conhecido se houver."""
+        """Canoniza o nome da equipe: aplica alias e cai no nome conhecido se houver (inclusive busca cruzada clube/seleção)."""
         if name in self.meta["snapshot"]:
             return name
-        return TEAM_ALIASES.get(name, name)
+        aliased = TEAM_ALIASES.get(name, name)
+        if aliased in self.meta["snapshot"]:
+            return aliased
+        try:
+            from app.services.predictor_service import get_predictor, get_club_predictor
+            is_club = "clubes" in str(getattr(self, "art_dir", ""))
+            other = get_predictor() if is_club else get_club_predictor()
+            if aliased in other.meta["snapshot"]:
+                return aliased
+            for t in other.meta["snapshot"].keys():
+                if t.lower() == aliased.lower():
+                    return t
+        except Exception:
+            pass
+        for t in self.meta["snapshot"].keys():
+            if t.lower() == aliased.lower():
+                return t
+        return aliased
 
     # ----------------------------------------------------------------- helpers de UI
     def teams(self): return self.meta["teams"]
-    def team_defaults(self, team): return self.meta["snapshot"].get(team, {})
+    def team_defaults(self, team):
+        if team in self.meta["snapshot"]:
+            return self.meta["snapshot"][team]
+        aliased = TEAM_ALIASES.get(team, team)
+        if aliased in self.meta["snapshot"]:
+            return self.meta["snapshot"][aliased]
+        for t in self.meta["snapshot"].keys():
+            if t.lower() in (team.lower(), aliased.lower()):
+                return self.meta["snapshot"][t]
+        try:
+            from app.services.predictor_service import get_predictor, get_club_predictor
+            is_club = "clubes" in str(getattr(self, "art_dir", ""))
+            other = get_predictor() if is_club else get_club_predictor()
+            if team in other.meta["snapshot"]:
+                return other.meta["snapshot"][team]
+            if aliased in other.meta["snapshot"]:
+                return other.meta["snapshot"][aliased]
+            for t in other.meta["snapshot"].keys():
+                if t.lower() in (team.lower(), aliased.lower()):
+                    return other.meta["snapshot"][t]
+        except Exception:
+            pass
+        return {}
+
     def bases(self): return self.meta["bases"]
 
     # ----------------------------------------------------------------- confronto direto

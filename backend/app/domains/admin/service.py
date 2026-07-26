@@ -151,14 +151,86 @@ def adjust_credits(db: Session, admin: User, user_id: str, data: schemas.CreditA
 
 
 # --------------------------------------------------------------- financeiro / listagens
-def list_payments(db: Session, limit: int, offset: int) -> dict:
-    total = db.execute(select(func.count(PaymentOrder.id))).scalar_one()
-    rows = db.execute(select(PaymentOrder).order_by(PaymentOrder.created_at.desc())
-                      .limit(limit).offset(offset)).scalars().all()
-    return {"items": [{"id": str(o.id), "user_id": str(o.user_id), "provider": o.provider.value,
-                       "amount_brl": str(o.amount_brl), "credits": o.credits, "status": o.status.value,
-                       "created_at": o.created_at.isoformat(), "paid_at": o.paid_at.isoformat() if o.paid_at else None}
-                      for o in rows], "total": total, "limit": limit, "offset": offset}
+def list_payments(
+    db: Session,
+    limit: int,
+    offset: int,
+    user_query: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict:
+    from app.domains.users.models import User
+    from sqlalchemy import or_
+
+    stmt = select(PaymentOrder, User).outerjoin(User, User.id == PaymentOrder.user_id)
+
+    if user_query and user_query.strip():
+        q = f"%{user_query.strip().lower()}%"
+        stmt = stmt.where(or_(func.lower(User.full_name).like(q), func.lower(User.email).like(q)))
+
+    if date_from:
+        try:
+            from datetime import datetime
+            df = datetime.fromisoformat(date_from)
+            stmt = stmt.where(PaymentOrder.created_at >= df)
+        except Exception:
+            pass
+
+    if date_to:
+        try:
+            from datetime import datetime, timedelta
+            dt = datetime.fromisoformat(date_to) + timedelta(days=1)
+            stmt = stmt.where(PaymentOrder.created_at < dt)
+        except Exception:
+            pass
+
+    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+    rows = db.execute(stmt.order_by(PaymentOrder.created_at.desc()).limit(limit).offset(offset)).all()
+
+    items = []
+    status_map = {
+        "pending": "Pendente",
+        "paid": "Concluído",
+        "completed": "Concluído",
+        "approved": "Concluído",
+        "failed": "Falhou / Recusado",
+        "cancelled": "Cancelado / Expirado",
+        "expired": "Expirado",
+        "refunded": "Estornado",
+    }
+
+    reason_map = {
+        "pending": "Aguardando confirmação do pagamento Pix / Gateway",
+        "paid": "Pagamento aprovado e créditos liberados",
+        "completed": "Pagamento aprovado e créditos liberados",
+        "approved": "Pagamento aprovado e créditos liberados",
+        "failed": "Transação recusada ou não autorizada no provedor",
+        "cancelled": "Pix expirado ou transação cancelada pelo comprador",
+        "expired": "Pix expirado sem recebimento do valor",
+        "refunded": "Valor estornado/reembolsado ao comprador",
+    }
+
+    for order, user in rows:
+        st_raw = order.status.value if hasattr(order.status, "value") else str(order.status)
+        st_pt = status_map.get(st_raw, st_raw)
+        reason = reason_map.get(st_raw, "Status do gateway de pagamento")
+
+        items.append({
+            "id": str(order.id),
+            "user_id": str(order.user_id),
+            "user_name": user.full_name if user else "Usuário Desconhecido",
+            "user_email": user.email if user else "—",
+            "provider": order.provider.value if hasattr(order.provider, "value") else str(order.provider),
+            "amount_brl": str(order.amount_brl),
+            "credits": order.credits,
+            "status": st_raw,
+            "status_label": st_pt,
+            "status_reason": reason,
+            "created_at": order.created_at.isoformat(),
+            "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+        })
+
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 def list_transactions(db: Session, user_id: str | None, limit: int, offset: int) -> dict:

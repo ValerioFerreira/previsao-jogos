@@ -201,7 +201,12 @@ export default function AdminPage() {
   });
   const [promoSection, setPromoSection] = useState<"promocoes" | "cupons" | "pacotes" | "banners" | "campanhas">("promocoes");
   const [partnerFilter, setPartnerFilter] = useState("");
-  const [partnerSortByCommission, setPartnerSortByCommission] = useState(false);
+  const [partnerSearch, setPartnerSearch] = useState("");
+  const [partnerSortRevenue, setPartnerSortRevenue] = useState<"none" | "desc" | "asc">("none");
+  const [partnerDetailModal, setPartnerDetailModal] = useState<Record<string, unknown> | null>(null);
+  const [payUserSearch, setPayUserSearch] = useState("");
+  const [payDateFrom, setPayDateFrom] = useState("");
+  const [payDateTo, setPayDateTo] = useState("");
   const [approveCodeDrafts, setApproveCodeDrafts] = useState<Record<string, string>>({});
   const [couponRequests, setCouponRequests] = useState<Record<string, unknown>[]>([]);
   const [pendingCounts, setPendingCounts] = useState<{ partner_applications: number; coupon_requests: number; total: number } | null>(null);
@@ -890,17 +895,109 @@ export default function AdminPage() {
         {isOwner && (
           <TabsContent value="financeiro">
             <Card>
-              <CardHeader><CardTitle className="text-lg">Pagamentos ({payments.length})</CardTitle></CardHeader>
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle className="text-lg">Financeiro & Pagamentos ({payments.length})</CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    placeholder="Filtrar por usuário ou e-mail..."
+                    className="w-48 h-8 text-xs"
+                    value={payUserSearch}
+                    onChange={(e) => setPayUserSearch(e.target.value)}
+                  />
+                  <div className="flex items-center gap-1 text-xs">
+                    <span>De:</span>
+                    <Input
+                      type="date"
+                      className="w-32 h-8 text-xs"
+                      value={payDateFrom}
+                      onChange={(e) => setPayDateFrom(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span>Até:</span>
+                    <Input
+                      type="date"
+                      className="w-32 h-8 text-xs"
+                      value={payDateTo}
+                      onChange={(e) => setPayDateTo(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => {
+                      adminApi.payments(50, payUserSearch, payDateFrom, payDateTo).then((r) => setPayments(r.items)).catch(() => {});
+                    }}
+                  >
+                    Filtrar
+                  </Button>
+                  {(payUserSearch || payDateFrom || payDateTo) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        setPayUserSearch(""); setPayDateFrom(""); setPayDateTo("");
+                        adminApi.payments(50, "", "", "").then((r) => setPayments(r.items)).catch(() => {});
+                      }}
+                    >
+                      Limpar
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
               <CardContent>
-                <div className="divide-y text-sm">
-                  {payments.map((p) => (
-                    <div key={String(p.id)} className="flex justify-between py-2">
-                      <span className="text-xs text-muted-foreground">{fmt(String(p.created_at))}</span>
-                      <span>R$ {String(p.amount_brl)} · {String(p.credits)} créditos</span>
-                      <span className="text-xs px-2 rounded bg-muted">{String(p.status)}</span>
-                    </div>
-                  ))}
-                  {payments.length === 0 && <p className="text-sm text-muted-foreground">Nenhum pagamento.</p>}
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 text-xs text-muted-foreground">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium">Data</th>
+                        <th className="text-left px-3 py-2 font-medium">Comprador</th>
+                        <th className="text-left px-3 py-2 font-medium">E-mail</th>
+                        <th className="text-right px-3 py-2 font-medium">Créditos</th>
+                        <th className="text-right px-3 py-2 font-medium">Valor (R$)</th>
+                        <th className="text-center px-3 py-2 font-medium">Status</th>
+                        <th className="text-left px-3 py-2 font-medium">Motivo / Detalhes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {payments.map((p) => {
+                        const stLabel = String(p.status_label || p.status || "—");
+                        const stReason = String(p.status_reason || "Status informado pelo gateway");
+                        const isSuccess = p.status === "paid" || p.status === "completed" || p.status === "approved";
+                        const isPending = p.status === "pending";
+
+                        return (
+                          <tr key={String(p.id)} className="hover:bg-muted/30 text-xs">
+                            <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{fmt(String(p.created_at))}</td>
+                            <td className="px-3 py-2 font-medium">{String(p.user_name || "Usuário")}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{String(p.user_email || "—")}</td>
+                            <td className="px-3 py-2 text-right font-mono font-semibold">{String(p.credits)}</td>
+                            <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-600">
+                              R$ {Number(p.amount_brl || 0).toFixed(2)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                  isSuccess
+                                    ? "bg-emerald-500/10 text-emerald-600"
+                                    : isPending
+                                    ? "bg-amber-500/10 text-amber-600"
+                                    : "bg-red-500/10 text-red-600"
+                                }`}
+                              >
+                                {stLabel}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground max-w-xs truncate" title={stReason}>
+                              {stReason}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {payments.length === 0 && <p className="text-sm text-muted-foreground p-4 text-center">Nenhum registro de pagamento encontrado.</p>}
                 </div>
               </CardContent>
             </Card>
@@ -1196,105 +1293,213 @@ export default function AdminPage() {
                   Solicitações públicas (via /parceiro/solicitar) aparecem abaixo como &quot;pendente&quot;.
                 </p>
 
-                <div className="flex gap-1.5 flex-wrap">
-                  {[
-                    { key: "", label: "Todos" },
-                    { key: "pending", label: "Pendentes" },
-                    { key: "active", label: "Ativos" },
-                    { key: "paused", label: "Pausados" },
-                    { key: "rejected", label: "Rejeitados" },
-                  ].map((f) => (
-                    <Button key={f.key} size="sm" variant={partnerFilter === f.key ? "default" : "outline"}
-                      onClick={() => { setPartnerFilter(f.key); loadAffiliates(f.key); }}>
-                      {f.label}
-                    </Button>
-                  ))}
-                  <Button size="sm" variant={partnerSortByCommission ? "default" : "outline"}
-                    onClick={() => setPartnerSortByCommission((v) => !v)}>
-                    Ordenar por comissão
-                  </Button>
+                {/* Filtros de Busca e Ordenação de Receita */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[
+                      { key: "", label: "Todos" },
+                      { key: "pending", label: "Pendentes" },
+                      { key: "active", label: "Ativos" },
+                      { key: "paused", label: "Pausados" },
+                      { key: "rejected", label: "Rejeitados" },
+                    ].map((f) => (
+                      <Button
+                        key={f.key}
+                        size="sm"
+                        variant={partnerFilter === f.key ? "default" : "outline"}
+                        onClick={() => { setPartnerFilter(f.key); loadAffiliates(f.key); }}
+                      >
+                        {f.label}
+                      </Button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input
+                      placeholder="Pesquisar por nome ou e-mail..."
+                      className="w-56 h-8 text-xs"
+                      value={partnerSearch}
+                      onChange={(e) => setPartnerSearch(e.target.value)}
+                    />
+                    <select
+                      className="border rounded-md px-2 py-1.5 text-xs bg-background h-8"
+                      value={partnerSortRevenue}
+                      onChange={(e) => setPartnerSortRevenue(e.target.value as "none" | "desc" | "asc")}
+                    >
+                      <option value="none">Ordenação: Nome (A-Z)</option>
+                      <option value="desc">Receita Gerada (Maior → Menor)</option>
+                      <option value="asc">Receita Gerada (Menor → Maior)</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50 text-xs text-muted-foreground">
-                      <tr>
-                        <th className="text-left font-medium px-3 py-2">Nome</th>
-                        <th className="text-left font-medium px-3 py-2">Código</th>
-                        <th className="text-left font-medium px-3 py-2">Contato</th>
-                        <th className="text-right font-medium px-3 py-2">Comissão</th>
-                        <th className="text-right font-medium px-3 py-2">Devida</th>
-                        <th className="text-right font-medium px-3 py-2">Paga</th>
-                        <th className="text-right font-medium px-3 py-2">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {(partnerSortByCommission
-                        ? [...affiliates].sort((a, b) =>
-                            (Number(b.commission_due_brl) + Number(b.commission_paid_brl)) -
-                            (Number(a.commission_due_brl) + Number(a.commission_paid_brl)))
-                        : affiliates
-                      ).map((a) => (
-                        <tr key={String(a.id)} className="hover:bg-muted/30 align-top">
-                          <td className="px-3 py-2 font-medium">
-                            <Link href={`/admin/parceiros/${a.id}`} className="hover:underline">{String(a.name)}</Link>
-                            <span className="block text-[10px] text-muted-foreground">
-                              {{ pending: "pendente", active: "ativo", paused: "pausado", rejected: "rejeitado" }[String(a.status)] ?? String(a.status)}
-                              {a.account_status ? ` · conta ${a.account_status}` : ""}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 font-mono text-xs">
-                            {a.status === "pending" ? (
-                              <Input
-                                className="h-7 w-28 font-mono text-xs uppercase"
-                                value={approveCodeDrafts[String(a.id)] ?? String(a.code)}
-                                onChange={(e) => setApproveCodeDrafts((d) => ({ ...d, [String(a.id)]: e.target.value.toUpperCase() }))}
-                              />
-                            ) : String(a.code)}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground">
-                            {a.contact_email ? <div>{String(a.contact_email)}</div> : null}
-                            {a.contact_phone ? <div>{String(a.contact_phone)}</div> : null}
-                            {!a.contact_email && !a.contact_phone && "—"}
-                          </td>
-                          <td className="px-3 py-2 text-right">{a.commission_pct ? `${String(a.commission_pct)}%` : "—"}</td>
-                          <td className="px-3 py-2 text-right font-mono">R$ {String(a.commission_due_brl)}</td>
-                          <td className="px-3 py-2 text-right font-mono">R$ {String(a.commission_paid_brl)}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-col gap-1 items-stretch min-w-36">
-                              {a.status === "pending" && (
-                                <>
-                                  <Button size="sm" onClick={() => approveAffiliate(a)}>Aprovar</Button>
-                                  <Button size="sm" variant="destructive" onClick={() => openReject(a)}>Rejeitar</Button>
-                                </>
-                              )}
-                              {a.status === "active" && (
-                                <>
-                                  <Button size="sm" variant="outline" onClick={() => resendInvite(a)}>Reenviar convite</Button>
-                                  <Button size="sm" variant="outline" onClick={() => openAffPayment(a)}>Registrar pagamento</Button>
-                                  <Button size="sm" variant="outline" onClick={() => openAffPaymentsList(a)}>Ver pagamentos</Button>
-                                  <Button size="sm" variant="outline" onClick={() => toggleDemoAccess(a)}>
-                                    {a.demo_access_enabled ? "Revogar conta demo" : "Permitir conta demo"}
-                                  </Button>
-                                </>
-                              )}
-                              {(a.status === "active" || a.status === "paused") && (
-                                <Button size="sm" variant="outline" onClick={async () => { await adminApi.patchAffiliate(String(a.id), { status: a.status === "active" ? "paused" : "active" }); await loadAffiliates(); }}>
-                                  {a.status === "active" ? "Pausar" : "Ativar"}
-                                </Button>
-                              )}
-                              <Link href={`/admin/parceiros/${a.id}`}>
-                                <Button size="sm" variant="ghost" className="w-full">Ver detalhes</Button>
-                              </Link>
-                              <Button size="sm" variant="destructive" onClick={() => deleteAffiliate(a)}>Excluir</Button>
+                {/* Cards Quadrados (4 por linha) */}
+                {(() => {
+                  let list = [...affiliates];
+
+                  // Filtro por pesquisa (nome ou e-mail)
+                  if (partnerSearch.trim()) {
+                    const q = partnerSearch.trim().toLowerCase();
+                    list = list.filter((a) =>
+                      String(a.name || "").toLowerCase().includes(q) ||
+                      String(a.contact_email || "").toLowerCase().includes(q) ||
+                      String(a.code || "").toLowerCase().includes(q)
+                    );
+                  }
+
+                  // Ordenação
+                  if (partnerSortRevenue === "desc") {
+                    list.sort((a, b) => Number(b.revenue_brl || 0) - Number(a.revenue_brl || 0));
+                  } else if (partnerSortRevenue === "asc") {
+                    list.sort((a, b) => Number(a.revenue_brl || 0) - Number(b.revenue_brl || 0));
+                  } else {
+                    // Padrão: Ordem alfabética de nomes de parceiros
+                    list.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+                  }
+
+                  if (list.length === 0) {
+                    return <p className="text-sm text-muted-foreground p-4 text-center">Nenhum parceiro encontrado.</p>;
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                      {list.map((a) => {
+                        const st = String(a.status || "active");
+                        const revVal = Number(a.revenue_brl || 0);
+
+                        return (
+                          <Card
+                            key={String(a.id)}
+                            className="cursor-pointer hover:border-primary/60 transition-colors flex flex-col justify-between p-4 min-h-[120px] aspect-square group shadow-sm hover:shadow-md"
+                            onClick={() => setPartnerDetailModal(a)}
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-start justify-between gap-1">
+                                <span className="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors">
+                                  {String(a.name)}
+                                </span>
+                                <span
+                                  className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                    st === "active"
+                                      ? "bg-emerald-500/10 text-emerald-600"
+                                      : st === "paused"
+                                      ? "bg-amber-500/10 text-amber-600"
+                                      : st === "pending"
+                                      ? "bg-blue-500/10 text-blue-600"
+                                      : "bg-red-500/10 text-red-600"
+                                  }`}
+                                >
+                                  {st === "active" ? "Ativo" : st === "paused" ? "Pausado" : st === "pending" ? "Pendente" : "Rejeitado"}
+                                </span>
+                              </div>
+                              <div className="text-xs font-mono text-muted-foreground uppercase">{String(a.code)}</div>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {affiliates.length === 0 && <p className="text-sm text-muted-foreground p-3">Nenhum parceiro nesse filtro.</p>}
-                </div>
+
+                            <div className="pt-3 border-t flex flex-col items-start gap-0.5">
+                              <span className="text-[10px] text-muted-foreground uppercase font-medium">Receita Gerada</span>
+                              <span className="text-sm font-bold font-mono text-emerald-600">
+                                R$ {revVal.toFixed(2)}
+                              </span>
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+                {/* Modal de Detalhes do Parceiro */}
+                {partnerDetailModal && (
+                  <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <Card className="w-full max-w-lg space-y-4 p-6 shadow-xl animate-in fade-in zoom-in-95">
+                      <div className="flex justify-between items-start border-b pb-3">
+                        <div>
+                          <h2 className="text-xl font-bold">{String(partnerDetailModal.name)}</h2>
+                          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground mt-0.5">
+                            <span>Código: {String(partnerDetailModal.code)}</span>
+                            <span>·</span>
+                            <span className="capitalize">Status: {String(partnerDetailModal.status)}</span>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="ghost" onClick={() => setPartnerDetailModal(null)}>✕</Button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <span className="text-muted-foreground block">E-mail:</span>
+                          <span className="font-medium break-all">{String(partnerDetailModal.contact_email || "—")}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-muted-foreground block">Telefone:</span>
+                          <span className="font-medium">{String(partnerDetailModal.contact_phone || "—")}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-muted-foreground block">CPF:</span>
+                          <span className="font-medium font-mono">{String(partnerDetailModal.cpf || "—")}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-muted-foreground block">Tipo de Pagamento:</span>
+                          <span className="font-medium uppercase">{String(partnerDetailModal.payment_type || "—")}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-muted-foreground block">Comissão (%):</span>
+                          <span className="font-medium">{String(partnerDetailModal.commission_pct || "20")}%</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-muted-foreground block">Desconto Cupom (%):</span>
+                          <span className="font-medium">{String(partnerDetailModal.discount_pcts || "10")}%</span>
+                        </div>
+                        <div className="space-y-1 bg-emerald-500/5 p-2 rounded border border-emerald-500/20 col-span-2">
+                          <span className="text-muted-foreground block">Receita Gerada:</span>
+                          <span className="font-bold text-sm text-emerald-600 font-mono">
+                            R$ {Number(partnerDetailModal.revenue_brl || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="space-y-1 bg-muted/40 p-2 rounded">
+                          <span className="text-muted-foreground block">Comissão Devida:</span>
+                          <span className="font-bold font-mono">R$ {String(partnerDetailModal.commission_due_brl || "0.00")}</span>
+                        </div>
+                        <div className="space-y-1 bg-muted/40 p-2 rounded">
+                          <span className="text-muted-foreground block">Comissão Paga:</span>
+                          <span className="font-bold font-mono">R$ {String(partnerDetailModal.commission_paid_brl || "0.00")}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t flex flex-wrap gap-2 justify-end">
+                        {partnerDetailModal.status === "pending" && (
+                          <>
+                            <Button size="sm" onClick={() => { approveAffiliate(partnerDetailModal); setPartnerDetailModal(null); }}>Aprovar</Button>
+                            <Button size="sm" variant="destructive" onClick={() => { openReject(partnerDetailModal); setPartnerDetailModal(null); }}>Rejeitar</Button>
+                          </>
+                        )}
+                        {partnerDetailModal.status === "active" && (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => resendInvite(partnerDetailModal)}>Reenviar convite</Button>
+                            <Button size="sm" variant="outline" onClick={() => { openAffPayment(partnerDetailModal); setPartnerDetailModal(null); }}>Registrar pagamento</Button>
+                            <Button size="sm" variant="outline" onClick={() => { openAffPaymentsList(partnerDetailModal); setPartnerDetailModal(null); }}>Ver pagamentos</Button>
+                          </>
+                        )}
+                        {(partnerDetailModal.status === "active" || partnerDetailModal.status === "paused") && (
+                          <Button
+                            size="sm"
+                            variant={partnerDetailModal.status === "active" ? "secondary" : "default"}
+                            onClick={async () => {
+                              const newSt = partnerDetailModal.status === "active" ? "paused" : "active";
+                              await adminApi.patchAffiliate(String(partnerDetailModal.id), { status: newSt });
+                              setPartnerDetailModal(null);
+                              await loadAffiliates();
+                            }}
+                          >
+                            {partnerDetailModal.status === "active" ? "Pausar" : "Ativar"}
+                          </Button>
+                        )}
+                        <Button size="sm" variant="destructive" onClick={() => { deleteAffiliate(partnerDetailModal); setPartnerDetailModal(null); }}>
+                          Excluir
+                        </Button>
+                      </div>
+                    </Card>
+                  </div>
+                )}
 
                 <div className="rounded-lg border p-4">
                   <div className="text-sm font-medium mb-2">Janela de atribuição de parceiro</div>

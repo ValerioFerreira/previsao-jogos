@@ -6,7 +6,7 @@ import { ArrowLeft, Loader2, Copy, TrendingUp, Users, ShoppingCart, DollarSign, 
 import { useAuth } from "@/lib/AuthContext";
 import {
   affiliatesApi, type AffiliatePortalStats, type TimeseriesResponse,
-  type CouponRequest, type ReferredPartnersResponse,
+  type CouponRequest, type ReferredPartnersResponse, type ReferredUsersResponse,
 } from "@/lib/affiliatesApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,7 @@ export default function ParceiroDashboardPage() {
   const [copied, setCopied] = useState<"user" | "partner" | "code" | null>(null);
   const [couponReqs, setCouponReqs] = useState<CouponRequest[] | null>(null);
   const [referred, setReferred] = useState<ReferredPartnersResponse | null>(null);
+  const [refUsers, setRefUsers] = useState<ReferredUsersResponse | null>(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function ParceiroDashboardPage() {
     affiliatesApi.me().then(setStats).catch((e) => setErr((e as Error).message));
     affiliatesApi.listCouponRequests().then(setCouponReqs).catch(() => setCouponReqs([]));
     affiliatesApi.referredPartners().then(setReferred).catch(() => setReferred(null));
+    affiliatesApi.referredUsers().then(setRefUsers).catch(() => setRefUsers(null));
   }, [user]);
 
   useEffect(() => {
@@ -248,26 +250,70 @@ export default function ParceiroDashboardPage() {
         </CardContent>
       </Card>
 
-      {referred && referred.items.length > 0 && (
+      {/* Lista de Usuários que usaram o link do parceiro */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2"><Users className="w-4 h-4" /> Usuários cadastrados pelo seu link ({refUsers?.total_users || 0})</CardTitle>
+          <p className="text-xs text-muted-foreground">Lista de usuários que criaram conta através da sua recomendação e o valor gasto na plataforma.</p>
+        </CardHeader>
+        <CardContent>
+          {!refUsers ? (
+            <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+          ) : refUsers.items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum usuário cadastrado através do seu link ainda.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium">Nome do Usuário</th>
+                    <th className="text-right px-3 py-2 font-medium">Valor Gasto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {refUsers.items.map((u) => (
+                    <tr key={u.id} className="hover:bg-muted/30">
+                      <td className="px-3 py-2 font-medium">{u.name}</td>
+                      <td className="px-3 py-2 text-right font-mono text-emerald-600 font-semibold">
+                        R$ {Number(u.spent_brl || 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Parceiros Indicados (Sub-afiliados Nível 2) */}
+      {referred && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2"><UserPlus className="w-4 h-4" /> Parceiros indicados</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2"><UserPlus className="w-4 h-4" /> Parceiros indicados ({referred.items.length})</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Override a receber: <span className="text-emerald-600 font-semibold">R$ {Number(referred.total_override_due_brl).toFixed(2)}</span> ({Number(referred.override_pct)}% da comissão de cada indicado)
+              Comissão por indicação (override de {Number(referred.override_pct)}%): total acumulado <span className="text-emerald-600 font-semibold">R$ {Number(referred.total_override_due_brl).toFixed(2)}</span>
             </p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {referred.items.map((p) => (
-                <div key={p.id} className="flex items-center justify-between text-sm border rounded-md px-3 py-2">
-                  <div>
-                    <span className="font-semibold">{p.name}</span>
-                    <span className="text-muted-foreground"> · {p.users_count} compradores · R$ {Number(p.revenue_brl).toFixed(2)} gerados</span>
+            {referred.items.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum parceiro indicado por você ainda.</p>
+            ) : (
+              <div className="space-y-2">
+                {referred.items.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between text-sm border rounded-md px-3 py-2">
+                    <div>
+                      <span className="font-semibold">{p.name}</span>
+                      <span className="text-muted-foreground"> · {p.clicks || 0} cliques · {p.users_count} compradores</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-muted-foreground">Comissão gerada p/ você</div>
+                      <span className="text-emerald-600 text-sm font-semibold">+R$ {Number(p.override_due_brl).toFixed(2)}</span>
+                    </div>
                   </div>
-                  <span className="text-emerald-600 text-xs font-semibold">+R$ {Number(p.override_due_brl).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

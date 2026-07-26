@@ -21,7 +21,7 @@ export default function LoginPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated) router.replace(user?.role === "partner" ? "/parceiro" : "/");
+    if (isAuthenticated) router.replace(user?.role === "partner" ? "/parceiro/dashboard" : "/");
   }, [isAuthenticated, user, router]);
 
   async function submit(e: React.FormEvent) {
@@ -31,7 +31,7 @@ export default function LoginPage() {
     try {
       const t = await authApi.login(email.trim(), password);
       await setSession(t);
-      router.push(t.user.role === "partner" ? "/parceiro" : "/");
+      router.push(t.user.role === "partner" ? "/parceiro/dashboard" : "/");
     } catch (e) {
       setErr((e as Error).message || "Não foi possível entrar.");
     } finally {
