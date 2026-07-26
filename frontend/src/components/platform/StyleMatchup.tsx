@@ -34,24 +34,24 @@ export default function StyleMatchup({ home, away, homeMatches, awayMatches, tar
           <div className="p-2 rounded-lg bg-orange-500/10 text-orange-400 font-bold border border-orange-500/15">Defesa</div>
           
           {/* Row 1: Home */}
-          <div className="text-left font-semibold flex items-center truncate text-[11.5px] py-1">{teamPt(home)}</div>
+          <div className="text-left font-bold flex items-center truncate text-[11.5px] py-1 text-[#52F4E3]">{teamPt(home)}</div>
           <div className="p-4 rounded-xl bg-muted/30 font-mono text-base font-bold flex flex-col items-center justify-center border border-border/20 shadow-sm hover:bg-muted/40 transition-colors">
-            <span className="text-lg text-emerald-400">{hs.avgGoalsScored.toFixed(2)}</span>
+            <span className="text-lg text-[#52F4E3]">{hs.avgGoalsScored.toFixed(2)}</span>
             <span className="text-[8px] text-muted-foreground mt-0.5 uppercase tracking-wider">Marcados</span>
           </div>
           <div className="p-4 rounded-xl bg-muted/30 font-mono text-base font-bold flex flex-col items-center justify-center border border-border/20 shadow-sm hover:bg-muted/40 transition-colors">
-            <span className="text-lg text-orange-400">{hs.avgGoalsConceded.toFixed(2)}</span>
+            <span className="text-lg text-[#52F4E3]/80">{hs.avgGoalsConceded.toFixed(2)}</span>
             <span className="text-[8px] text-muted-foreground mt-0.5 uppercase tracking-wider">Sofridos</span>
           </div>
           
           {/* Row 2: Away */}
-          <div className="text-left font-semibold flex items-center truncate text-[11.5px] py-1">{teamPt(away)}</div>
+          <div className="text-left font-bold flex items-center truncate text-[11.5px] py-1 text-[#F97316]">{teamPt(away)}</div>
           <div className="p-4 rounded-xl bg-muted/30 font-mono text-base font-bold flex flex-col items-center justify-center border border-border/20 shadow-sm hover:bg-muted/40 transition-colors">
-            <span className="text-lg text-emerald-400">{as.avgGoalsScored.toFixed(2)}</span>
+            <span className="text-lg text-[#F97316]">{as.avgGoalsScored.toFixed(2)}</span>
             <span className="text-[8px] text-muted-foreground mt-0.5 uppercase tracking-wider">Marcados</span>
           </div>
           <div className="p-4 rounded-xl bg-muted/30 font-mono text-base font-bold flex flex-col items-center justify-center border border-border/20 shadow-sm hover:bg-muted/40 transition-colors">
-            <span className="text-lg text-orange-400">{as.avgGoalsConceded.toFixed(2)}</span>
+            <span className="text-lg text-[#F97316]/80">{as.avgGoalsConceded.toFixed(2)}</span>
             <span className="text-[8px] text-muted-foreground mt-0.5 uppercase tracking-wider">Sofridos</span>
           </div>
         </div>

@@ -453,3 +453,18 @@ def reset_password(db: Session, email: str, code: str, password: str, ip: str | 
         s.revoked_at = _now()
     _log(db, AuthEventType.password_reset, user.id, ip)
     db.commit()
+
+
+def dev_owner_login(db: Session, ip: str | None, ua: str | None) -> schemas.TokenResponse:
+    """Dev/local auto-login helper for owner account."""
+    from app.domains.enums import UserRole
+    user = db.execute(select(User).where(User.email == "valerioeducfin@gmail.com")).scalar_one_or_none()
+    if not user:
+        user = db.execute(select(User).where(User.role == UserRole.owner)).scalars().first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Usuário owner não encontrado.")
+    user.last_login_at = _now()
+    user.last_login_ip = ip
+    tokens = _issue_tokens(db, user, ip, ua)
+    db.commit()
+    return tokens

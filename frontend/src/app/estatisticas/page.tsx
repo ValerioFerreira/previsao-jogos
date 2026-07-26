@@ -284,38 +284,45 @@ export default function Estatisticas() {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* CABCALHO FLUTUANTE DA PARTIDA */}
-      <MatchHeader home={homeTeamId} away={awayTeamId} teamIds={teamIds} competition={competition} neutral={neutralField} onEditTeams={() => setEditingMatch(true)} />
+      {/* CABEÇALHO FLUTUANTE DA PARTIDA */}
+      <MatchHeader
+        home={homeTeamId}
+        away={awayTeamId}
+        teamIds={teamIds}
+        competition={competition}
+        date={matchDate}
+        neutral={neutralField}
+        onEditTeams={() => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          setEditingMatch(true);
+        }}
+      />
 
-      {/* SELETOR / CONFIGURAÇÃO DO CONFRONTO (Recolhe quando ambas estão preenchidas; "Alterar Confronto" reabre) */}
-      {(editingMatch || !bothSelected) && (
-        <div className="bg-card border border-border/50 rounded-xl p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Configurar Confronto</h2>
-            {bothSelected && (
-              <button onClick={() => setEditingMatch(false)} className="text-xs text-cyan-400 hover:underline">
-                Concluir edição
+      {/* SELETOR / CONFIGURAÇÃO DO CONFRONTO (Exatamente igual ao da Análise, com motion.div layout e opção de partida passada) */}
+      {(bothSelected && !editingMatch) ? null : (
+        <motion.div
+          layout
+          transition={{ layout: { duration: 0.4, ease: 'easeInOut' } }}
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className={`bg-card border border-border/50 rounded-xl p-5 mx-auto max-w-full ${pickerMode === 'independente' ? 'w-full' : 'w-fit'}`}
+        >
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h2 className="text-lg font-heading font-bold flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-500" /> Configuração do Confronto
+            </h2>
+            {bothSelected && editingMatch && (
+              <button onClick={() => setEditingMatch(false)} className="text-xs font-medium text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-3 py-1.5">
+                Concluir
               </button>
             )}
           </div>
+
           <MatchModePicker
             onModeChange={(m) => { setPickerMode(m); clearMatch(); }}
             onSelectFuture={(fx) => { setMatchDate(fx.date); setEditingMatch(false); }}
-            onSelectPast={(fx) => openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10))}
+            onSelectPast={(fx) => { openMatch(fx.home, fx.away, (fx.date || '').slice(0, 10)); setEditingMatch(false); }}
           />
-          {pickerMode === 'independente' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">Mandante</Label>
-                <TeamSelect value={homeTeamId} onValueChange={setHomeTeamId} teams={[]} placeholder="Selecione o mandante..." searchPlaceholder="Buscar mandante..." />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">Visitante</Label>
-                <TeamSelect value={awayTeamId} onValueChange={setAwayTeamId} teams={[]} placeholder="Selecione o visitante..." searchPlaceholder="Buscar visitante..." />
-              </div>
-            </div>
-          )}
-        </div>
+        </motion.div>
       )}
 
       {bothSelected && loading && (
@@ -428,26 +435,26 @@ export default function Estatisticas() {
               {/* Tendência de Gols (últimos jogos) */}
               <div className="bg-card border border-border/50 rounded-xl p-5">
                 <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
-                  <TrendingUp className="w-4 h-4 text-emerald-500" />
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
                   Tendência de Gols Marcados
                   <InfoTooltip text="Gols marcados por cada seleção nos jogos recentes, alinhados por 'jogos atrás' (J-1 é o mais recente). Compara a fase ofensiva das duas." />
                 </h3>
                 <p className="text-xs text-muted-foreground mb-4">Gols marcados nos últimos jogos de cada seleção</p>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={goalTrendData} margin={{ top: 5, right: 20, bottom: 24, left: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                    <LineChart data={goalTrendData} margin={{ top: 8, right: 20, bottom: 24, left: 8 }}>
+                      <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" opacity={0.3} />
                       <XAxis dataKey="jogo" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                         label={{ value: 'Jogos atrás (J-1 = mais recente)', position: 'insideBottom', offset: -12, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' } }} />
                       <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                         label={{ value: 'Gols marcados', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                       <RTooltip
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
-                        labelStyle={{ color: 'hsl(var(--foreground))' }}
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px', fontSize: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                        labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 'bold' }}
                       />
                       <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />
-                      <Line type="monotone" dataKey={homeTeamId} name={teamPt(homeTeamId)} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-                      <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      <Line type="monotone" dataKey={homeTeamId} name={teamPt(homeTeamId)} stroke="#52F4E3" strokeWidth={2.5} dot={{ r: 3.5, fill: "#52F4E3" }} connectNulls />
+                      <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#F97316" strokeWidth={2.5} dot={{ r: 3.5, fill: "#F97316" }} connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -455,9 +462,9 @@ export default function Estatisticas() {
 
               {/* Evolução de Elo com Link explicativo */}
               {eloHistoryData.length > 1 && (
-                <div className="bg-card border border-border/50 rounded-xl p-5">
+                <div className="bg-card border border-border/60 rounded-2xl p-5 shadow-lg shadow-black/10">
                   <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
-                    <Activity className="w-4 h-4 text-cyan-500" />
+                    <Activity className="w-4 h-4 text-cyan-400" />
                     Evolução de Elo
                     <InfoTooltip
                       text="Rating Elo histórico de cada equipe. Mostra a variação de patamar de força ao longo do tempo."
@@ -468,18 +475,18 @@ export default function Estatisticas() {
                   <p className="text-xs text-muted-foreground mb-4">Rating Elo mensal ao longo do tempo</p>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={eloHistoryData} margin={{ top: 5, right: 20, bottom: 24, left: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                      <LineChart data={eloHistoryData} margin={{ top: 8, right: 20, bottom: 24, left: 8 }}>
+                        <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" opacity={0.3} />
                         <XAxis dataKey="month" tickFormatter={fmtEloMonth} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
                         <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                           label={{ value: 'Elo', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                         <RTooltip
-                          contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
-                          labelStyle={{ color: 'hsl(var(--foreground))' }}
+                          contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px', fontSize: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                          labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 'bold' }}
                         />
                         <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />
-                        <Line type="monotone" dataKey={homeTeamId} name={teamPt(homeTeamId)} stroke="#10b981" strokeWidth={2} dot={false} connectNulls />
-                        <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#f97316" strokeWidth={2} dot={false} connectNulls />
+                        <Line type="monotone" dataKey={homeTeamId} name={teamPt(homeTeamId)} stroke="#52F4E3" strokeWidth={2.5} dot={false} connectNulls />
+                        <Line type="monotone" dataKey={awayTeamId} name={teamPt(awayTeamId)} stroke="#F97316" strokeWidth={2.5} dot={false} connectNulls />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -487,9 +494,9 @@ export default function Estatisticas() {
               )}
 
               {/* Scatter Plot com Legenda Explicativa do Vencedor */}
-              <div className="bg-card border border-border/50 rounded-xl p-5">
+              <div className="bg-card border border-border/60 rounded-2xl p-5 shadow-lg shadow-black/10">
                 <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
-                  <Target className="w-4 h-4 text-amber-500" />
+                  <Target className="w-4 h-4 text-amber-400" />
                   Matriz Comparativa de Quadrantes
                   <InfoTooltip text="Ataque (gols/jogo, eixo X) vs defesa (gols sofridos/jogo, eixo Y). A zona VERDE (direita-baixo) é a ideal: marca muito e sofre pouco; a VERMELHA (esquerda-cima) é a pior." />
                 </h3>
@@ -500,21 +507,21 @@ export default function Estatisticas() {
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 8, right: 24, bottom: 28, left: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
+                      <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" opacity={0.3} />
                       <XAxis type="number" dataKey="attack" name="Ataque" domain={[0, quadrant.xMax]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Ataque (gols/jogo) →', position: 'insideBottom', offset: -8, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
                       <YAxis type="number" dataKey="defense" name="Defesa" domain={[0, quadrant.yMax]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} label={{ value: '← Defesa (gols sofridos/jogo)', angle: -90, position: 'insideLeft', offset: 6, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
-                      <ReferenceArea x1={quadrant.am} x2={quadrant.xMax} y1={0} y2={quadrant.dm} fill="#10b981" fillOpacity={0.10} ifOverflow="hidden" />
-                      <ReferenceArea x1={0} x2={quadrant.am} y1={quadrant.dm} y2={quadrant.yMax} fill="#ef4444" fillOpacity={0.10} ifOverflow="hidden" />
-                      <ReferenceArea x1={quadrant.cx1} x2={quadrant.cx2} y1={quadrant.cy1} y2={quadrant.cy2} fill="hsl(var(--muted-foreground))" fillOpacity={0.12} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.5} strokeDasharray="4 3" ifOverflow="hidden" />
-                      <ReferenceLine x={quadrant.am} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.4} strokeDasharray="2 4" />
-                      <ReferenceLine y={quadrant.dm} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.4} strokeDasharray="2 4" />
+                      <ReferenceArea x1={quadrant.am} x2={quadrant.xMax} y1={0} y2={quadrant.dm} fill="#10b981" fillOpacity={0.08} ifOverflow="hidden" />
+                      <ReferenceArea x1={0} x2={quadrant.am} y1={quadrant.dm} y2={quadrant.yMax} fill="#ef4444" fillOpacity={0.08} ifOverflow="hidden" />
+                      <ReferenceArea x1={quadrant.cx1} x2={quadrant.cx2} y1={quadrant.cy1} y2={quadrant.cy2} fill="hsl(var(--muted-foreground))" fillOpacity={0.08} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.3} strokeDasharray="4 3" ifOverflow="hidden" />
+                      <ReferenceLine x={quadrant.am} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.3} strokeDasharray="2 4" />
+                      <ReferenceLine y={quadrant.dm} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.3} strokeDasharray="2 4" />
                       <RTooltip
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }}
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px', fontSize: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
                         formatter={(value: any, name: any) => [Number(value).toFixed(2), name === 'Ataque' ? 'Ataque (gols/jogo)' : 'Defesa (sofridos/jogo)']}
                       />
                       <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: '12px' }} />
-                      <Scatter name={teamPt(homeTeamId)} data={[{ attack: homeHistory.attack_avg || 0, defense: homeHistory.defense_avg || 0 }]} fill="#10b981" />
-                      <Scatter name={teamPt(awayTeamId)} data={[{ attack: awayHistory.attack_avg || 0, defense: awayHistory.defense_avg || 0 }]} fill="#f97316" />
+                      <Scatter name={teamPt(homeTeamId)} data={[{ attack: homeHistory.attack_avg || 0, defense: homeHistory.defense_avg || 0 }]} fill="#52F4E3" />
+                      <Scatter name={teamPt(awayTeamId)} data={[{ attack: awayHistory.attack_avg || 0, defense: awayHistory.defense_avg || 0 }]} fill="#F97316" />
                     </ScatterChart>
                   </ResponsiveContainer>
                 </div>
@@ -527,7 +534,7 @@ export default function Estatisticas() {
 
               {/* Frequency Distributions */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-card border border-border/50 rounded-xl p-5">
+                <div className="bg-card border border-border/60 rounded-2xl p-5 shadow-lg shadow-black/10">
                   <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
                     Distribuição de Escanteios
                     <InfoTooltip text="Frequência histórica de escanteios nos últimos 20 jogos de cada equipe." />
@@ -536,19 +543,19 @@ export default function Estatisticas() {
                   <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart margin={{ top: 5, right: 8, bottom: 22, left: 4 }} data={cornersChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                        <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" opacity={0.3} />
                         <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Escanteios na partida', position: 'insideBottom', offset: -10, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }} />
                         <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Nº de jogos', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
-                        <RTooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
+                        <RTooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px', fontSize: '11px' }} />
                         <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: '11px' }} />
-                        <Bar dataKey={homeTeamId} name={teamPt(homeTeamId)} fill="#10b981" radius={[2, 2, 0, 0]} />
-                        <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#f97316" radius={[2, 2, 0, 0]} />
+                        <Bar dataKey={homeTeamId} name={teamPt(homeTeamId)} fill="#52F4E3" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#F97316" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                <div className="bg-card border border-border/50 rounded-xl p-5">
+                <div className="bg-card border border-border/60 rounded-2xl p-5 shadow-lg shadow-black/10">
                   <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
                     Distribuição de Cartões
                     <InfoTooltip text="Frequência histórica de cartões nos últimos 20 jogos de cada equipe." />
@@ -557,13 +564,13 @@ export default function Estatisticas() {
                   <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart margin={{ top: 5, right: 8, bottom: 22, left: 4 }} data={cardsChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                        <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" opacity={0.3} />
                         <XAxis dataKey="value" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Cartões na partida', position: 'insideBottom', offset: -10, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }} />
                         <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} label={{ value: 'Nº de jogos', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))', textAnchor: 'middle' } }} />
-                        <RTooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '11px' }} />
+                        <RTooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px', fontSize: '11px' }} />
                         <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: '11px' }} />
-                        <Bar dataKey={homeTeamId} name={teamPt(homeTeamId)} fill="#f59e0b" radius={[2, 2, 0, 0]} />
-                        <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#ef4444" radius={[2, 2, 0, 0]} />
+                        <Bar dataKey={homeTeamId} name={teamPt(homeTeamId)} fill="#52F4E3" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey={awayTeamId} name={teamPt(awayTeamId)} fill="#F97316" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>

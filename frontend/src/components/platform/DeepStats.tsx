@@ -46,8 +46,8 @@ function ComparisonTable({ home, away, hs, as }: { home: string; away: string; h
         <thead>
           <tr className="text-muted-foreground">
             <th className="text-left font-medium py-1.5">Indicador</th>
-            <th className="text-right font-medium py-1.5 text-emerald-500">{teamPt(home)}</th>
-            <th className="text-right font-medium py-1.5 text-orange-500">{teamPt(away)}</th>
+            <th className="text-right font-medium py-1.5 text-[#52F4E3]">{teamPt(home)}</th>
+            <th className="text-right font-medium py-1.5 text-[#F97316]">{teamPt(away)}</th>
             <th className="text-right font-medium py-1.5">Melhor</th>
           </tr>
         </thead>
@@ -59,8 +59,8 @@ function ComparisonTable({ home, away, hs, as }: { home: string; away: string; h
             return (
               <tr key={r.label} className="border-t border-border/30">
                 <td className="py-1.5 text-muted-foreground">{r.label}</td>
-                <td className={`py-1.5 text-right font-mono ${!tie && hBetter ? "font-bold text-emerald-500" : ""}`}>{r.hv.toFixed(r.d ?? 1)}{r.suf || ""}</td>
-                <td className={`py-1.5 text-right font-mono ${!tie && !hBetter ? "font-bold text-orange-500" : ""}`}>{r.av.toFixed(r.d ?? 1)}{r.suf || ""}</td>
+                <td className={`py-1.5 text-right font-mono ${!tie && hBetter ? "font-bold text-[#52F4E3]" : ""}`}>{r.hv.toFixed(r.d ?? 1)}{r.suf || ""}</td>
+                <td className={`py-1.5 text-right font-mono ${!tie && !hBetter ? "font-bold text-[#F97316]" : ""}`}>{r.av.toFixed(r.d ?? 1)}{r.suf || ""}</td>
                 <td className="py-1.5 text-right text-muted-foreground">{winner}</td>
               </tr>
             );
@@ -213,13 +213,13 @@ export default function DeepStats({ home, away, homeMatches, awayMatches, homeHi
               <InfoTooltip text="Compara a média ponderada dos últimos 10 jogos com os anteriores (limitado a 50), reduzindo o peso de amistosos. Seta verde = melhorando; vermelha = piorando." />
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-4">
-              <MomentumPanel team={home} matches={homeMatches} accent="#10b981" targetCompetition={targetCompetition} />
-              <MomentumPanel team={away} matches={awayMatches} accent="#f97316" targetCompetition={targetCompetition} />
+              <MomentumPanel team={home} matches={homeMatches} accent="#52F4E3" targetCompetition={targetCompetition} />
+              <MomentumPanel team={away} matches={awayMatches} accent="#F97316" targetCompetition={targetCompetition} />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-3 border-t border-border/30">
-            <HomeAwaySplit team={home} matches={homeMatches} accent="#10b981" />
-            <HomeAwaySplit team={away} matches={awayMatches} accent="#f97316" />
+            <HomeAwaySplit team={home} matches={homeMatches} accent="#52F4E3" />
+            <HomeAwaySplit team={away} matches={awayMatches} accent="#F97316" />
           </div>
         </div>
       </div>
@@ -227,12 +227,12 @@ export default function DeepStats({ home, away, homeMatches, awayMatches, homeHi
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-card border border-border/50 rounded-xl p-5">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-            BTTS Detalhado
+            Ambas Marcam Detalhado
             <InfoTooltip text="Frequência (%) em que a equipe marca, sofre, participa de jogos com ambas marcando, mantém a meta invicta ou fica sem marcar, nos jogos recentes." />
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <BttsPanel team={home} s={hs} accent="#10b981" />
-            <BttsPanel team={away} s={as} accent="#f97316" />
+            <BttsPanel team={home} s={hs} accent="#52F4E3" />
+            <BttsPanel team={away} s={as} accent="#F97316" />
           </div>
         </div>
 
@@ -242,8 +242,8 @@ export default function DeepStats({ home, away, homeMatches, awayMatches, homeHi
             <InfoTooltip text="Consistência: quanto menor a variação em torno da média de gols, mais estrelas. Imprevisibilidade: combina a variação de gols, cartões e escanteios em um índice de 0 a 100 — quanto maior, mais 'caótica' tende a ser a equipe." />
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <ConsistencyPanel team={home} s={hs} accent="#10b981" />
-            <ConsistencyPanel team={away} s={as} accent="#f97316" />
+            <ConsistencyPanel team={home} s={hs} accent="#52F4E3" />
+            <ConsistencyPanel team={away} s={as} accent="#F97316" />
           </div>
         </div>
       </div>

@@ -67,126 +67,145 @@ function ClubMarketsBanner({ onExplore }: { onExplore: () => void }) {
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-2xl shadow-xl shadow-cyan-900/20 bg-slate-100 dark:bg-slate-950"
+      transition={{ duration: 0.3 }}
+      className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-card p-6 sm:p-8 shadow-xl shadow-emerald-950/10"
     >
-      {/* Imagem de fundo restaurada (Dark Mode) */}
-      <img
-        aria-hidden
-        src="https://png.pngtree.com/thumb_back/fh260/background/20230705/pngtree-intense-football-game-at-the-stadium-3d-rendering-of-competing-players-image_3821105.jpg"
-        alt=""
-        className="absolute inset-0 w-full h-full object-cover opacity-60 hidden dark:block"
-      />
-      {/* Imagem de fundo (Light Mode) */}
-      <img
-        aria-hidden
-        src="https://www.shutterstock.com/image-vector/silhouette-soccer-football-player-set-260nw-2710080835.jpg"
-        alt=""
-        className="absolute inset-0 w-full h-full object-cover opacity-60 block dark:hidden"
-      />
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-white/75 via-white/50 to-slate-100 dark:from-slate-950/75 dark:via-slate-950/60 dark:to-background" />
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-slate-100/50 via-transparent to-slate-100/50 dark:from-background/50 dark:to-background/50" />
+      {/* Background vector pattern and glow */}
+      <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px] opacity-10 pointer-events-none" />
 
-      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-3 right-3 text-slate-600 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors z-10">
+      <button onClick={dismiss} aria-label="Fechar aviso" className="absolute top-3.5 right-3.5 text-muted-foreground hover:text-foreground transition-colors z-10 p-1 rounded-md hover:bg-muted/40">
         <X className="w-4 h-4" />
       </button>
 
-      <div className="relative px-5 py-8 sm:py-10 flex flex-col items-center text-center gap-4">
-        <motion.p
-          animate={{ opacity: [0.85, 1, 0.85] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-          className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300"
-        >
-          Nova Atualização
-        </motion.p>
-        <h2 className="font-heading font-extrabold text-2xl sm:text-4xl text-slate-900 dark:text-white leading-tight tracking-tight">
-          MERCADOS DE <span className="bg-gradient-to-r from-emerald-600 to-cyan-600 dark:from-emerald-400 dark:to-cyan-400 bg-clip-text text-transparent">CLUBES</span>
+      <div className="relative flex flex-col items-center text-center gap-4 max-w-3xl mx-auto">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono font-bold uppercase tracking-wider">
+          <Sparkles className="w-3 h-3" /> Modelo Quantitativo Atualizado
+        </div>
+
+        <h2 className="font-heading font-extrabold text-2xl sm:text-4xl text-foreground leading-tight tracking-tight">
+          Inteligência Estatística para <span className="bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">Clubes & Ligas</span>
         </h2>
 
-        <div className="flex flex-wrap justify-center gap-1.5 max-w-2xl">
+        <p className="text-xs sm:text-sm text-muted-foreground max-w-xl leading-relaxed">
+          Projeções matemáticas calibradas com Dixon-Coles, xG projetado e modelo de goleadores para mais de 40 competições globais.
+        </p>
+
+        <div className="flex flex-wrap justify-center gap-1.5 max-w-2xl my-1">
           {CLUB_LEAGUES.map((l) => (
-            <span key={l} className="text-[11px] font-medium bg-slate-900/5 border border-slate-900/10 text-slate-800 dark:bg-white/10 dark:border-white/15 dark:text-white/90 rounded-full px-2.5 py-1 backdrop-blur-sm">{l}</span>
+            <span key={l} className="text-[11px] font-medium bg-muted/60 border border-border/50 text-foreground/80 rounded-lg px-2.5 py-1">
+              {l}
+            </span>
           ))}
-          <span className="text-[11px] font-bold bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 dark:from-emerald-500/20 dark:to-cyan-500/20 border border-emerald-500/30 text-slate-900 dark:text-white rounded-full px-2.5 py-1 backdrop-blur-sm">
-            E mais 36 competições
+          <span className="text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-lg px-2.5 py-1">
+            + 36 Ligas Globais
           </span>
         </div>
 
-
-
         <button
           onClick={() => { dismiss(); onExplore(); }}
-          className="mt-1 px-5 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-emerald-500 to-cyan-500 dark:from-emerald-400 dark:to-cyan-400 text-white dark:text-slate-950 hover:opacity-90 transition-opacity"
+          className="mt-2 px-6 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 hover:brightness-110 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] cursor-pointer"
         >
-          Analisar um jogo de clube →
+          Explorar confronto de clubes →
         </button>
       </div>
     </motion.div>
   );
 }
 
-// Banner de partidas fixadas pelo admin — substitui o ClubMarketsBanner quando houver
-// destaques ativos. Mesmo invólucro visual (fundo/gradiente), miolo com grid de cards.
-function FeaturedMatchesBanner({ matches, teamIds, onPick }: {
-  matches: UpcomingFixture[]; teamIds: Record<string, number>; onPick: (fx: UpcomingFixture) => void;
+function startsInLessThanHour(iso?: string): boolean {
+  if (!iso) return false;
+  const matchTime = new Date(iso).getTime();
+  if (isNaN(matchTime)) return false;
+  const now = Date.now();
+  const diffMs = matchTime - now;
+  return diffMs > 0 && diffMs <= 3600000;
+}
+
+function FeaturedMatchesBanner({
+  matches, teamIds, onPick,
+}: {
+  matches: UpcomingFixture[];
+  teamIds: Record<string, number>;
+  onPick: (fx: UpcomingFixture) => void;
 }) {
+  if (!matches.length) return null;
+
+  const sortedMatches = React.useMemo(() => {
+    return [...matches].sort((a, b) => {
+      const ta = new Date(a.date).getTime() || 0;
+      const tb = new Date(b.date).getTime() || 0;
+      return ta - tb;
+    });
+  }, [matches]);
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-2xl shadow-xl shadow-cyan-900/20 bg-slate-100 dark:bg-slate-950"
+      className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-5 sm:p-7 shadow-2xl shadow-black/30"
     >
-      <img
-        aria-hidden
-        src="https://png.pngtree.com/thumb_back/fh260/background/20230705/pngtree-intense-football-game-at-the-stadium-3d-rendering-of-competing-players-image_3821105.jpg"
-        alt=""
-        className="absolute inset-0 w-full h-full object-cover opacity-60 hidden dark:block"
-      />
-      <img
-        aria-hidden
-        src="https://www.shutterstock.com/image-vector/silhouette-soccer-football-player-set-260nw-2710080835.jpg"
-        alt=""
-        className="absolute inset-0 w-full h-full object-cover opacity-60 block dark:hidden"
-      />
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-white/85 via-white/70 to-slate-100 dark:from-slate-950/85 dark:via-slate-950/75 dark:to-background" />
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-slate-100/50 via-transparent to-slate-100/50 dark:from-background/50 dark:to-background/50" />
+      {/* Imagem de Fundo com Alta Nitidez, Fade e Filtro Grayscale no modo claro */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <img
+          src="/images/background-partidas-destaque.jpg"
+          alt=""
+          className="w-full h-full object-cover blur-[2px] scale-105 opacity-65 dark:opacity-60 dark:grayscale-0 grayscale contrast-110 brightness-105 transition-all duration-500"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-card/40 via-card/65 to-card/85" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+      </div>
 
-      <div className="relative px-5 py-8 sm:py-10 flex flex-col items-center text-center gap-5">
+      <div className="relative flex flex-col items-center text-center gap-5">
         <div>
-          <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300 mb-2">
-            Partidas em Destaque
-          </p>
-          <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight tracking-tight">
-            Escolha um confronto e veja a análise completa
+          <h2 className="font-heading font-extrabold text-xl sm:text-3xl text-foreground tracking-tight flex items-center justify-center gap-2 flex-wrap">
+            <span className="text-foreground">PARTIDAS EM</span>
+            <motion.span
+              animate={{ opacity: [0.85, 1, 0.85], scale: [0.98, 1.03, 0.98] }}
+              transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+              className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300 bg-clip-text text-transparent drop-shadow-sm font-black"
+            >
+              DESTAQUE
+            </motion.span>
           </h2>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">
+            Selecione uma partida para ver a análise completa
+          </p>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-4 max-w-5xl w-full mx-auto">
-          {matches.map((fx) => (
-            <div
+        <div className="flex flex-wrap justify-center gap-3.5 max-w-5xl w-full mx-auto">
+          {sortedMatches.map((fx) => (
+            <motion.button
               key={fx.fixture_id}
-              className="group relative p-[2px] rounded-xl overflow-hidden transition-all duration-300 hover:scale-105 shadow-md hover:shadow-cyan-500/20 w-[calc(50%-0.5rem)] sm:w-[180px]"
+              onClick={() => onPick(fx)}
+              whileHover={{ y: -4, scale: 1.03 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              className="group/match relative flex flex-col items-center justify-between gap-2 p-3.5 rounded-xl border border-border/80 bg-card/85 backdrop-blur-xl hover:bg-card/95 hover:border-emerald-500/60 transition-colors w-[calc(50%-0.5rem)] sm:w-[190px] text-center cursor-pointer shadow-lg shadow-black/30 hover:shadow-2xl hover:shadow-emerald-500/20"
             >
-              {/* Contorno neon azul-esverdeado girando ao redor no hover */}
-              <div className="absolute inset-[-150%] bg-[conic-gradient(from_0deg,#00f2fe,#10b981,#06b6d4,#00f2fe)] animate-[spin_4s_linear_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-              
-              <button
-                onClick={() => onPick(fx)}
-                className="relative z-10 w-full h-full flex flex-col items-center justify-between gap-1.5 p-3 rounded-[10px] bg-white/90 dark:bg-slate-900/90 hover:bg-white dark:hover:bg-slate-900 backdrop-blur-sm transition-colors text-center cursor-pointer"
-              >
-                <div className="flex items-center justify-center gap-1.5">
-                  <img src={teamLogoUrl(teamIds[fx.home]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain" />
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-white/50">x</span>
-                  <img src={teamLogoUrl(teamIds[fx.away]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain" />
+              {startsInLessThanHour(fx.date) && (
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/50 text-red-400 text-[8.5px] font-mono font-extrabold uppercase tracking-wider animate-pulse shadow-md shadow-red-500/30 backdrop-blur-md">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                    Inicia em menos de 1 hora
+                  </span>
                 </div>
-                <div className="text-[11px] font-semibold text-slate-900 dark:text-white leading-tight">
-                  {teamPt(fx.home)} x {teamPt(fx.away)}
-                </div>
-                <div className="text-[10px] text-slate-600 dark:text-white/60 truncate w-full">{competitionPt(fx.tournament)}</div>
-                <div className="text-[10px] text-slate-500 dark:text-white/50">{fmtMatchDateTime(fx.date)}</div>
-              </button>
-            </div>
+              )}
+
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <img src={teamLogoUrl(teamIds[fx.home]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain drop-shadow" />
+                <span className="text-[10px] font-mono font-bold text-muted-foreground">VS</span>
+                <img src={teamLogoUrl(teamIds[fx.away]) || undefined} onError={onImgError} alt="" className="w-6 h-6 object-contain drop-shadow" />
+              </div>
+
+              <div className="text-[12px] font-bold text-foreground leading-snug group-hover/match:text-emerald-400 transition-colors">
+                {teamPt(fx.home)} <span className="text-muted-foreground font-normal">x</span> {teamPt(fx.away)}
+              </div>
+
+              <div className="text-[10px] text-muted-foreground truncate w-full">{competitionPt(fx.tournament)}</div>
+              <div className="text-[9.5px] font-mono text-muted-foreground font-medium bg-muted/40 border border-border/40 px-2 py-0.5 rounded">{fmtMatchDateTime(fx.date)}</div>
+            </motion.button>
           ))}
         </div>
       </div>
@@ -496,11 +515,15 @@ export default function Previsoes() {
           referee={referee}
           neutral={neutralField}
           onEditTeams={() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
             setEditingTeams(true);
             setAnalysis(null);
             setFixtureId(null);
             setDeepAnalysisInfo(null);
             setProjection(null);
+            if (mode === 'futura') {
+              setModalOpen(true);
+            }
           }}
         />
       )}

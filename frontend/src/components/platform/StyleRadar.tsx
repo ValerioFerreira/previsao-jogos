@@ -110,9 +110,9 @@ export default function StyleRadar({ home, away, homeMatches, awayMatches, targe
   const ph = profile(homeMatches10); const pa = profile(awayMatches10);
   const data = Object.keys(ph).map((k) => ({ metric: k, [home]: Math.round((ph as any)[k]), [away]: Math.round((pa as any)[k]) }));
   return (
-    <div className="bg-card border border-border/50 rounded-xl p-5 h-full flex flex-col justify-between">
+    <div className="bg-card border border-border/60 rounded-2xl p-5 h-full flex flex-col justify-between shadow-lg shadow-black/10">
       <div className="flex flex-col flex-1">
-        <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5 text-foreground">
           Radar de Estilo
           <InfoTooltip text="Perfil comparativo (0–100) das duas equipes nos jogos recentes. Passe o mouse sobre os ícones nos vértices para ver o indicador medido. Quanto mais para fora, mais forte naquele quesito." />
         </h3>
@@ -122,11 +122,11 @@ export default function StyleRadar({ home, away, homeMatches, awayMatches, targe
         <div className="w-full flex-1 min-h-[300px] relative flex items-center justify-center">
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart data={data} cx="50%" cy="50%" outerRadius="82%" margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-              <PolarGrid stroke="hsl(var(--border))" opacity={0.5} />
+              <PolarGrid stroke="hsl(var(--border))" opacity={0.3} />
               <PolarAngleAxis dataKey="metric" tick={<AngleTick />} />
               <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 8, fill: "hsl(var(--muted-foreground))" }} angle={90} />
-              <Radar name={teamPt(home)} dataKey={home} stroke="#10b981" fill="#10b981" fillOpacity={0.3} dot={{ r: 3, fill: "#10b981", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
-              <Radar name={teamPt(away)} dataKey={away} stroke="#f97316" fill="#f97316" fillOpacity={0.25} dot={{ r: 3, fill: "#f97316", stroke: "hsl(var(--card))", strokeWidth: 1 }} activeDot={{ r: 5, cursor: "pointer" }} />
+              <Radar name={teamPt(home)} dataKey={home} stroke="#52F4E3" fill="#52F4E3" fillOpacity={0.3} dot={{ r: 3.5, fill: "#52F4E3", stroke: "hsl(var(--card))", strokeWidth: 1.5 }} activeDot={{ r: 5.5, cursor: "pointer" }} />
+              <Radar name={teamPt(away)} dataKey={away} stroke="#F97316" fill="#F97316" fillOpacity={0.3} dot={{ r: 3.5, fill: "#F97316", stroke: "hsl(var(--card))", strokeWidth: 1.5 }} activeDot={{ r: 5.5, cursor: "pointer" }} />
               <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: "11px" }} />
               <RTooltip content={<VertexTooltip home={home} away={away} />} />
             </RadarChart>
@@ -135,7 +135,7 @@ export default function StyleRadar({ home, away, homeMatches, awayMatches, targe
       </div>
 
       {/* Legenda dos Vértices com Ícones ao lado do nome */}
-      <div className="mt-auto pt-4 border-t border-border/30 text-[10px] text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-2 leading-relaxed">
+      <div className="mt-auto pt-4 border-t border-border/40 text-[10px] text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-2 leading-relaxed">
         {Object.entries(METRIC_META).map(([name, { icon, desc }]) => (
           <div key={name} className="flex items-center gap-1.5 truncate">
             <span className="text-xs shrink-0">{icon}</span>

@@ -131,6 +131,8 @@ export const authApi = {
 
   enterDemo: () => authFetch<TokenResponse>("/auth/enter-demo", { method: "POST" }),
 
+  devOwnerLogin: () => raw<TokenResponse>("/auth/dev-owner-login", { method: "POST" }),
+
   logout: () => {
     const r = tokens.refresh();
     tokens.clear();

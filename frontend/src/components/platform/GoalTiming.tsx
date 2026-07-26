@@ -85,8 +85,8 @@ function MinuteHeatmap({ home, away, homeData, awayData }: {
     <div className="mt-4 pt-4 border-t border-border/30">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Heatmap dos Minutos</p>
       <div className="space-y-1.5 mb-2">
-        <Line team={home} rows={hRows} accent="16, 185, 129" metric="scoredPct" />
-        <Line team={home} rows={hRows} accent="16, 185, 129" metric="concededPct" />
+        <Line team={home} rows={hRows} accent="82, 244, 227" metric="scoredPct" />
+        <Line team={home} rows={hRows} accent="82, 244, 227" metric="concededPct" />
         <Line team={away} rows={aRows} accent="249, 115, 22" metric="scoredPct" />
         <Line team={away} rows={aRows} accent="249, 115, 22" metric="concededPct" />
       </div>
@@ -169,8 +169,8 @@ export default function GoalTiming({ home, homeData, away, awayData }: {
       </h3>
       <p className="text-xs text-muted-foreground mb-3">% dos gols por faixa de 15′ (acréscimos entram na faixa do tempo)</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-        {hasH && <TeamTiming team={home} data={homeData!} accent="#10b981" />}
-        {hasA && <TeamTiming team={away} data={awayData!} accent="#f97316" />}
+        {hasH && <TeamTiming team={home} data={homeData!} accent="#52F4E3" />}
+        {hasA && <TeamTiming team={away} data={awayData!} accent="#F97316" />}
       </div>
       {hasH && hasA && <MinuteHeatmap home={home} away={away} homeData={homeData} awayData={awayData} />}
     </div>

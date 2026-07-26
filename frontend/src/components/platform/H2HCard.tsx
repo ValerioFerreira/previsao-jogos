@@ -62,9 +62,9 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
       {/* Placar do retrospecto: vitórias/empates + barra de distribuição */}
       <div className="grid grid-cols-3 gap-2 mb-2">
         {[
-          { id: home, w: hw, color: "text-emerald-500", label: "Vitórias" },
+          { id: home, w: hw, color: "text-[#52F4E3]", label: "Vitórias" },
           { id: null, w: dr, color: "text-muted-foreground", label: "Empates" },
-          { id: away, w: aw, color: "text-cyan-500", label: "Vitórias" },
+          { id: away, w: aw, color: "text-[#F97316]", label: "Vitórias" },
         ].map((s, i) => (
           <div key={i} className="flex flex-col items-center">
             {s.id ? (
@@ -81,9 +81,9 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
       </div>
       {/* barra de distribuição de resultados */}
       <div className="flex h-2 rounded-full overflow-hidden mb-3">
-        <div style={{ width: `${pct(hw)}%` }} className="bg-emerald-500" title={`${teamPt(home)} ${pct(hw)}%`} />
+        <div style={{ width: `${pct(hw)}%` }} className="bg-[#52F4E3]" title={`${teamPt(home)} ${pct(hw)}%`} />
         <div style={{ width: `${pct(dr)}%` }} className="bg-muted-foreground/50" title={`Empates ${pct(dr)}%`} />
-        <div style={{ width: `${pct(aw)}%` }} className="bg-cyan-500" title={`${teamPt(away)} ${pct(aw)}%`} />
+        <div style={{ width: `${pct(aw)}%` }} className="bg-[#F97316]" title={`${teamPt(away)} ${pct(aw)}%`} />
       </div>
 
       {/* chips de métricas do confronto — 2 balões reorganizados */}
@@ -106,15 +106,15 @@ export default function H2HCard({ h2hData, home, away, teamIds }: {
       <div className="mb-3">
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1 text-center">Médias no confronto direto</p>
         <div className="grid grid-cols-3 items-center text-[10px] text-muted-foreground pb-1 border-b border-border/30">
-          <span className="text-center text-emerald-400 truncate">{teamPt(home)}</span>
+          <span className="text-center text-[#52F4E3] font-bold truncate">{teamPt(home)}</span>
           <span className="text-center" />
-          <span className="text-center text-cyan-400 truncate">{teamPt(away)}</span>
+          <span className="text-center text-[#F97316] font-bold truncate">{teamPt(away)}</span>
         </div>
         {AVG_ROWS.map(([label, key]) => (
           <div key={key} className="grid grid-cols-3 items-center text-xs py-1 border-t border-border/20 first:border-t-0">
-            <span className="font-mono font-semibold text-emerald-400 text-center">{h2hData.home_avgs?.[key] ?? "—"}</span>
+            <span className="font-mono font-semibold text-[#52F4E3] text-center">{h2hData.home_avgs?.[key] ?? "—"}</span>
             <span className="text-muted-foreground text-center">{label}</span>
-            <span className="font-mono font-semibold text-cyan-400 text-center">{h2hData.away_avgs?.[key] ?? "—"}</span>
+            <span className="font-mono font-semibold text-[#F97316] text-center">{h2hData.away_avgs?.[key] ?? "—"}</span>
           </div>
         ))}
       </div>

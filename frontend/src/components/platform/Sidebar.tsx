@@ -12,7 +12,9 @@ import {
   Moon,
   Coins,
   LogOut,
-  ArrowRightLeft
+  ArrowRightLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 import { useAuth } from '@/lib/AuthContext';
@@ -21,9 +23,16 @@ import { motion } from 'framer-motion';
 interface SidebarProps {
   navLayout?: 'sidebar' | 'top';
   onToggleLayout?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export default function Sidebar({ navLayout = 'sidebar', onToggleLayout }: SidebarProps) {
+export default function Sidebar({
+  navLayout = 'sidebar',
+  onToggleLayout,
+  isCollapsed = false,
+  onToggleCollapse,
+}: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const { user, wallet, logout } = useAuth();
   const pathname = usePathname();
@@ -57,87 +66,113 @@ export default function Sidebar({ navLayout = 'sidebar', onToggleLayout }: Sideb
   const firstName = user ? user.full_name.split(' ')[0] : '';
 
   return (
-    <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-64 bg-card/95 border-r border-border/60 z-50 backdrop-blur-xl transition-all duration-300">
+    <aside
+      className={`hidden md:flex flex-col fixed left-0 top-0 bottom-0 bg-card/95 border-r border-border/60 z-50 backdrop-blur-xl transition-all duration-300 shadow-2xl ${
+        isCollapsed ? 'w-20' : 'w-64'
+      }`}
+    >
       {/* Top Brand Section */}
-      <div className="p-4 border-b border-border/50 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5">
-          <img src="/images/so-o-A-sem-fundo.png" alt="ApostaInfo" className="w-8 h-8 object-contain" />
-          <div className="flex flex-col">
-            <img src="/images/so-o-texto-sem-fundo.png" alt="ApostaInfo" className="h-6 w-auto object-contain" />
-            <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest -mt-1">
-              Menu Lateral
-            </span>
-          </div>
+      <div className={`p-3.5 border-b border-border/50 flex items-center justify-between gap-2 ${isCollapsed ? 'px-2 justify-center' : 'px-4'}`}>
+        <Link href="/" className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+          <img src="/images/so-o-A-sem-fundo.png" alt="ApostaInfo" className="w-10 h-10 object-contain shrink-0 drop-shadow" />
+          {!isCollapsed && (
+            <div className="flex-1 flex justify-center min-w-0">
+              <img src="/images/so-o-texto-sem-fundo.png" alt="ApostaInfo" className="h-7 sm:h-7.5 w-auto object-contain" />
+            </div>
+          )}
         </Link>
 
-        {onToggleLayout && (
+        {onToggleCollapse && (
           <button
-            onClick={onToggleLayout}
-            title="Alternar Layout"
-            className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            onClick={onToggleCollapse}
+            title={isCollapsed ? "Expandir barra lateral" : "Colapsar barra lateral"}
+            className="p-1.5 rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground transition-all shrink-0 cursor-pointer active:scale-95"
           >
-            <ArrowRightLeft className="w-4 h-4" />
+            {isCollapsed ? (
+              <PanelLeftOpen className="w-5 h-5 text-emerald-400" />
+            ) : (
+              <PanelLeftClose className="w-5 h-5 text-muted-foreground hover:text-foreground" />
+            )}
           </button>
         )}
       </div>
 
-      {/* Card do Perfil do Usuário / Créditos (Posicionado logo acima do "Navegação") */}
-      <div className="p-3 m-3 mb-1 rounded-xl bg-muted/50 border border-border/50 space-y-3">
-        {user ? (
-          <>
-            <Link
-              href="/perfil?tab=dados"
-              className="flex items-center gap-2.5 group cursor-pointer hover:opacity-90 transition-opacity"
-              title="Ir para o meu perfil"
-            >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs shadow-sm group-hover:scale-105 transition-transform">
-                {firstName.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold truncate group-hover:text-primary transition-colors">
-                  {user.full_name}
-                </div>
-                <div className="text-[10px] text-muted-foreground capitalize">
-                  {user.role === 'owner' ? 'Proprietário' : user.role === 'partner' ? 'Parceiro' : 'Usuário'}
-                </div>
-              </div>
-            </Link>
-
-            <div className="flex items-center justify-between pt-2 border-t border-border/40">
+      {/* Card do Perfil do Usuário / Créditos */}
+      {!isCollapsed ? (
+        <div className="p-3 m-3 mb-1 rounded-xl bg-muted/40 border border-border/50 space-y-3">
+          {user ? (
+            <>
               <Link
-                href="/carteira"
-                className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
-                title="Ir para a carteira"
+                href="/perfil?tab=dados"
+                className="flex items-center gap-2.5 group cursor-pointer hover:opacity-90 transition-opacity"
+                title="Ir para o meu perfil"
               >
-                <Coins className="w-4 h-4" />
-                <span>{credits} créditos</span>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs shadow-sm group-hover:scale-105 transition-transform">
+                  {firstName.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold truncate group-hover:text-primary transition-colors">
+                    {user.full_name}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground capitalize font-mono">
+                    {user.role === 'owner' ? 'Proprietário' : user.role === 'partner' ? 'Parceiro' : 'Usuário'}
+                  </div>
+                </div>
               </Link>
+
+              <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                <Link
+                  href="/carteira"
+                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline font-mono"
+                  title="Ir para a carteira"
+                >
+                  <Coins className="w-4 h-4" />
+                  <span>{credits} créditos</span>
+                </Link>
+                <Link
+                  href="/carteira"
+                  className="text-[11px] font-semibold text-primary hover:underline bg-primary/10 px-2 py-0.5 rounded"
+                >
+                  + créditos
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2 text-center py-1">
+              <p className="text-xs text-muted-foreground">Acesse sua conta para utilizar créditos e gerar análises.</p>
               <Link
-                href="/carteira"
-                className="text-[11px] font-semibold text-primary hover:underline bg-primary/10 px-2 py-0.5 rounded"
+                href="/entrar"
+                className="block w-full py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition text-center"
               >
-                + créditos
+                Entrar na conta
               </Link>
             </div>
-          </>
-        ) : (
-          <div className="space-y-2 text-center py-1">
-            <p className="text-xs text-muted-foreground">Acesse sua conta para utilizar créditos e gerar análises.</p>
-            <Link
-              href="/entrar"
-              className="block w-full py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition text-center"
-            >
-              Entrar na conta
+          )}
+        </div>
+      ) : (
+        <div className="py-3 flex flex-col items-center border-b border-border/40">
+          {user ? (
+            <Link href="/carteira" title={`${credits} créditos - Ir para a carteira`} className="flex flex-col items-center gap-1">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                {firstName.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-xs font-black font-mono text-emerald-400 tracking-tight bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">{credits}c</span>
             </Link>
-          </div>
-        )}
-      </div>
+          ) : (
+            <Link href="/entrar" title="Entrar na conta" className="p-1 text-xs text-emerald-400 font-bold">
+              🔑
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-3 mb-2">
-          Navegação
-        </div>
+      <nav className={`flex-1 space-y-1 overflow-y-auto ${isCollapsed ? 'px-2 py-4' : 'px-3 py-3'}`}>
+        {!isCollapsed && (
+          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-3 mb-2 font-mono">
+            Navegação
+          </div>
+        )}
 
         {navItems.map((item) => {
           const isActive = pathname === item.path;
@@ -146,10 +181,13 @@ export default function Sidebar({ navLayout = 'sidebar', onToggleLayout }: Sideb
             <Link
               key={item.path}
               href={item.path}
-              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              title={item.label}
+              className={`relative flex items-center gap-3 rounded-xl transition-all ${
+                isCollapsed ? 'justify-center p-3' : 'px-3 py-2.5 text-sm font-semibold'
+              } ${
                 isActive
-                  ? 'bg-primary/10 text-primary font-semibold'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  ? 'bg-primary/10 text-primary font-bold shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
               }`}
             >
               {isActive && (
@@ -159,32 +197,44 @@ export default function Sidebar({ navLayout = 'sidebar', onToggleLayout }: Sideb
                   transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 />
               )}
-              <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span>{item.label}</span>
+              <Icon className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+              {!isCollapsed && <span>{item.label}</span>}
             </Link>
           );
         })}
       </nav>
 
       {/* Footer Actions */}
-      <div className="p-3 border-t border-border/50 flex items-center justify-between gap-2">
+      <div className={`p-3 border-t border-border/50 flex items-center gap-2 bg-card/40 ${isCollapsed ? 'flex-col justify-center px-2' : 'justify-between'}`}>
+        {/* Seletor entre lua e sol somente */}
         {mounted && (
           <button
             onClick={toggleTheme}
             aria-label="Alternar tema"
-            className="flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg hover:bg-accent transition-colors border border-border/60 text-xs font-medium"
+            title="Alternar Tema (Claro / Escuro)"
+            className={`rounded-xl border border-border/60 bg-muted/30 hover:bg-accent text-muted-foreground hover:text-foreground transition-all flex items-center justify-center cursor-pointer active:scale-95 shrink-0 ${
+              isCollapsed ? 'p-2.5 w-full' : 'p-2.5'
+            }`}
           >
             {theme === 'dark' ? (
-              <>
-                <Sun className="w-4 h-4 text-amber-400" />
-                <span>Modo Claro</span>
-              </>
+              <Sun className="w-4.5 h-4.5 text-amber-400" />
             ) : (
-              <>
-                <Moon className="w-4 h-4 text-slate-600" />
-                <span>Modo Escuro</span>
-              </>
+              <Moon className="w-4.5 h-4.5 text-slate-600" />
             )}
+          </button>
+        )}
+
+        {/* Botão de Alternar para Menu Superior */}
+        {onToggleLayout && (
+          <button
+            onClick={onToggleLayout}
+            title="Alternar para Menu Superior"
+            className={`flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-muted/30 hover:bg-accent text-muted-foreground hover:text-foreground transition-all text-xs font-semibold cursor-pointer active:scale-95 ${
+              isCollapsed ? 'p-2.5 w-full' : 'flex-1 py-2 px-3'
+            }`}
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            {!isCollapsed && <span>Menu Superior</span>}
           </button>
         )}
 
@@ -193,7 +243,9 @@ export default function Sidebar({ navLayout = 'sidebar', onToggleLayout }: Sideb
           <button
             onClick={logout}
             title="Sair da conta"
-            className="p-2 rounded-lg hover:bg-red-500/10 text-red-600 transition-colors border border-border/60"
+            className={`rounded-xl hover:bg-red-500/10 text-red-500 transition-all border border-border/60 shrink-0 cursor-pointer active:scale-95 ${
+              isCollapsed ? 'p-2.5 w-full' : 'p-2.5'
+            }`}
           >
             <LogOut className="w-4 h-4" />
           </button>

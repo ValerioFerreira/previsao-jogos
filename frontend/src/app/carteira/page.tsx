@@ -39,6 +39,15 @@ const BADGE_LABEL: Record<string, { label: string; className: string }> = {
   melhor_custo_beneficio: { label: "💎 Melhor custo-benefício", className: "bg-violet-600 text-white" },
 };
 
+function getPackageBgImage(name: string, id: string): string {
+  const n = (name || id || '').toLowerCase();
+  if (n.includes('inicial')) return '/images/pacote-inicial.png';
+  if (n.includes('essencial')) return '/images/pacote-essencial.png';
+  if (n.includes('premium')) return '/images/pacote-premium.png';
+  if (n.includes('ultimate')) return '/images/pacote-ultimate.png';
+  return '/images/pacote-inicial.png';
+}
+
 export default function CarteiraPage() {
   const { user, wallet, loading, refreshWallet } = useAuth();
   const router = useRouter();
@@ -105,7 +114,6 @@ export default function CarteiraPage() {
     else if (status === "pending") setMsg("Pagamento pendente (ex.: Pix aguardando compensação). Os créditos são liberados automaticamente após a confirmação.");
     else if (status === "failure") setErr("Pagamento não concluído. Você pode tentar novamente.");
     window.history.replaceState({}, "", "/carteira");
-    // poll rápido para refletir o crédito assim que o webhook processar
     let tries = 0;
     const id = setInterval(async () => {
       tries += 1;
@@ -114,7 +122,6 @@ export default function CarteiraPage() {
       if (tries >= 6) clearInterval(id);
     }, 5000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function pricePerCredit(p: CreditPackage) {
@@ -188,45 +195,45 @@ export default function CarteiraPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-2">
-        <WalletIcon className="w-6 h-6" />
+        <WalletIcon className="w-6 h-6 text-emerald-400" />
         <h1 className="text-2xl font-bold">Carteira</h1>
       </div>
 
-      {/* Resumo da carteira — primeiro, antes de vendas/banners */}
+      {/* Resumo da carteira */}
       <div className={`grid gap-4 ${promo > 0 ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2"}`}>
-        <Card>
+        <Card className="border-border/60 bg-card/80 backdrop-blur-md">
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">Créditos disponíveis</div>
-            <div className="text-3xl font-bold flex items-center gap-2 mt-1">
-              <Coins className="w-6 h-6 text-emerald-500" /> {Math.floor(available)}
+            <div className="text-3xl font-bold flex items-center gap-2 mt-1 font-mono">
+              <Coins className="w-6 h-6 text-emerald-400" /> {Math.floor(available)}
             </div>
           </CardContent>
         </Card>
         {promo > 0 && (
-          <Card className="border-sky-500/30 bg-sky-500/[0.03]">
+          <Card className="border-sky-500/30 bg-sky-500/[0.03] backdrop-blur-md">
             <CardContent className="pt-6">
               <div className="text-sm text-muted-foreground flex items-center gap-1">
                 Promocionais
-                <span title="Consumidos automaticamente em qualquer análise (antes dos pagos). Não participam da Aposta Escolhida." className="cursor-help text-sky-500">ⓘ</span>
+                <span title="Consumidos automaticamente em qualquer análise." className="cursor-help text-sky-500">ⓘ</span>
               </div>
-              <div className="text-3xl font-bold mt-1 text-sky-500">{Math.floor(promo)}</div>
+              <div className="text-3xl font-bold mt-1 text-sky-400 font-mono">{Math.floor(promo)}</div>
             </CardContent>
           </Card>
         )}
-        <Card className="cursor-pointer hover:border-amber-500/50 hover:bg-amber-500/[0.02] transition-all select-none group" onClick={() => router.push('/perfil?tab=selecoes')}>
+        <Card className="cursor-pointer hover:border-amber-500/50 hover:bg-amber-500/[0.02] transition-all select-none group border-border/60 bg-card/80 backdrop-blur-md" onClick={() => router.push('/perfil?tab=selecoes')}>
           <CardContent className="pt-6">
             <div className="text-sm text-muted-foreground flex items-center justify-between">
               <span>Reservados</span>
-              <span className="text-[10px] text-amber-500 font-semibold uppercase tracking-wider group-hover:translate-x-1 transition-transform">Ver seleções ➜</span>
+              <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider group-hover:translate-x-1 transition-transform">Ver seleções ➜</span>
             </div>
-            <div className="text-3xl font-bold mt-1 text-amber-500">{Math.floor(reserved)}</div>
+            <div className="text-3xl font-bold mt-1 text-amber-400 font-mono">{Math.floor(reserved)}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Campanha ativa (prioridade máxima) — banner amarra cupom/pacotes participantes */}
+      {/* Campanha ativa */}
       {campaign?.banner && (
-        <div className="rounded-lg bg-gradient-to-r from-violet-700 to-violet-500 text-white p-4 flex items-center gap-3">
+        <div className="rounded-2xl bg-gradient-to-r from-violet-700 to-violet-500 text-white p-4 flex items-center gap-3 shadow-lg">
           <Sparkles className="w-5 h-5 shrink-0" />
           <div>
             <div className="font-semibold">{campaign.banner.title}</div>
@@ -242,7 +249,7 @@ export default function CarteiraPage() {
 
       {/* Banners promocionais */}
       {banners.map((b) => (
-        <div key={b.id} className="rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 text-white p-4 flex items-center gap-3">
+        <div key={b.id} className="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white p-4 flex items-center gap-3 shadow-lg">
           <Sparkles className="w-5 h-5 shrink-0" />
           <div>
             <div className="font-semibold">{b.title}</div>
@@ -251,56 +258,74 @@ export default function CarteiraPage() {
         </div>
       ))}
 
-      {msg && <div className="text-sm rounded-md bg-emerald-500/10 text-emerald-600 p-3">{msg}</div>}
-      {err && <div className="text-sm rounded-md bg-red-500/10 text-red-600 p-3">{err}</div>}
+      {msg && <div className="text-sm rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-3">{msg}</div>}
+      {err && <div className="text-sm rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 p-3">{err}</div>}
 
-      {/* Pacotes de créditos (com selos de destaque) */}
+      {/* Pacotes de créditos com imagem de fundo, filtro preto e branco no light mode e alta performance */}
       <div className="flex flex-col items-center justify-center pt-6 pb-2">
         <h2 className="text-2xl font-black tracking-widest bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400 bg-clip-text text-transparent uppercase">
-          PACOTES
+          ESCOLHA SUA PROMOÇÃO:
         </h2>
         <div className="h-1 w-16 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full mt-1.5 mb-2" />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {packages.map((p) => {
           const badge = p.featured_badge ? BADGE_LABEL[p.featured_badge] : null;
           const isRecommended = !badge && p.id === recommendedId;
           const pct = savingsPct(p);
           const cleanName = p.name.replace(/pacote\s*/i, "");
+          const bgImg = getPackageBgImage(p.name, p.id);
+
           return (
-            <motion.div
+            <div
               key={p.id}
-              whileHover={{ y: -6, scale: 1.02, boxShadow: "0px 10px 25px rgba(0, 0, 0, 0.3)" }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              className={`relative rounded-xl border p-5 flex flex-col items-center text-center gap-2.5 transition-all bg-slate-900/60 backdrop-blur-md select-none ${
+              className={`group relative rounded-2xl border p-5 flex flex-col items-center text-center justify-between gap-3 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl select-none overflow-hidden cursor-pointer bg-card/85 backdrop-blur-xl border-border/60 ${
                 badge
-                  ? "border-emerald-500/50 shadow-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.05)] bg-gradient-to-b from-slate-900/80 to-emerald-950/20"
+                  ? "hover:border-emerald-500/70 hover:shadow-emerald-500/20"
                   : isRecommended
-                  ? "border-violet-500/50 shadow-violet-500/10 shadow-[0_0_15px_rgba(139,92,246,0.05)] bg-gradient-to-b from-slate-900/80 to-violet-950/20"
-                  : "border-border/60 hover:border-muted-foreground/40 bg-slate-900/40"
+                  ? "hover:border-violet-500/70 hover:shadow-violet-500/20"
+                  : "hover:border-emerald-500/50 hover:shadow-emerald-500/10"
               }`}
             >
+              {/* Imagem de Fundo com Alta Nitidez e filtro Grayscale no modo claro */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+                <img
+                  src={bgImg}
+                  alt=""
+                  className="w-full h-full object-cover blur-[2px] scale-105 opacity-70 dark:opacity-65 dark:grayscale-0 grayscale contrast-110 brightness-105 transition-transform duration-500 group-hover:scale-110"
+                  loading="eager"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-card/40 via-card/65 to-card/85" />
+              </div>
+
               {badge && (
-                <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm ${badge.className}`}>
+                <span className={`absolute top-2 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-md z-10 ${badge.className}`}>
                   {badge.label}
                 </span>
               )}
               {isRecommended && (
-                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-primary text-primary-foreground shadow-sm">
+                <span className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full whitespace-nowrap bg-primary text-primary-foreground shadow-md z-10">
                   Recomendado
                 </span>
               )}
-              <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mt-2">{cleanName}</div>
-              <div className="text-4xl font-black font-mono tracking-tight bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent my-1">{p.total_credits}</div>
-              <div className="text-[11px] text-muted-foreground">créditos{p.bonus_credits ? ` (+${p.bonus_credits} bônus)` : ""}</div>
-              <div className="text-base font-bold text-foreground">R$ {Number(p.price_brl).toFixed(2)}</div>
-              <div className="text-[10px] text-muted-foreground opacity-80">R$ {pricePerCredit(p).toFixed(2)} / crédito</div>
-              {pct > 0 && <div className="text-[11px] font-semibold text-emerald-400 animate-pulse">Economize {pct}%</div>}
-              <Button size="sm" className="w-full mt-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 border-0 text-white font-semibold shadow-md shadow-emerald-500/10" onClick={() => startBuy(p)}>
+
+              <div className="relative z-10 w-full flex flex-col items-center pt-2">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground font-bold">{cleanName}</div>
+                <div className="text-4xl font-black font-mono tracking-tight text-foreground my-1">{p.total_credits}</div>
+                <div className="text-[11px] text-muted-foreground font-medium">créditos{p.bonus_credits ? ` (+${p.bonus_credits} bônus)` : ""}</div>
+              </div>
+
+              <div className="relative z-10 w-full flex flex-col items-center space-y-1 my-2">
+                <div className="text-lg font-extrabold text-foreground font-mono">R$ {Number(p.price_brl).toFixed(2)}</div>
+                <div className="text-[10.5px] text-muted-foreground font-mono">R$ {pricePerCredit(p).toFixed(2)} / crédito</div>
+                {pct > 0 && <div className="text-[11px] font-bold text-emerald-400 font-mono">Economize {pct}%</div>}
+              </div>
+
+              <Button size="sm" className="relative z-10 w-full bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 border-0 text-white font-bold shadow-md shadow-emerald-500/20 active:scale-95 transition-all" onClick={() => startBuy(p)}>
                 <Plus className="w-3.5 h-3.5 mr-1" /> Adquirir
               </Button>
-            </motion.div>
+            </div>
           );
         })}
       </div>

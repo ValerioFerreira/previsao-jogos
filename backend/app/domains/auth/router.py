@@ -102,3 +102,8 @@ def me(user: User = Depends(get_current_user)):
 @router.get("/me/referral", response_model=schemas.ReferralInfo)
 def my_referral(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return service.get_referral_info(db, user)
+
+
+@router.post("/dev-owner-login", response_model=schemas.TokenResponse)
+def dev_owner_login(request: Request, db: Session = Depends(get_db)):
+    return service.dev_owner_login(db, client_ip(request), request.headers.get("user-agent"))

@@ -34,7 +34,7 @@ export function RecentMatchRow({ match, onOpen }: { match: RecentMatch; onOpen?:
       <span className={`flex items-center justify-center w-5 h-5 rounded-[4px] border font-bold text-[11px] shrink-0 ${color}`}>{result}</span>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold truncate">
-          {match.is_home ? 'vs' : '@'} {teamPt(match.opponent)}
+          {match.is_home ? 'Casa x ' : 'Fora x '}{teamPt(match.opponent)}
           <span className="font-mono font-normal text-muted-foreground ml-1.5">{placar}</span>
         </p>
         <p className="text-[9px] text-muted-foreground truncate">
