@@ -33,6 +33,11 @@ class BlockRequest(BaseModel):
     reason: str | None = None
 
 
+class UserRoleUpdateRequest(BaseModel):
+    role: str
+
+
+
 # ---------- créditos (concessão/estorno/ajuste manual) ----------
 class CreditAdjustRequest(BaseModel):
     amount: Decimal                 # positivo credita; negativo debita (manual_adjustment)

@@ -45,7 +45,18 @@ def get_current_user(
     return user
 
 
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role not in (UserRole.admin, UserRole.superadmin):
+def is_owner_role(user: User) -> bool:
+    return user.role == UserRole.owner or user.email == "valerioeducfin@gmail.com"
+
+
+def require_owner(user: User = Depends(get_current_user)) -> User:
+    if not (is_owner_role(user) or user.role in (UserRole.admin, UserRole.superadmin)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Acesso restrito.")
     return user
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if not (is_owner_role(user) or user.role in (UserRole.manager, UserRole.admin, UserRole.superadmin)):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Acesso restrito.")
+    return user
+

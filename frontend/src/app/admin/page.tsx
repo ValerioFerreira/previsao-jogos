@@ -156,7 +156,9 @@ function PartnerRevenueChart({ items }: { items: Record<string, unknown>[] }) {
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const isAdmin = user && (user.role === "admin" || user.role === "superadmin");
+  const isOwner = user && (user.role === "owner" || user.role === "admin" || user.role === "superadmin" || user.email === "valerioeducfin@gmail.com");
+  const isManager = user && user.role === "manager";
+  const isAdmin = isOwner || isManager;
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [q, setQ] = useState("");
@@ -238,32 +240,41 @@ export default function AdminPage() {
   }, []);
 
   const loadAll = useCallback(async () => {
-    await loadUsers();
+    if (isOwner) {
+      await loadUsers();
+    }
     try {
-      const [p, pr, a, d, cp, ca, pk, af, ld, du] = await Promise.all([
-        adminApi.payments(), adminApi.promotions(), adminApi.audit(), adminApi.dashboard(),
-        adminApi.coupons(), adminApi.couponAnalytics(), adminApi.packages(), adminApi.affiliates(),
-        legalApi.documents(),
-        adminApi.demoUsage(),
-      ]);
-      await Promise.all([
+      const promises: Promise<unknown>[] = [
+        adminApi.promotions().then(r => setPromos(r.items)),
+        adminApi.coupons().then(r => setCoupons(r.items)),
+        adminApi.packages().then(r => setPackages(r.items)),
+        adminApi.banners().then(r => setBanners(r.items)),
         adminApi.campaigns().then(r => setCampaigns(r.items)),
         adminApi.deepAnalyses().then(r => setDeepAnalyses(r.items)),
-        adminApi.settings().then(r => setSettings(r.items)),
-        adminApi.banners().then(r => setBanners(r.items)),
         adminApi.featuredMatches().then(r => setFeaturedMatches(r.items)),
         adminApi.sharedAnalyses().then(r => setSharedAnalyses(r.items)),
         api.upcomingFixtures().then(r => setUpcoming(r.fixtures)),
         Promise.all([api.teamIds("selecao"), api.teamIds("clube")]).then(([sel, clu]) => setTeamIds({ ...sel, ...clu })),
         Promise.all([api.teams("selecao"), api.teams("clube")]).then(([sel, clu]) => setAllCompetitions({ selecao: sel.tournaments, clube: clu.tournaments })),
-        loadPartnerRequests(),
-      ]);
-      setPayments(p.items); setPromos(pr.items); setAudit(a.items); setDashboard(d);
-      setCoupons(cp.items); setCouponAnalytics(ca.items); setPackages(pk.items); setAffiliates(af.items);
-      setLegalDocs(ld);
-      setDemoUsage(du.items);
+      ];
+
+      if (isOwner) {
+        promises.push(
+          adminApi.payments().then(r => setPayments(r.items)),
+          adminApi.audit().then(r => setAudit(r.items)),
+          adminApi.dashboard().then(r => setDashboard(r)),
+          adminApi.couponAnalytics().then(r => setCouponAnalytics(r.items)),
+          adminApi.affiliates().then(r => setAffiliates(r.items)),
+          legalApi.documents().then(r => setLegalDocs(r)),
+          adminApi.demoUsage().then(r => setDemoUsage(r.items)),
+          adminApi.settings().then(r => setSettings(r.items)),
+          loadPartnerRequests(),
+        );
+      }
+
+      await Promise.all(promises);
     } catch (e) { setErr((e as Error).message); }
-  }, [loadUsers]);
+  }, [loadUsers, isOwner]);
 
   useEffect(() => { if (isAdmin) loadAll(); }, [isAdmin, loadAll]);
 
@@ -759,118 +770,154 @@ export default function AdminPage() {
       <h1 className="text-2xl font-bold flex items-center gap-2"><Shield className="w-6 h-6 text-primary" /> Painel administrativo</h1>
       {err && <div className="text-sm rounded-md bg-red-500/10 text-red-600 p-3">{err}</div>}
 
-      <Tabs defaultValue="dashboard">
+      <Tabs defaultValue={isOwner ? "dashboard" : "promocoes"}>
         <TabsList className="flex flex-wrap h-auto w-full gap-1">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="usuarios">Usuários</TabsTrigger>
-          <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+          {isOwner && (
+            <>
+              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+              <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+              <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+            </>
+          )}
           <TabsTrigger value="promocoes">Promoções</TabsTrigger>
-          <TabsTrigger value="afiliados" className="relative">
-            Parceiros
-            {pendingCounts && pendingCounts.total > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none"
-                title={`${pendingCounts.partner_applications} solicitações de parceria, ${pendingCounts.coupon_requests} de cupom`}>
-                {pendingCounts.total}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="documentos">Documentos</TabsTrigger>
-          <TabsTrigger value="config">Configurações</TabsTrigger>
+          {isOwner && (
+            <>
+              <TabsTrigger value="afiliados" className="relative">
+                Parceiros
+                {pendingCounts && pendingCounts.total > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none"
+                    title={`${pendingCounts.partner_applications} solicitações de parceria, ${pendingCounts.coupon_requests} de cupom`}>
+                    {pendingCounts.total}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="documentos">Documentos</TabsTrigger>
+              <TabsTrigger value="config">Configurações</TabsTrigger>
+            </>
+          )}
           <TabsTrigger value="deep">Análise Aprofundada</TabsTrigger>
           <TabsTrigger value="destaque">Partidas em Destaque</TabsTrigger>
           <TabsTrigger value="compartilhar">Compartilhar Análise</TabsTrigger>
-          <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
+          {isOwner && <TabsTrigger value="auditoria">Auditoria</TabsTrigger>}
         </TabsList>
 
         {/* ---------------- Dashboard ---------------- */}
-        <TabsContent value="dashboard">
-          <Card>
-            <CardContent className="space-y-4 pt-6">
-              <RevenueChart rev={rev} />
-              <PartnerRevenueChart items={byPartner} />
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Ticket médio</div><div className="text-xl font-bold">R$ {Number(rev?.ticket_medio_brl ?? 0).toFixed(2)}</div></div>
-                <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Créditos vendidos</div><div className="text-xl font-bold">{Math.round(Number(credits_?.vendidos ?? 0))}</div></div>
-                <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Créditos promo</div><div className="text-xl font-bold">{Math.round(Number(credits_?.promocionais ?? 0))}</div></div>
-                <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Usuários ativos (30d)</div><div className="text-xl font-bold">{users_?.active_30d ?? 0}</div></div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Usuários pagantes</div><div className="text-xl font-bold">{users_?.paying_total ?? 0}</div></div>
-              </div>
-              {Array.isArray(dashboard?.by_package) && (dashboard!.by_package as Record<string, unknown>[]).length > 0 && (
-                <div>
-                  <div className="text-sm font-medium mb-2">Receita por pacote</div>
-                  <div className="divide-y text-sm">
-                    {(dashboard!.by_package as { name: string; orders: number; revenue_brl: string }[]).map((p) => (
-                      <div key={p.name} className="flex justify-between py-1.5">
-                        <span>{p.name} ({p.orders} pedidos)</span><span className="font-mono">R$ {p.revenue_brl}</span>
-                      </div>
-                    ))}
-                  </div>
+        {isOwner && (
+          <TabsContent value="dashboard">
+            <Card>
+              <CardContent className="space-y-4 pt-6">
+                <RevenueChart rev={rev} />
+                <PartnerRevenueChart items={byPartner} />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Ticket médio</div><div className="text-xl font-bold">R$ {Number(rev?.ticket_medio_brl ?? 0).toFixed(2)}</div></div>
+                  <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Créditos vendidos</div><div className="text-xl font-bold">{Math.round(Number(credits_?.vendidos ?? 0))}</div></div>
+                  <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Créditos promo</div><div className="text-xl font-bold">{Math.round(Number(credits_?.promocionais ?? 0))}</div></div>
+                  <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Usuários ativos (30d)</div><div className="text-xl font-bold">{users_?.active_30d ?? 0}</div></div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">Usuários pagantes</div><div className="text-xl font-bold">{users_?.paying_total ?? 0}</div></div>
+                </div>
+                {Array.isArray(dashboard?.by_package) && (dashboard!.by_package as Record<string, unknown>[]).length > 0 && (
+                  <div>
+                    <div className="text-sm font-medium mb-2">Receita por pacote</div>
+                    <div className="divide-y text-sm">
+                      {(dashboard!.by_package as { name: string; orders: number; revenue_brl: string }[]).map((p) => (
+                        <div key={p.name} className="flex justify-between py-1.5">
+                          <span>{p.name} ({p.orders} pedidos)</span><span className="font-mono">R$ {p.revenue_brl}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* ---------------- Usuários ---------------- */}
-        <TabsContent value="usuarios">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Usuários ({users.length})</CardTitle></CardHeader>
-            <CardContent>
-              <div className="flex gap-2 mb-4">
-                <Input placeholder="Buscar por nome/e-mail/CPF..." value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && loadUsers(q)} />
-                <Button variant="outline" onClick={() => loadUsers(q)}>Buscar</Button>
-              </div>
-              <div className="divide-y text-sm">
-                {users.map((u) => (
-                  <div key={u.id} className="flex items-center justify-between py-2.5 gap-2">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{u.full_name} {u.role !== "user" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{u.role}</span>}</div>
-                      <div className="text-xs text-muted-foreground truncate">{u.email} · {u.status} · {u.available_balance ?? "0"} créditos</div>
+        {isOwner && (
+          <TabsContent value="usuarios">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Usuários ({users.length})</CardTitle></CardHeader>
+              <CardContent>
+                <div className="flex gap-2 mb-4">
+                  <Input placeholder="Buscar por nome/e-mail/CPF..." value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && loadUsers(q)} />
+                  <Button variant="outline" onClick={() => loadUsers(q)}>Buscar</Button>
+                </div>
+                <div className="divide-y text-sm">
+                  {users.map((u) => (
+                    <div key={u.id} className="flex items-center justify-between py-2.5 gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium truncate">{u.full_name} {u.role !== "user" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{u.role}</span>}</div>
+                        <div className="text-xs text-muted-foreground truncate">{u.email} · {u.status} · {u.available_balance ?? "0"} créditos</div>
+                      </div>
+                      <div className="flex gap-2 shrink-0 items-center">
+                        {u.email !== "valerioeducfin@gmail.com" ? (
+                          <select
+                            className="border rounded px-2 py-1 text-xs bg-background focus:ring-1 focus:ring-primary outline-none"
+                            value={u.role || "user"}
+                            onChange={async (e) => {
+                              try {
+                                await adminApi.updateUserRole(u.id, e.target.value);
+                                await loadUsers(q);
+                              } catch (err) {
+                                setErr((err as Error).message);
+                              }
+                            }}
+                          >
+                            <option value="user">Usuário</option>
+                            <option value="partner">Parceiro</option>
+                            <option value="manager">Gestor</option>
+                            <option value="owner">Proprietário</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        ) : (
+                          <span className="text-xs text-muted-foreground font-semibold px-2">Proprietário Raiz</span>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => openGrant(u)}><Coins className="w-3.5 h-3.5" /></Button>
+                        <Button size="sm" variant={u.status === "blocked" ? "outline" : "destructive"} onClick={() => toggleBlock(u)}>
+                          {u.status === "blocked" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      <Button size="sm" variant="outline" onClick={() => openGrant(u)}><Coins className="w-3.5 h-3.5" /></Button>
-                      <Button size="sm" variant={u.status === "blocked" ? "outline" : "destructive"} onClick={() => toggleBlock(u)}>
-                        {u.status === "blocked" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* ---------------- Financeiro ---------------- */}
-        <TabsContent value="financeiro">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Pagamentos ({payments.length})</CardTitle></CardHeader>
-            <CardContent>
-              <div className="divide-y text-sm">
-                {payments.map((p) => (
-                  <div key={String(p.id)} className="flex justify-between py-2">
-                    <span className="text-xs text-muted-foreground">{fmt(String(p.created_at))}</span>
-                    <span>R$ {String(p.amount_brl)} · {String(p.credits)} créditos</span>
-                    <span className="text-xs px-2 rounded bg-muted">{String(p.status)}</span>
-                  </div>
-                ))}
-                {payments.length === 0 && <p className="text-sm text-muted-foreground">Nenhum pagamento.</p>}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {isOwner && (
+          <TabsContent value="financeiro">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Pagamentos ({payments.length})</CardTitle></CardHeader>
+              <CardContent>
+                <div className="divide-y text-sm">
+                  {payments.map((p) => (
+                    <div key={String(p.id)} className="flex justify-between py-2">
+                      <span className="text-xs text-muted-foreground">{fmt(String(p.created_at))}</span>
+                      <span>R$ {String(p.amount_brl)} · {String(p.credits)} créditos</span>
+                      <span className="text-xs px-2 rounded bg-muted">{String(p.status)}</span>
+                    </div>
+                  ))}
+                  {payments.length === 0 && <p className="text-sm text-muted-foreground">Nenhum pagamento.</p>}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* ---------------- Promoções (unificada: Promoções + Cupons + Pacotes + Banners + Campanhas) ---------------- */}
         <TabsContent value="promocoes">
           <div className="flex gap-1.5 flex-wrap mb-4">
             {([
               { key: "promocoes", label: "Promoções" },
-              { key: "cupons", label: "Cupons" },
-              { key: "pacotes", label: "Pacotes" },
-              { key: "banners", label: "Banners" },
-              { key: "campanhas", label: "Campanhas" },
-            ] as const).map((s) => (
+              isOwner && { key: "cupons", label: "Cupons" },
+              isOwner && { key: "pacotes", label: "Pacotes" },
+              isOwner && { key: "banners", label: "Banners" },
+              isOwner && { key: "campanhas", label: "Campanhas" },
+            ].filter(Boolean) as { key: "promocoes" | "cupons" | "pacotes" | "banners" | "campanhas"; label: string }[]).map((s) => (
               <Button key={s.key} size="sm" variant={promoSection === s.key ? "default" : "outline"} onClick={() => setPromoSection(s.key)}>
                 {s.label}
               </Button>
@@ -901,7 +948,7 @@ export default function AdminPage() {
           </Card>
           )}
 
-          {promoSection === "cupons" && (
+          {isOwner && promoSection === "cupons" && (
           <Card>
             <CardHeader><CardTitle className="text-lg">Cupons</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -979,7 +1026,7 @@ export default function AdminPage() {
           </Card>
           )}
 
-          {promoSection === "pacotes" && (
+          {isOwner && promoSection === "pacotes" && (
           <Card>
             <CardHeader><CardTitle className="text-lg">Pacotes de crédito</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -1011,7 +1058,7 @@ export default function AdminPage() {
           </Card>
           )}
 
-          {promoSection === "banners" && (
+          {isOwner && promoSection === "banners" && (
           <Card>
             <CardHeader><CardTitle className="text-lg">Banners promocionais</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -1051,7 +1098,7 @@ export default function AdminPage() {
           </Card>
           )}
 
-          {promoSection === "campanhas" && (
+          {isOwner && promoSection === "campanhas" && (
           <Card>
             <CardHeader><CardTitle className="text-lg">Campanhas</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -1091,271 +1138,277 @@ export default function AdminPage() {
         </TabsContent>
 
         {/* ---------------- Parceiros (afiliados) ---------------- */}
-        <TabsContent value="afiliados" className="space-y-4">
-          {couponRequests.length > 0 && (
-            <Card className="border-amber-500/40">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  Solicitações de cupom promocional
-                  <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold">{couponRequests.length}</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {couponRequests.map((r) => (
-                  <div key={String(r.id)} className="flex flex-wrap items-center justify-between gap-2 text-sm border rounded-md px-3 py-2">
-                    <div>
-                      <span className="font-semibold">{String(r.affiliate_name)}</span>
-                      <span className="text-muted-foreground"> ({String(r.affiliate_code)})</span>
-                      {" · "}
-                      <span className="font-mono uppercase font-semibold">{String(r.requested_code)}</span>
-                      <span className="text-muted-foreground"> · {Number(r.discount_pct)}% desconto / {30 - Number(r.discount_pct)}% comissão</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => decideCouponRequest(String(r.id), "approve")}>Aprovar</Button>
-                      <Button size="sm" variant="outline" onClick={() => decideCouponRequest(String(r.id), "reject")}>Recusar</Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Parceiros</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <form onSubmit={createAffiliate} className="flex flex-wrap gap-2 items-end">
-                <Field label="Nome" className="flex-1 min-w-40"><Input value={newAffiliate.name} onChange={(e) => setNewAffiliate({ ...newAffiliate, name: e.target.value })} required /></Field>
-                <Field label="Código (link)"><Input className="w-32" value={newAffiliate.code} onChange={(e) => setNewAffiliate({ ...newAffiliate, code: e.target.value })} required /></Field>
-                <Field label="Comissão (%)"><Input className="w-24" type="number" value={newAffiliate.commission_pct} onChange={(e) => setNewAffiliate({ ...newAffiliate, commission_pct: e.target.value })} /></Field>
-                <Field label="CPF"><Input className="w-32" value={newAffiliate.cpf} onChange={(e) => setNewAffiliate({ ...newAffiliate, cpf: e.target.value })} /></Field>
-                <Field label="E-mail de contato"><Input className="w-52" type="email" value={newAffiliate.contact_email} onChange={(e) => setNewAffiliate({ ...newAffiliate, contact_email: e.target.value })} /></Field>
-                <Field label="Telefone de contato"><Input className="w-40" value={newAffiliate.contact_phone} onChange={(e) => setNewAffiliate({ ...newAffiliate, contact_phone: e.target.value })} /></Field>
-                <Field label="Forma de pagamento">
-                  <select className="border rounded-md px-2 py-2 text-sm bg-background w-28" value={newAffiliate.payment_type} onChange={(e) => setNewAffiliate({ ...newAffiliate, payment_type: e.target.value })}>
-                    <option value="">—</option>
-                    <option value="pf">PF</option>
-                    <option value="pj">PJ</option>
-                  </select>
-                </Field>
-                <Field label="Desconto do cupom (%)">
-                  <select className="border rounded-md px-2 py-2 text-sm bg-background w-28" value={newAffiliate.discount_pcts} onChange={(e) => setNewAffiliate({ ...newAffiliate, discount_pcts: e.target.value })}>
-                    <option value="">—</option>
-                    {[5, 10, 15, 20, 25].map((d) => <option key={d} value={d}>{d}%</option>)}
-                  </select>
-                </Field>
-                <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Criar (já aprovado)</Button>
-              </form>
-              <p className="text-xs text-muted-foreground">
-                Preenchendo CPF + e-mail + telefone, o convite para definir senha é enviado automaticamente.
-                Solicitações públicas (via /parceiro/solicitar) aparecem abaixo como &quot;pendente&quot;.
-              </p>
-
-              <div className="flex gap-1.5 flex-wrap">
-                {[
-                  { key: "", label: "Todos" },
-                  { key: "pending", label: "Pendentes" },
-                  { key: "active", label: "Ativos" },
-                  { key: "paused", label: "Pausados" },
-                  { key: "rejected", label: "Rejeitados" },
-                ].map((f) => (
-                  <Button key={f.key} size="sm" variant={partnerFilter === f.key ? "default" : "outline"}
-                    onClick={() => { setPartnerFilter(f.key); loadAffiliates(f.key); }}>
-                    {f.label}
-                  </Button>
-                ))}
-                <Button size="sm" variant={partnerSortByCommission ? "default" : "outline"}
-                  onClick={() => setPartnerSortByCommission((v) => !v)}>
-                  Ordenar por comissão
-                </Button>
-              </div>
-
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-xs text-muted-foreground">
-                    <tr>
-                      <th className="text-left font-medium px-3 py-2">Nome</th>
-                      <th className="text-left font-medium px-3 py-2">Código</th>
-                      <th className="text-left font-medium px-3 py-2">Contato</th>
-                      <th className="text-right font-medium px-3 py-2">Comissão</th>
-                      <th className="text-right font-medium px-3 py-2">Devida</th>
-                      <th className="text-right font-medium px-3 py-2">Paga</th>
-                      <th className="text-right font-medium px-3 py-2">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {(partnerSortByCommission
-                      ? [...affiliates].sort((a, b) =>
-                          (Number(b.commission_due_brl) + Number(b.commission_paid_brl)) -
-                          (Number(a.commission_due_brl) + Number(a.commission_paid_brl)))
-                      : affiliates
-                    ).map((a) => (
-                      <tr key={String(a.id)} className="hover:bg-muted/30 align-top">
-                        <td className="px-3 py-2 font-medium">
-                          <Link href={`/admin/parceiros/${a.id}`} className="hover:underline">{String(a.name)}</Link>
-                          <span className="block text-[10px] text-muted-foreground">
-                            {{ pending: "pendente", active: "ativo", paused: "pausado", rejected: "rejeitado" }[String(a.status)] ?? String(a.status)}
-                            {a.account_status ? ` · conta ${a.account_status}` : ""}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 font-mono text-xs">
-                          {a.status === "pending" ? (
-                            <Input
-                              className="h-7 w-28 font-mono text-xs uppercase"
-                              value={approveCodeDrafts[String(a.id)] ?? String(a.code)}
-                              onChange={(e) => setApproveCodeDrafts((d) => ({ ...d, [String(a.id)]: e.target.value.toUpperCase() }))}
-                            />
-                          ) : String(a.code)}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
-                          {a.contact_email ? <div>{String(a.contact_email)}</div> : null}
-                          {a.contact_phone ? <div>{String(a.contact_phone)}</div> : null}
-                          {!a.contact_email && !a.contact_phone && "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right">{a.commission_pct ? `${String(a.commission_pct)}%` : "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono">R$ {String(a.commission_due_brl)}</td>
-                        <td className="px-3 py-2 text-right font-mono">R$ {String(a.commission_paid_brl)}</td>
-                        <td className="px-3 py-2">
-                          <div className="flex flex-col gap-1 items-stretch min-w-36">
-                            {a.status === "pending" && (
-                              <>
-                                <Button size="sm" onClick={() => approveAffiliate(a)}>Aprovar</Button>
-                                <Button size="sm" variant="destructive" onClick={() => openReject(a)}>Rejeitar</Button>
-                              </>
-                            )}
-                            {a.status === "active" && (
-                              <>
-                                <Button size="sm" variant="outline" onClick={() => resendInvite(a)}>Reenviar convite</Button>
-                                <Button size="sm" variant="outline" onClick={() => openAffPayment(a)}>Registrar pagamento</Button>
-                                <Button size="sm" variant="outline" onClick={() => openAffPaymentsList(a)}>Ver pagamentos</Button>
-                                <Button size="sm" variant="outline" onClick={() => toggleDemoAccess(a)}>
-                                  {a.demo_access_enabled ? "Revogar conta demo" : "Permitir conta demo"}
-                                </Button>
-                              </>
-                            )}
-                            {(a.status === "active" || a.status === "paused") && (
-                              <Button size="sm" variant="outline" onClick={async () => { await adminApi.patchAffiliate(String(a.id), { status: a.status === "active" ? "paused" : "active" }); await loadAffiliates(); }}>
-                                {a.status === "active" ? "Pausar" : "Ativar"}
-                              </Button>
-                            )}
-                            <Link href={`/admin/parceiros/${a.id}`}>
-                              <Button size="sm" variant="ghost" className="w-full">Ver detalhes</Button>
-                            </Link>
-                            <Button size="sm" variant="destructive" onClick={() => deleteAffiliate(a)}>Excluir</Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {affiliates.length === 0 && <p className="text-sm text-muted-foreground p-3">Nenhum parceiro nesse filtro.</p>}
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <div className="text-sm font-medium mb-2">Janela de atribuição de parceiro</div>
-                <p className="text-xs text-muted-foreground mb-3">Por quantos dias um clique no link do parceiro continua valendo para atribuir a comissão de uma compra futura (o cupom do parceiro atribui na hora, independente dessa janela).</p>
-                <form onSubmit={saveAttributionDays} className="flex flex-wrap gap-2 items-end">
-                  <Field label="Dias"><Input className="w-32" type="number" min="1" value={attributionDays} onChange={(e) => setAttributionDays(e.target.value)} required /></Field>
-                  <Button type="submit" size="sm">Salvar</Button>
-                </form>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Conta demo — uso por CPF</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Quantas análises cada CPF gerou usando a conta demo compartilhada (aproximado por janela de
-                sessão entre logins) — útil para flagrar parceiro revendendo análises por fora.
-              </p>
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-xs text-muted-foreground">
-                    <tr>
-                      <th className="text-left font-medium px-3 py-2">CPF</th>
-                      <th className="text-left font-medium px-3 py-2">Parceiro</th>
-                      <th className="text-right font-medium px-3 py-2">Logins</th>
-                      <th className="text-right font-medium px-3 py-2">Análises</th>
-                      <th className="text-right font-medium px-3 py-2">Último acesso</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {demoUsage.map((d) => (
-                      <tr key={String(d.cpf)} className="hover:bg-muted/30">
-                        <td className="px-3 py-2 font-mono text-xs">{String(d.cpf)}</td>
-                        <td className="px-3 py-2">{String(d.affiliate_name ?? "—")}</td>
-                        <td className="px-3 py-2 text-right">{Number(d.logins)}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{Number(d.analyses)}</td>
-                        <td className="px-3 py-2 text-right text-xs text-muted-foreground">{fmt(String(d.last_login_at))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {demoUsage.length === 0 && <p className="text-sm text-muted-foreground p-3">Nenhum acesso à conta demo registrado ainda.</p>}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Modal open={!!rejectModal} onClose={() => setRejectModal(null)} title={`Rejeitar solicitação — ${rejectModal?.name ?? ""}`}>
-            <form onSubmit={submitReject} className="space-y-3">
-              <Field label="Motivo (opcional, fica registrado)">
-                <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} />
-              </Field>
-              <Button type="submit" variant="destructive" className="w-full">Confirmar rejeição</Button>
-            </form>
-          </Modal>
-        </TabsContent>
-
-        {/* ---------------- Documentos legais ---------------- */}
-        <TabsContent value="documentos">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Documentos que os usuários assinam</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Editar e publicar aqui cria uma NOVA versão vigente e revoga o aceite de todos os
-                usuários — na próxima vez que logarem, será pedido que revisem e assinem novamente.
-              </p>
-              {legalMsg && <div className="text-sm rounded-md bg-emerald-500/10 text-emerald-600 p-3">{legalMsg}</div>}
-              <div className="divide-y text-sm">
-                {legalDocs.map((d) => (
-                  <div key={d.id} className="flex items-center justify-between py-2.5 gap-2">
-                    <div className="min-w-0">
-                      <div className="font-medium">{d.title}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {d.type} · versão {d.version}{d.published_at ? ` · publicado em ${fmt(d.published_at)}` : ""}
+        {isOwner && (
+          <TabsContent value="afiliados" className="space-y-4">
+            {couponRequests.length > 0 && (
+              <Card className="border-amber-500/40">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Solicitações de cupom promocional
+                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold">{couponRequests.length}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {couponRequests.map((r) => (
+                    <div key={String(r.id)} className="flex flex-wrap items-center justify-between gap-2 text-sm border rounded-md px-3 py-2">
+                      <div>
+                        <span className="font-semibold">{String(r.affiliate_name)}</span>
+                        <span className="text-muted-foreground"> ({String(r.affiliate_code)})</span>
+                        {" · "}
+                        <span className="font-mono uppercase font-semibold">{String(r.requested_code)}</span>
+                        <span className="text-muted-foreground"> · {Number(r.discount_pct)}% desconto / {30 - Number(r.discount_pct)}% comissão</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => decideCouponRequest(String(r.id), "approve")}>Aprovar</Button>
+                        <Button size="sm" variant="outline" onClick={() => decideCouponRequest(String(r.id), "reject")}>Recusar</Button>
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => openEditLegal(d)}>Editar</Button>
-                  </div>
-                ))}
-                {legalDocs.length === 0 && <p className="text-sm text-muted-foreground">Nenhum documento cadastrado.</p>}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Parceiros</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <form onSubmit={createAffiliate} className="flex flex-wrap gap-2 items-end">
+                  <Field label="Nome" className="flex-1 min-w-40"><Input value={newAffiliate.name} onChange={(e) => setNewAffiliate({ ...newAffiliate, name: e.target.value })} required /></Field>
+                  <Field label="Código (link)"><Input className="w-32" value={newAffiliate.code} onChange={(e) => setNewAffiliate({ ...newAffiliate, code: e.target.value })} required /></Field>
+                  <Field label="Comissão (%)"><Input className="w-24" type="number" value={newAffiliate.commission_pct} onChange={(e) => setNewAffiliate({ ...newAffiliate, commission_pct: e.target.value })} /></Field>
+                  <Field label="CPF"><Input className="w-32" value={newAffiliate.cpf} onChange={(e) => setNewAffiliate({ ...newAffiliate, cpf: e.target.value })} /></Field>
+                  <Field label="E-mail de contato"><Input className="w-52" type="email" value={newAffiliate.contact_email} onChange={(e) => setNewAffiliate({ ...newAffiliate, contact_email: e.target.value })} /></Field>
+                  <Field label="Telefone de contato"><Input className="w-40" value={newAffiliate.contact_phone} onChange={(e) => setNewAffiliate({ ...newAffiliate, contact_phone: e.target.value })} /></Field>
+                  <Field label="Forma de pagamento">
+                    <select className="border rounded-md px-2 py-2 text-sm bg-background w-28" value={newAffiliate.payment_type} onChange={(e) => setNewAffiliate({ ...newAffiliate, payment_type: e.target.value })}>
+                      <option value="">—</option>
+                      <option value="pf">PF</option>
+                      <option value="pj">PJ</option>
+                    </select>
+                  </Field>
+                  <Field label="Desconto do cupom (%)">
+                    <select className="border rounded-md px-2 py-2 text-sm bg-background w-28" value={newAffiliate.discount_pcts} onChange={(e) => setNewAffiliate({ ...newAffiliate, discount_pcts: e.target.value })}>
+                      <option value="">—</option>
+                      {[5, 10, 15, 20, 25].map((d) => <option key={d} value={d}>{d}%</option>)}
+                    </select>
+                  </Field>
+                  <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Criar (já aprovado)</Button>
+                </form>
+                <p className="text-xs text-muted-foreground">
+                  Preenchendo CPF + e-mail + telefone, o convite para definir senha é enviado automaticamente.
+                  Solicitações públicas (via /parceiro/solicitar) aparecem abaixo como &quot;pendente&quot;.
+                </p>
+
+                <div className="flex gap-1.5 flex-wrap">
+                  {[
+                    { key: "", label: "Todos" },
+                    { key: "pending", label: "Pendentes" },
+                    { key: "active", label: "Ativos" },
+                    { key: "paused", label: "Pausados" },
+                    { key: "rejected", label: "Rejeitados" },
+                  ].map((f) => (
+                    <Button key={f.key} size="sm" variant={partnerFilter === f.key ? "default" : "outline"}
+                      onClick={() => { setPartnerFilter(f.key); loadAffiliates(f.key); }}>
+                      {f.label}
+                    </Button>
+                  ))}
+                  <Button size="sm" variant={partnerSortByCommission ? "default" : "outline"}
+                    onClick={() => setPartnerSortByCommission((v) => !v)}>
+                    Ordenar por comissão
+                  </Button>
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 text-xs text-muted-foreground">
+                      <tr>
+                        <th className="text-left font-medium px-3 py-2">Nome</th>
+                        <th className="text-left font-medium px-3 py-2">Código</th>
+                        <th className="text-left font-medium px-3 py-2">Contato</th>
+                        <th className="text-right font-medium px-3 py-2">Comissão</th>
+                        <th className="text-right font-medium px-3 py-2">Devida</th>
+                        <th className="text-right font-medium px-3 py-2">Paga</th>
+                        <th className="text-right font-medium px-3 py-2">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(partnerSortByCommission
+                        ? [...affiliates].sort((a, b) =>
+                            (Number(b.commission_due_brl) + Number(b.commission_paid_brl)) -
+                            (Number(a.commission_due_brl) + Number(a.commission_paid_brl)))
+                        : affiliates
+                      ).map((a) => (
+                        <tr key={String(a.id)} className="hover:bg-muted/30 align-top">
+                          <td className="px-3 py-2 font-medium">
+                            <Link href={`/admin/parceiros/${a.id}`} className="hover:underline">{String(a.name)}</Link>
+                            <span className="block text-[10px] text-muted-foreground">
+                              {{ pending: "pendente", active: "ativo", paused: "pausado", rejected: "rejeitado" }[String(a.status)] ?? String(a.status)}
+                              {a.account_status ? ` · conta ${a.account_status}` : ""}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            {a.status === "pending" ? (
+                              <Input
+                                className="h-7 w-28 font-mono text-xs uppercase"
+                                value={approveCodeDrafts[String(a.id)] ?? String(a.code)}
+                                onChange={(e) => setApproveCodeDrafts((d) => ({ ...d, [String(a.id)]: e.target.value.toUpperCase() }))}
+                              />
+                            ) : String(a.code)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground">
+                            {a.contact_email ? <div>{String(a.contact_email)}</div> : null}
+                            {a.contact_phone ? <div>{String(a.contact_phone)}</div> : null}
+                            {!a.contact_email && !a.contact_phone && "—"}
+                          </td>
+                          <td className="px-3 py-2 text-right">{a.commission_pct ? `${String(a.commission_pct)}%` : "—"}</td>
+                          <td className="px-3 py-2 text-right font-mono">R$ {String(a.commission_due_brl)}</td>
+                          <td className="px-3 py-2 text-right font-mono">R$ {String(a.commission_paid_brl)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-col gap-1 items-stretch min-w-36">
+                              {a.status === "pending" && (
+                                <>
+                                  <Button size="sm" onClick={() => approveAffiliate(a)}>Aprovar</Button>
+                                  <Button size="sm" variant="destructive" onClick={() => openReject(a)}>Rejeitar</Button>
+                                </>
+                              )}
+                              {a.status === "active" && (
+                                <>
+                                  <Button size="sm" variant="outline" onClick={() => resendInvite(a)}>Reenviar convite</Button>
+                                  <Button size="sm" variant="outline" onClick={() => openAffPayment(a)}>Registrar pagamento</Button>
+                                  <Button size="sm" variant="outline" onClick={() => openAffPaymentsList(a)}>Ver pagamentos</Button>
+                                  <Button size="sm" variant="outline" onClick={() => toggleDemoAccess(a)}>
+                                    {a.demo_access_enabled ? "Revogar conta demo" : "Permitir conta demo"}
+                                  </Button>
+                                </>
+                              )}
+                              {(a.status === "active" || a.status === "paused") && (
+                                <Button size="sm" variant="outline" onClick={async () => { await adminApi.patchAffiliate(String(a.id), { status: a.status === "active" ? "paused" : "active" }); await loadAffiliates(); }}>
+                                  {a.status === "active" ? "Pausar" : "Ativar"}
+                                </Button>
+                              )}
+                              <Link href={`/admin/parceiros/${a.id}`}>
+                                <Button size="sm" variant="ghost" className="w-full">Ver detalhes</Button>
+                              </Link>
+                              <Button size="sm" variant="destructive" onClick={() => deleteAffiliate(a)}>Excluir</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {affiliates.length === 0 && <p className="text-sm text-muted-foreground p-3">Nenhum parceiro nesse filtro.</p>}
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <div className="text-sm font-medium mb-2">Janela de atribuição de parceiro</div>
+                  <p className="text-xs text-muted-foreground mb-3">Por quantos dias um clique no link do parceiro continua valendo para atribuir a comissão de uma compra futura (o cupom do parceiro atribui na hora, independente dessa janela).</p>
+                  <form onSubmit={saveAttributionDays} className="flex flex-wrap gap-2 items-end">
+                    <Field label="Dias"><Input className="w-32" type="number" min="1" value={attributionDays} onChange={(e) => setAttributionDays(e.target.value)} required /></Field>
+                    <Button type="submit" size="sm">Salvar</Button>
+                  </form>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Conta demo — uso por CPF</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Quantas análises cada CPF gerou usando a conta demo compartilhada (aproximado por janela de
+                  sessão entre logins) — útil para flagrar parceiro revendendo análises por fora.
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 text-xs text-muted-foreground">
+                      <tr>
+                        <th className="text-left font-medium px-3 py-2">CPF</th>
+                        <th className="text-left font-medium px-3 py-2">Parceiro</th>
+                        <th className="text-right font-medium px-3 py-2">Logins</th>
+                        <th className="text-right font-medium px-3 py-2">Análises</th>
+                        <th className="text-right font-medium px-3 py-2">Último acesso</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {demoUsage.map((d) => (
+                        <tr key={String(d.cpf)} className="hover:bg-muted/30">
+                          <td className="px-3 py-2 font-mono text-xs">{String(d.cpf)}</td>
+                          <td className="px-3 py-2">{String(d.affiliate_name ?? "—")}</td>
+                          <td className="px-3 py-2 text-right">{Number(d.logins)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{Number(d.analyses)}</td>
+                          <td className="px-3 py-2 text-right text-xs text-muted-foreground">{fmt(String(d.last_login_at))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {demoUsage.length === 0 && <p className="text-sm text-muted-foreground p-3">Nenhum acesso à conta demo registrado ainda.</p>}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Modal open={!!rejectModal} onClose={() => setRejectModal(null)} title={`Rejeitar solicitação — ${rejectModal?.name ?? ""}`}>
+              <form onSubmit={submitReject} className="space-y-3">
+                <Field label="Motivo (opcional, fica registrado)">
+                  <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} />
+                </Field>
+                <Button type="submit" variant="destructive" className="w-full">Confirmar rejeição</Button>
+              </form>
+            </Modal>
+          </TabsContent>
+        )}
+
+        {/* ---------------- Documentos legais ---------------- */}
+        {isOwner && (
+          <TabsContent value="documentos">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Documentos que os usuários assinam</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Editar e publicar aqui cria uma NOVA versão vigente e revoga o aceite de todos os
+                  usuários — na próxima vez que logarem, será pedido que revisem e assinem novamente.
+                </p>
+                {legalMsg && <div className="text-sm rounded-md bg-emerald-500/10 text-emerald-600 p-3">{legalMsg}</div>}
+                <div className="divide-y text-sm">
+                  {legalDocs.map((d) => (
+                    <div key={d.id} className="flex items-center justify-between py-2.5 gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium">{d.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {d.type} · versão {d.version}{d.published_at ? ` · publicado em ${fmt(d.published_at)}` : ""}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => openEditLegal(d)}>Editar</Button>
+                    </div>
+                  ))}
+                  {legalDocs.length === 0 && <p className="text-sm text-muted-foreground">Nenhum documento cadastrado.</p>}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* ---------------- Configurações ---------------- */}
-        <TabsContent value="config">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Configurações da plataforma</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">A janela de atribuição de afiliados agora é configurada na aba Afiliados. Aqui ficam as demais configurações gerais do site (chave/valor em JSON).</p>
-              <form onSubmit={saveSetting} className="flex flex-wrap gap-2 items-end">
-                <Field label="Chave"><Input className="w-64" placeholder="ex: suporte_email" value={newSetting.key} onChange={(e) => setNewSetting({ ...newSetting, key: e.target.value })} required /></Field>
-                <Field label="Valor (texto ou JSON)" className="flex-1 min-w-56"><Input placeholder='ex: "contato@apostainfo.com.br" ou {"dias": 30}' value={newSetting.value} onChange={(e) => setNewSetting({ ...newSetting, value: e.target.value })} required /></Field>
-                <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Salvar</Button>
-              </form>
-              <div className="divide-y text-sm">
-                {settings.filter((s) => s.key !== "affiliate_attribution_days").map((s) => (
-                  <div key={String(s.key)} className="flex justify-between py-2">
-                    <span className="font-mono text-xs">{String(s.key)}</span>
-                    <span className="text-xs text-muted-foreground">{JSON.stringify(s.value)}</span>
-                  </div>
-                ))}
-                {settings.filter((s) => s.key !== "affiliate_attribution_days").length === 0 && <p className="text-sm text-muted-foreground">Nenhuma configuração definida (usa os defaults do código).</p>}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {isOwner && (
+          <TabsContent value="config">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Configurações da plataforma</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">A janela de atribuição de afiliados agora é configurada na aba Afiliados. Aqui ficam as demais configurações gerais do site (chave/valor em JSON).</p>
+                <form onSubmit={saveSetting} className="flex flex-wrap gap-2 items-end">
+                  <Field label="Chave"><Input className="w-64" placeholder="ex: suporte_email" value={newSetting.key} onChange={(e) => setNewSetting({ ...newSetting, key: e.target.value })} required /></Field>
+                  <Field label="Valor (texto ou JSON)" className="flex-1 min-w-56"><Input placeholder='ex: "contato@apostainfo.com.br" ou {"dias": 30}' value={newSetting.value} onChange={(e) => setNewSetting({ ...newSetting, value: e.target.value })} required /></Field>
+                  <Button type="submit" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Salvar</Button>
+                </form>
+                <div className="divide-y text-sm">
+                  {settings.filter((s) => s.key !== "affiliate_attribution_days").map((s) => (
+                    <div key={String(s.key)} className="flex justify-between py-2">
+                      <span className="font-mono text-xs">{String(s.key)}</span>
+                      <span className="text-xs text-muted-foreground">{JSON.stringify(s.value)}</span>
+                    </div>
+                  ))}
+                  {settings.filter((s) => s.key !== "affiliate_attribution_days").length === 0 && <p className="text-sm text-muted-foreground">Nenhuma configuração definida (usa os defaults do código).</p>}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* ---------------- Análise Aprofundada ---------------- */}
         <TabsContent value="deep">
@@ -1490,22 +1543,24 @@ export default function AdminPage() {
         </TabsContent>
 
         {/* ---------------- Auditoria ---------------- */}
-        <TabsContent value="auditoria">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Auditoria</CardTitle></CardHeader>
-            <CardContent>
-              <div className="divide-y text-sm">
-                {audit.map((a) => (
-                  <div key={a.id} className="flex justify-between py-2 gap-2 flex-wrap">
-                    <span className="font-mono text-xs">{a.action} {a.target_type ? `(${a.target_type})` : ""}</span>
-                    <span className="text-xs text-muted-foreground">{a.admin_name ?? a.admin_email ?? "sistema"} · {fmt(a.created_at)}</span>
-                  </div>
-                ))}
-                {audit.length === 0 && <p className="text-sm text-muted-foreground">Sem registros.</p>}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {isOwner && (
+          <TabsContent value="auditoria">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Auditoria</CardTitle></CardHeader>
+              <CardContent>
+                <div className="divide-y text-sm">
+                  {audit.map((a) => (
+                    <div key={a.id} className="flex justify-between py-2 gap-2 flex-wrap">
+                      <span className="font-mono text-xs">{a.action} {a.target_type ? `(${a.target_type})` : ""}</span>
+                      <span className="text-xs text-muted-foreground">{a.admin_name ?? a.admin_email ?? "sistema"} · {fmt(a.created_at)}</span>
+                    </div>
+                  ))}
+                  {audit.length === 0 && <p className="text-sm text-muted-foreground">Sem registros.</p>}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* ---------------- Modais ---------------- */}

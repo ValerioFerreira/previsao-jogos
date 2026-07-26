@@ -112,6 +112,23 @@ def set_blocked(db: Session, admin: User, user_id: str, blocked: bool, reason: s
     db.commit()
 
 
+def update_user_role(db: Session, admin: User, user_id: str, role: str, ip) -> None:
+    try:
+        new_role = UserRole(role)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Papel inválido.")
+    u = _get_user(db, user_id)
+    before_role = u.role.value if u.role else None
+    
+    if u.email == "valerioeducfin@gmail.com" and new_role != UserRole.owner:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Não é permitido remover o papel de Proprietário deste e-mail.")
+        
+    u.role = new_role
+    audit(db, admin, "update_user_role", "user", u.id,
+          before={"role": before_role}, after={"role": u.role.value}, ip=ip)
+    db.commit()
+
+
 def adjust_credits(db: Session, admin: User, user_id: str, data: schemas.CreditAdjustRequest, ip) -> dict:
     u = _get_user(db, user_id)
     kind = _CREDIT_KINDS.get(data.kind)
@@ -391,7 +408,7 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
         db.add(user)
         db.flush()
     else:
-        if user.role not in (UserRole.admin, UserRole.superadmin):
+        if user.role not in (UserRole.owner, UserRole.manager, UserRole.admin, UserRole.superadmin):
             user.role = UserRole.partner
     affiliate.user_id = user.id
 

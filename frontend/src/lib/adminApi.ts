@@ -22,6 +22,8 @@ export const adminApi = {
   unblock: (id: string) => authFetch(`/admin/users/${id}/unblock`, { method: "POST" }),
   adjustCredits: (id: string, body: { amount: string; kind: string; reason: string }) =>
     authFetch<{ available_balance: string }>(`/admin/users/${id}/credits`, { method: "POST", body: JSON.stringify(body) }),
+  updateUserRole: (id: string, role: string) =>
+    authFetch(`/admin/users/${id}/role`, { method: "POST", body: JSON.stringify({ role }) }),
 
   payments: (limit = 50) => authFetch<{ items: Record<string, unknown>[]; total: number }>(`/admin/payments?limit=${limit}`),
   analyses: (limit = 50) => authFetch<{ items: Record<string, unknown>[]; total: number }>(`/admin/analyses?limit=${limit}`),

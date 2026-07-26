@@ -16,6 +16,8 @@ class UserRole(str, enum.Enum):
     admin = "admin"
     superadmin = "superadmin"
     partner = "partner"
+    owner = "owner"
+    manager = "manager"
 
 
 class OtpPurpose(str, enum.Enum):

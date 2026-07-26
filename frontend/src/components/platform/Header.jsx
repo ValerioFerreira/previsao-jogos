@@ -2,25 +2,35 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sun, Moon, Activity, BarChart3, Wrench } from 'lucide-react';
+import { Sun, Moon, Activity, BarChart3, Wrench, LayoutDashboard } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
+import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 import AccountMenu from '@/components/platform/AccountMenu';
 
-const NAV_ITEMS = [
-  { path: '/', label: 'Análise' },
-  { path: '/estatisticas', label: 'Estatísticas' },
-  { path: '/como-funciona', label: 'Como Funciona?' },
-];
-
 export default function Header() {
   const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
   const pathname = usePathname();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  const isOwner = user && (user.role === 'owner' || user.role === 'admin' || user.role === 'superadmin' || user.email === 'valerioeducfin@gmail.com');
+  const isPartner = user && user.role === 'partner';
+  const showPartnerView = isOwner || isPartner;
+
+  const navItems = [
+    { path: '/', label: 'Análise' },
+    { path: '/estatisticas', label: 'Estatísticas' },
+    { path: '/como-funciona', label: 'Como Funciona?' },
+  ];
+
+  if (showPartnerView) {
+    navItems.push({ path: '/parceiro', label: 'Visão do Parceiro' });
+  }
 
   return (
     <>
@@ -35,7 +45,7 @@ export default function Header() {
 
             {/* Navigation - Desktop */}
             <nav className="hidden md:flex items-center gap-1 justify-self-center">
-              {NAV_ITEMS.map(item => {
+              {navItems.map(item => {
                 const isActive = pathname === item.path;
                 return (
                   <Link
@@ -91,9 +101,15 @@ export default function Header() {
       {/* Bottom Navigation for Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/90 border-t border-border/50 backdrop-blur-lg pb-safe">
         <div className="flex justify-around items-center h-16 px-2">
-          {NAV_ITEMS.map(item => {
+          {navItems.map(item => {
             const isActive = pathname === item.path;
-            const Icon = item.path === '/' ? Activity : item.path === '/estatisticas' ? BarChart3 : Wrench;
+            const Icon = item.path === '/' 
+              ? Activity 
+              : item.path === '/estatisticas' 
+                ? BarChart3 
+                : item.path === '/parceiro'
+                  ? LayoutDashboard
+                  : Wrench;
             return (
               <Link
                 key={item.path}
