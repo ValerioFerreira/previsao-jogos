@@ -19,11 +19,11 @@ import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 
 interface SidebarProps {
-  navLayout: 'sidebar' | 'top';
-  onToggleLayout: () => void;
+  navLayout?: 'sidebar' | 'top';
+  onToggleLayout?: () => void;
 }
 
-export default function Sidebar({ navLayout, onToggleLayout }: SidebarProps) {
+export default function Sidebar({ navLayout = 'sidebar', onToggleLayout }: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const { user, wallet, logout } = useAuth();
   const pathname = usePathname();
@@ -70,17 +70,71 @@ export default function Sidebar({ navLayout, onToggleLayout }: SidebarProps) {
           </div>
         </Link>
 
-        <button
-          onClick={onToggleLayout}
-          title="Alternar para Menu no Topo"
-          className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowRightLeft className="w-4 h-4" />
-        </button>
+        {onToggleLayout && (
+          <button
+            onClick={onToggleLayout}
+            title="Alternar Layout"
+            className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Card do Perfil do Usuário / Créditos (Posicionado logo acima do "Navegação") */}
+      <div className="p-3 m-3 mb-1 rounded-xl bg-muted/50 border border-border/50 space-y-3">
+        {user ? (
+          <>
+            <Link
+              href="/perfil?tab=dados"
+              className="flex items-center gap-2.5 group cursor-pointer hover:opacity-90 transition-opacity"
+              title="Ir para o meu perfil"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs shadow-sm group-hover:scale-105 transition-transform">
+                {firstName.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold truncate group-hover:text-primary transition-colors">
+                  {user.full_name}
+                </div>
+                <div className="text-[10px] text-muted-foreground capitalize">
+                  {user.role === 'owner' ? 'Proprietário' : user.role === 'partner' ? 'Parceiro' : 'Usuário'}
+                </div>
+              </div>
+            </Link>
+
+            <div className="flex items-center justify-between pt-2 border-t border-border/40">
+              <Link
+                href="/carteira"
+                className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                title="Ir para a carteira"
+              >
+                <Coins className="w-4 h-4" />
+                <span>{credits} créditos</span>
+              </Link>
+              <Link
+                href="/carteira"
+                className="text-[11px] font-semibold text-primary hover:underline bg-primary/10 px-2 py-0.5 rounded"
+              >
+                + créditos
+              </Link>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-2 text-center py-1">
+            <p className="text-xs text-muted-foreground">Acesse sua conta para utilizar créditos e gerar análises.</p>
+            <Link
+              href="/entrar"
+              className="block w-full py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition text-center"
+            >
+              Entrar na conta
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
         <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-3 mb-2">
           Navegação
         </div>
@@ -112,71 +166,24 @@ export default function Sidebar({ navLayout, onToggleLayout }: SidebarProps) {
         })}
       </nav>
 
-      {/* User Info / Wallet Card */}
-      <div className="p-3 m-3 rounded-xl bg-muted/50 border border-border/50 space-y-3">
-        {user ? (
-          <>
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-                {firstName.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold truncate">{user.full_name}</div>
-                <div className="text-[10px] text-muted-foreground capitalize">
-                  {user.role === 'owner' ? 'Proprietário' : user.role === 'partner' ? 'Parceiro' : 'Usuário'}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-border/40">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                <Coins className="w-4 h-4" />
-                <span>{credits} créditos</span>
-              </div>
-              <Link
-                href="/carteira"
-                className="text-[11px] font-medium text-primary hover:underline"
-              >
-                Recarregar
-              </Link>
-            </div>
-          </>
-        ) : (
-          <div className="space-y-2 text-center py-1">
-            <p className="text-xs text-muted-foreground">Acesse sua conta para utilizar créditos e gerar análises.</p>
-            <Link
-              href="/entrar"
-              className="block w-full py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition text-center"
-            >
-              Entrar na conta
-            </Link>
-          </div>
-        )}
-      </div>
-
       {/* Footer Actions */}
       <div className="p-3 border-t border-border/50 flex items-center justify-between gap-2">
-        {/* Layout Switcher Button */}
-        <button
-          onClick={onToggleLayout}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded-lg border border-border/60 hover:bg-accent transition-colors"
-          title="Alternar entre menu no topo e menu lateral"
-        >
-          <ArrowRightLeft className="w-3.5 h-3.5 text-muted-foreground" />
-          <span>Menu no Topo</span>
-        </button>
-
-        {/* Theme Toggle */}
         {mounted && (
           <button
             onClick={toggleTheme}
             aria-label="Alternar tema"
-            className="p-2 rounded-lg hover:bg-accent transition-colors border border-border/60"
+            className="flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg hover:bg-accent transition-colors border border-border/60 text-xs font-medium"
           >
             {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-amber-400" />
+              <>
+                <Sun className="w-4 h-4 text-amber-400" />
+                <span>Modo Claro</span>
+              </>
             ) : (
-              <Moon className="w-4 h-4 text-slate-600" />
+              <>
+                <Moon className="w-4 h-4 text-slate-600" />
+                <span>Modo Escuro</span>
+              </>
             )}
           </button>
         )}

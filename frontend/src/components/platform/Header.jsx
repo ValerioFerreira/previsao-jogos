@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 import AccountMenu from '@/components/platform/AccountMenu';
 
-export default function Header({ onToggleLayout, navLayout }) {
+export default function Header() {
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const pathname = usePathname();
@@ -69,17 +69,7 @@ export default function Header({ onToggleLayout, navLayout }) {
             </nav>
 
             {/* Right Controls */}
-            <div className="col-start-3 flex items-center gap-2 sm:gap-3 shrink-0 justify-self-end">
-              {onToggleLayout && (
-                <button
-                  onClick={onToggleLayout}
-                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border/60 hover:bg-accent transition-colors"
-                  title="Alternar entre Menu Lateral e Menu no Topo"
-                >
-                  <ArrowRightLeft className="w-3.5 h-3.5 text-primary" />
-                  <span>{navLayout === 'sidebar' ? 'Menu no Topo' : 'Menu Lateral'}</span>
-                </button>
-              )}
+            <div className="col-start-3 flex items-center gap-3 shrink-0 justify-self-end">
               {/* Theme Toggle */}
               {mounted && (
                 <button
