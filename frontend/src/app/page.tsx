@@ -145,16 +145,27 @@ function FeaturedMatchesBanner({
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-5 sm:p-7 shadow-2xl shadow-black/30"
+      className="relative overflow-hidden rounded-b-2xl border-b border-border/70 border-t-0 border-x-0 bg-transparent p-5 sm:p-7 shadow-xl"
     >
-      {/* Imagem de Fundo com Alta Nitidez, Fade e Filtro Grayscale no modo claro */}
+      {/* Imagem de Fundo com Alta Nitidez, Fade no topo e nas laterais para se fundir com a tela */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <img
           src="/images/background-partidas-destaque.jpg"
           alt=""
-          className="w-full h-full object-cover blur-[2px] scale-105 opacity-65 dark:opacity-60 dark:grayscale-0 grayscale contrast-110 brightness-105 transition-all duration-500"
+          className="w-full h-full object-cover blur-[2px] scale-105 opacity-75 dark:opacity-70 dark:grayscale-0 grayscale contrast-110 brightness-105 transition-all duration-500"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-card/40 via-card/65 to-card/85" />
+        {/* Overlay de gradiente base */}
+        <div className="absolute inset-0 bg-gradient-to-b from-card/30 via-card/50 to-card/80" />
+        
+        {/* Fade Superior (Topo) para fundir a tela */}
+        <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-background via-background/70 to-transparent pointer-events-none z-10" />
+        
+        {/* Fade Lateral Esquerdo */}
+        <div className="absolute top-0 bottom-0 left-0 w-24 bg-gradient-to-r from-background via-background/70 to-transparent pointer-events-none z-10" />
+        
+        {/* Fade Lateral Direito */}
+        <div className="absolute top-0 bottom-0 right-0 w-24 bg-gradient-to-l from-background via-background/70 to-transparent pointer-events-none z-10" />
+
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
       </div>
 
@@ -496,14 +507,8 @@ export default function Previsoes() {
 
   return (
     <div className="space-y-6">
-      {featured.length > 0 ? (
+      {featured.length > 0 && (
         <FeaturedMatchesBanner matches={featured} teamIds={teamIds} onPick={selectFeaturedMatch} />
-      ) : (
-        <ClubMarketsBanner onExplore={() => {
-          setMode('independente');
-          changeScope('clube');
-          setEditingTeams(true);
-        }} />
       )}
       {homeTeamId && awayTeamId && (
         <MatchHeader
