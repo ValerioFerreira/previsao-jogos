@@ -51,21 +51,21 @@ function PlacarExatoCard({ data, home, away, teamIds }: { data: NonNullable<Pred
     return `Placar alto projetado: ${m.exp_total} gols esperados, P(4+ gols) = ${m.prob_4_mais}%.`;
   };
   return (
-    <div className="bg-card border border-border/50 rounded-xl p-5">
+    <div className="bg-card border border-border/50 rounded-xl p-3.5 sm:p-5">
       <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
         <Target className="w-4 h-4 text-purple-500" /> Placar Exato
         <InfoTooltip text="Os 3 placares mais prováveis segundo a matriz conjunta de gols (Dixon-Coles)." />
       </h4>
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-4">
         {data.top.map((s, i) => (
-          <div key={i} className={`text-center rounded-lg p-2 border ${i === 0 ? "bg-purple-500/10 border-purple-500/30" : "bg-muted/30 border-border/30"}`}>
-            <div className="flex items-center justify-center gap-1.5 mb-0.5">
-              {teamLogoUrl(teamIds[home]) && <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-4 h-4 object-contain" onError={onImgError} />}
-              <p className="text-xl font-mono font-bold text-foreground leading-none">{s.mandante}<span className="text-muted-foreground mx-0.5">–</span>{s.visitante}</p>
-              {teamLogoUrl(teamIds[away]) && <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-4 h-4 object-contain" onError={onImgError} />}
+          <div key={i} className={`text-center rounded-lg p-1.5 sm:p-2 border ${i === 0 ? "bg-purple-500/10 border-purple-500/30" : "bg-muted/30 border-border/30"}`}>
+            <div className="flex items-center justify-center gap-1 sm:gap-1.5 mb-0.5 whitespace-nowrap">
+              {teamLogoUrl(teamIds[home]) && <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain shrink-0" onError={onImgError} />}
+              <p className="text-sm sm:text-xl font-mono font-bold text-foreground leading-none">{s.mandante}<span className="text-muted-foreground mx-0.5">–</span>{s.visitante}</p>
+              {teamLogoUrl(teamIds[away]) && <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain shrink-0" onError={onImgError} />}
             </div>
-            <p className="text-[11px] font-mono text-cyan-400 mt-0.5">{s.prob.toFixed(1)}%</p>
-            <p className="text-[9px] text-muted-foreground mt-0.5">odd {oddRangeStr(s.prob)}</p>
+            <p className="text-[10px] sm:text-[11px] font-mono text-cyan-400 mt-0.5">{s.prob.toFixed(1)}%</p>
+            <p className="text-[8.5px] sm:text-[9px] text-muted-foreground mt-0.5 truncate">odd {oddRangeStr(s.prob)}</p>
           </div>
         ))}
       </div>
