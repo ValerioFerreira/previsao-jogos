@@ -27,6 +27,8 @@ export const metadata: Metadata = {
   manifest: "/images/favicon_io/site.webmanifest",
 };
 
+import AppLayoutWrapper from "@/components/platform/AppLayoutWrapper";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,13 +43,7 @@ export default function RootLayout({
             <InactivityWatcher />
             <SessionExpiredNotice />
             <PredictionProvider>
-              <div className="relative flex min-h-screen flex-col">
-                <Header />
-                <main className="flex-1 w-full max-w-7xl mx-auto p-4 pb-24 sm:p-6 md:pb-8 lg:p-8 animate-in fade-in duration-500">
-                  {children}
-                </main>
-                <Footer />
-              </div>
+              <AppLayoutWrapper>{children}</AppLayoutWrapper>
               <Toaster />
             </PredictionProvider>
           </AuthProvider>

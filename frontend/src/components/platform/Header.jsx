@@ -2,13 +2,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sun, Moon, Activity, BarChart3, Wrench, LayoutDashboard } from 'lucide-react';
+import { Sun, Moon, Activity, BarChart3, Wrench, LayoutDashboard, ArrowRightLeft } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 import { useAuth } from '@/lib/AuthContext';
 import { motion } from 'framer-motion';
 import AccountMenu from '@/components/platform/AccountMenu';
 
-export default function Header() {
+export default function Header({ onToggleLayout, navLayout }) {
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const pathname = usePathname();
@@ -69,7 +69,17 @@ export default function Header() {
             </nav>
 
             {/* Right Controls */}
-            <div className="col-start-3 flex items-center gap-3 shrink-0 justify-self-end">
+            <div className="col-start-3 flex items-center gap-2 sm:gap-3 shrink-0 justify-self-end">
+              {onToggleLayout && (
+                <button
+                  onClick={onToggleLayout}
+                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border/60 hover:bg-accent transition-colors"
+                  title="Alternar entre Menu Lateral e Menu no Topo"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-primary" />
+                  <span>{navLayout === 'sidebar' ? 'Menu no Topo' : 'Menu Lateral'}</span>
+                </button>
+              )}
               {/* Theme Toggle */}
               {mounted && (
                 <button
