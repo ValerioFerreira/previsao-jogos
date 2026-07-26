@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query, Depends
+import logging
+from fastapi import FastAPI, HTTPException, Query, Depends, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger("app.main")
 
 # Precisa vir antes de allowed_origins() (usado no add_middleware abaixo): é este import
 # que carrega backend/.env (app/db/connection.py::_load_local_dotenv), então CORS_ORIGINS
@@ -61,10 +65,54 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins(),
+    allow_origin_regex=r"https://(www\.)?apostainfo\.com\.br|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def enforce_cors_headers(request: Request, call_next):
+    origin = request.headers.get("origin")
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        logger.exception("Exceção não tratada no pipeline HTTP para %s %s: %s", request.method, request.url, exc)
+        response = JSONResponse(
+            status_code=500,
+            content={"detail": "Erro interno no servidor."},
+        )
+
+    if origin and "Access-Control-Allow-Origin" not in response.headers:
+        allowed = allowed_origins()
+        if origin in allowed or "apostainfo.com.br" in origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+
+    return response
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Erro interno não tratado na rota %s %s: %s", request.method, request.url, exc)
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin:
+        allowed = allowed_origins()
+        if origin in allowed or "apostainfo.com.br" in origin:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+            headers["Access-Control-Allow-Methods"] = "*"
+            headers["Access-Control-Allow-Headers"] = "*"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Erro interno no servidor."},
+        headers=headers,
+    )
+
 
 # Camada de usuários/monetização. Não afeta as rotas de previsão.
 from app.domains.auth.router import router as auth_router  # noqa: E402

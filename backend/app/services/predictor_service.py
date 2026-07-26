@@ -1307,11 +1307,16 @@ def get_team_anomalies(team_name: str, scope: str = "selecao") -> list[dict[str,
 
 def allowed_origins() -> list[str]:
     raw = os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_URL") or os.getenv("FRONTEND_ORIGIN") or "http://localhost:3000"
-    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
-    if "http://localhost:3000" not in origins:
-        origins.append("http://localhost:3000")
-    if "https://www.apostainfo.com.br" not in origins:
-        origins.append("https://www.apostainfo.com.br")
-    if "https://apostainfo.com.br" not in origins:
-        origins.append("https://apostainfo.com.br")
+    origins = [origin.rstrip("/").strip() for origin in raw.split(",") if origin.strip()]
+    defaults = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "https://www.apostainfo.com.br",
+        "https://apostainfo.com.br",
+    ]
+    for d in defaults:
+        if d not in origins:
+            origins.append(d)
     return origins
+
