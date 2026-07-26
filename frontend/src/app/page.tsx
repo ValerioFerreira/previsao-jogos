@@ -145,9 +145,9 @@ function FeaturedMatchesBanner({
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-b-2xl border-b border-border/70 border-t-0 border-x-0 bg-transparent p-5 sm:p-7 shadow-xl"
+      className="relative overflow-hidden border-b border-border/70 border-t-0 border-x-0 bg-transparent p-5 sm:p-7 sm:py-9"
     >
-      {/* Imagem de Fundo com Alta Nitidez, Fade no topo e nas laterais afetando exclusivamente a imagem (z-0) */}
+      {/* Imagem de Fundo com Alta Nitidez e Fade Profundo no topo e nas laterais para fusão 100% invisível das bordas com o fundo */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         <img
           src="/images/background-partidas-destaque.jpg"
@@ -155,16 +155,16 @@ function FeaturedMatchesBanner({
           className="w-full h-full object-cover blur-[2px] scale-105 opacity-80 dark:opacity-75 dark:grayscale-0 grayscale contrast-110 brightness-105 transition-all duration-500"
         />
         {/* Overlay de gradiente base */}
-        <div className="absolute inset-0 bg-gradient-to-b from-card/20 via-card/45 to-card/75" />
+        <div className="absolute inset-0 bg-gradient-to-b from-card/10 via-card/40 to-card/75" />
         
-        {/* Fade Superior (Topo) para fundir apenas a imagem de fundo com a tela */}
-        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-background via-background/60 to-transparent pointer-events-none" />
+        {/* Fade Superior (Topo) com fusão total na cor da tela */}
+        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-background via-background/90 via-50% to-transparent pointer-events-none z-10" />
         
-        {/* Fade Lateral Esquerdo */}
-        <div className="absolute top-0 bottom-0 left-0 w-24 bg-gradient-to-r from-background via-background/60 to-transparent pointer-events-none" />
+        {/* Fade Lateral Esquerdo com fusão total */}
+        <div className="absolute top-0 bottom-0 left-0 w-32 bg-gradient-to-r from-background via-background/90 via-50% to-transparent pointer-events-none z-10" />
         
-        {/* Fade Lateral Direito */}
-        <div className="absolute top-0 bottom-0 right-0 w-24 bg-gradient-to-l from-background via-background/60 to-transparent pointer-events-none" />
+        {/* Fade Lateral Direito com fusão total */}
+        <div className="absolute top-0 bottom-0 right-0 w-32 bg-gradient-to-l from-background via-background/90 via-50% to-transparent pointer-events-none z-10" />
 
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
       </div>
