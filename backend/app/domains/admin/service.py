@@ -466,11 +466,16 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
 
     if not (affiliate.cpf and affiliate.contact_email and affiliate.contact_phone):
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            detail="CPF, e-mail e telefone são obrigatórios para enviar o convite.")
+                            detail="CPF, e-mail e telefone são obrigatórios para enviar o convite. Atualize os dados do parceiro.")
 
     user = db.get(User, affiliate.user_id) if affiliate.user_id else None
-    if user is None:
+    if user is None and affiliate.contact_email:
         user = db.execute(select(User).where(User.email == affiliate.contact_email.lower())).scalar_one_or_none()
+    if user is None and affiliate.cpf:
+        user = db.execute(select(User).where(User.cpf == affiliate.cpf)).scalar_one_or_none()
+    if user is None and affiliate.contact_phone:
+        user = db.execute(select(User).where(User.phone == affiliate.contact_phone)).scalar_one_or_none()
+
     if user is None:
         user = User(
             full_name=affiliate.name, email=affiliate.contact_email.lower(),
@@ -482,6 +487,10 @@ def _create_partner_invite(db: Session, admin: User, affiliate: Affiliate, ip) -
     else:
         if user.role not in (UserRole.owner, UserRole.manager):
             user.role = UserRole.partner
+        if not user.cpf and affiliate.cpf:
+            user.cpf = affiliate.cpf
+        if not user.phone and affiliate.contact_phone:
+            user.phone = affiliate.contact_phone
     affiliate.user_id = user.id
 
     # Cria até 3 cupons baseados nos descontos solicitados
@@ -753,9 +762,11 @@ def pending_counts(db: Session) -> dict:
 
 def resend_affiliate_invite(db: Session, admin: User, affiliate_id: str, ip) -> dict:
     a = _get_affiliate(db, affiliate_id)
-    if a.status != "active":
+    if a.status not in ("active", "pending"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            detail="Só é possível reenviar convite para parceiros ativos.")
+                            detail="Só é possível reenviar convite para parceiros ativos ou pendentes.")
+    if a.status == "pending":
+        a.status = "active"
     _create_partner_invite(db, admin, a, ip)
     audit(db, admin, "affiliate_resend_invite", "affiliate", a.id, ip=ip)
     db.commit()
