@@ -200,15 +200,6 @@ export default function OpportunitiesSection({ prediction, home, away, fixtureId
       </div>
 
       <div className="bg-card border border-emerald-500/30 rounded-xl p-4 sm:p-5 shadow-sm space-y-4">
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          <strong className="text-foreground">O que é EV (valor esperado)?</strong> Quando a odd oferecida por
-          uma casa paga mais do que a probabilidade real segundo o nosso modelo sugere, a aposta é
-          matematicamente favorável no longo prazo — mas isso{" "}
-          <strong className="text-foreground">não garante lucro em uma aposta individual</strong>. A
-          probabilidade usada é uma <strong className="text-foreground">estimativa</strong> do modelo, não uma
-          certeza. Jogue com responsabilidade.
-        </p>
-
         {/* BARRA DE FILTROS */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-border/50 bg-muted/20">
           <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
@@ -307,6 +298,15 @@ export default function OpportunitiesSection({ prediction, home, away, fixtureId
             Exibindo 5 visíveis de {filteredRows.length} oportunidades — role a tabela para ver mais.
           </p>
         )}
+
+        <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/40">
+          <strong className="text-foreground">O que é EV (valor esperado)?</strong> Quando a odd oferecida por
+          uma casa paga mais do que a probabilidade real segundo o nosso modelo sugere, a aposta é
+          matematicamente favorável no longo prazo — mas isso{" "}
+          <strong className="text-foreground">não garante lucro em uma aposta individual</strong>. A
+          probabilidade usada é uma <strong className="text-foreground">estimativa</strong> do modelo, não uma
+          certeza. Jogue com responsabilidade.
+        </p>
 
         <p className="mt-2 text-[11px] text-muted-foreground flex items-start gap-1.5 pt-2 border-t border-border/40">
           <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
