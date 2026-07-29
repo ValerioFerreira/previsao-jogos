@@ -1583,20 +1583,28 @@ fabricado. Relatório completo em `docs/RELATORIO_HIPOTESES_A_B_C_v2.md`.
 
 Esta máquina só tem 4 competições de clube no espelho local (`data/club_raw_cache.sqlite`:
 Brasileirão A/B, Premier League, Champions League — 21.130 jogos), não as 83 competições/272.918
-jogos do artefato de produção atual (retreinado em outra máquina, 2026-07-22, §19.8). O modelo
-congelado desta rodada foi treinado só nessas 4 ligas (19.574 jogos pré-corte). Das 4, só
+jogos do artefato de produção atual (retreinado em outra máquina, 2026-07-22, §19.8). Das 4, só
 **Premier League** (380/380) e **Brasileirão Série A** (342/380) têm odds reais em `data-test/`.
 **N final: 722 partidas reais, temporada 2025/26.** Backfill das competições faltantes
 (`mirror_club_cache.py`) iniciado em 2026-07-28 — ver §24.5.
 
+**Modelo usado**: `model_artifacts_clubes_2025frozen/` já commitado (cutoff 2025-07-01,
+**250.682 jogos / 5.365 times** — treinado na base completa em outra máquina). Um retreino local
+chegou a sobrescrevê-lo por uma versão de apenas 19.574 jogos/396 times (a base local parcial);
+isso foi detectado e **revertido**, e todos os números abaixo foram regerados com o artefato bom.
+**Lição**: `backtest_train_frozen_model.py` lê o `club_features_enriched.parquet` local — rodá-lo
+numa máquina com base parcial degrada silenciosamente o artefato congelado. Confira
+`meta.json["n_train"]` antes e depois.
+
 ### 24.2 Hipótese A — Alfa de cotação (real, robusto)
 
 Comparar a melhor odd real (`Max`) vs a pior odd individual real disponível, no pick do modelo:
-**Alfa = +7.70%** IC95%[+6.46%,+9.04%] no 1x2 (N=722) e **+2.65%** IC95%[+2.26%,+3.05%] no O/U
-2.5 (N=380, Premier League). Todos os recortes excluem zero — é dispersão estrutural de mercado,
-estatisticamente sólida. **Não é vantagem do modelo**, é vantagem de comparar casas (mensagem
-defensável: "escolher a melhor cotação reduz a perda esperada", não "dá lucro" — o ROI segue
-negativo na melhor casa em 3 dos 4 recortes).
+**Alfa = +7.15%** IC95%[+6.05%,+8.31%] no 1x2 (N=722) e **+2.12%** IC95%[+1.78%,+2.46%] no O/U
+2.5 (N=380, PL). Por liga: Brasileirão +3.11% [+2.54%,+3.74%], Premier League +10.78%
+[+8.82%,+12.87%]. Pooled (1102 apostas): **+5.41%** [+4.67%,+6.21%]. Todos excluem zero — é
+dispersão estrutural de mercado, estatisticamente sólida. **Não é vantagem do modelo**, é
+vantagem de comparar casas (mensagem defensável: "escolher a melhor cotação reduz a perda
+esperada", não "dá lucro" — o ROI segue negativo na melhor casa em 3 dos 4 recortes).
 
 ### 24.3 Hipótese B — Modelo vs 3 perfis de apostador (sem edge robusto)
 
@@ -1604,23 +1612,27 @@ Perfis pedidos originalmente (favoritista, emocional-por-gols = sempre Over 2.5 
 existe em `data-test`, faixa de odd 1.70-2.20) comparados ao pick do modelo, mesma fonte de
 preço (`book="Avg"`) pra isolar seleção de comparação de casas. Bootstrap + Bonferroni/BH-FDR.
 
-**Correção de enquadramento (mesma data, ver §25)**: a leitura inicial testou os ROIs contra
-**zero**, que é o benchmark errado. Com vig de 6.05%, o ROI esperado de qualquer apostador sem
-vantagem é **−5.71%**. Contra esse benchmark, o ROI agregado do modelo (−5.85%) fica a
-**−0.04σ** — aderência quase perfeita à expectativa de "sem edge", nem bom nem ruim. Os
-extremos (Premier League −12.95% = −1.52σ; Brasileirão +2.04% = +1.42σ) ficam dentro do ruído
-nos dois sentidos. **Nada aqui é estatisticamente conclusivo**: detectar edge de 2% exigiria
-~20.100 apostas e temos 722. **Corrobora §20 ("sem edge robusto"), não contradiz** — ao
-contrário do §23 (v1, retirado). Não usar para claim de "modelo bate apostador comum".
+**O benchmark não é zero (ver §25.1)**: com vig de 6.05%, o ROI esperado de qualquer apostador
+sem vantagem é **−5.71%**. Resultados (pooled): modelo_1x2 −8.51% [−15.77%,−1.17%] = **−0.76σ do
+benchmark, não significativo**; favoritista −6.35% (inclui 0); faixa_odd −11.57%; modelo_ou
+−11.40%; emocional_sempre_over −4.24% (inclui 0). Por liga: Premier League −15.04%
+[−24.57%,−5.45%] = −1.99σ (limítrofe, não sobrevive correção); Brasileirão −1.24% (inclui 0).
+
+**Nada aqui é conclusivo**: detectar edge de 2% exigiria ~19.400 apostas e temos 722. Registrar
+sem maquiar: nesta amostra o pick do modelo teve ROI **pior** que o do favoritista (−8.51% vs
+−6.35%), mas com SE ~3.7pp os dois são indistinguíveis. **Corrobora §20 ("sem edge robusto"),
+não contradiz** — ao contrário do §23 (v1, retirado). Não usar para claim de "modelo bate
+apostador comum".
 
 ### 24.4 Hipótese C — Desagregação por liga/ano (piso N≥100, sem linha de N=1)
 
-Por liga: Brasileirão +2.04% IC95%[−9.06%,+13.03%]; Premier League −12.95%
-IC95%[−22.69%,−3.09%] (exclui zero, mas **não** exclui o benchmark de −5.37% dessa liga —
-ver §25). Por ano: como só há uma temporada real disponível
-(2025/26), a "desagregação por ano" é essa mesma temporada cortada pelo calendário civil (2025:
-N=528, ROI −0.17%, inclui 0; 2026: N=194, ROI −21.29%, exclui 0) — **não é teste de consistência
-multi-temporada** como o §23 (v1) fabricou ("10 de 11 anos lucrativos, 2010-2026").
+Por liga: Brasileirão N=342, winrate 50.9%, ROI −1.24% IC95%[−12.12%,+9.56%]; Premier League
+N=380, winrate 46.8%, ROI −15.04% IC95%[−24.57%,−5.45%] (exclui zero, mas fica a −1.99σ do
+benchmark de −5.37% dessa liga — limítrofe, ver §25). Por ano: como só há uma temporada real
+disponível (2025/26), a "desagregação por ano" é essa mesma temporada cortada pelo calendário
+civil (2025: N=528, ROI −1.79%, inclui 0; 2026: N=194 = meia temporada, ROI −26.78%) — **não é
+teste de consistência multi-temporada** como o §23 (v1) fabricou ("10 de 11 anos lucrativos,
+2010-2026").
 
 ### 24.5 Pendências
 
@@ -1652,31 +1664,37 @@ faz um modelo perfeitamente são parecer quebrado.
 
 | Recorte | ROI observado | ROI esperado s/ edge | Distância |
 |---|---:|---:|---:|
-| Pooled (722) | −5.85% | −5.71% | **−0.04σ** |
-| Brasileirão A (342) | +2.04% | −6.08% | +1.42σ |
-| Premier League (380) | −12.95% | −5.37% | −1.52σ |
+| Pooled (722) | −8.51% | −5.71% | **−0.76σ** |
+| Brasileirão A (342) | −1.24% | −6.08% | +0.86σ |
+| Premier League (380) | −15.04% | −5.37% | −1.99σ (limítrofe) |
 
-O agregado está a **quatro centésimos de desvio-padrão** da teoria. Não é resultado ruim — é
-resultado *na expectativa*, com aderência quase desconfortável.
+O agregado está a **0.76 desvio-padrão** da teoria — indistinguível de "sem edge". O caso mais
+negativo (Premier League) é limítrofe e não sobreviveria à correção de múltiplas comparações;
+lê-lo como "o modelo é anti-preditivo na PL" seria sobreajustar ruído.
 
-### 25.2 O modelo não está quebrado: captura ~76% da informação do mercado
+### 25.2 O modelo não está quebrado: captura ~78% da informação do mercado
 
 | | log-loss | Brier | ECE | Acurácia |
 |---|---:|---:|---:|---:|
-| Nosso modelo | 1.0219 | 0.6137 | 0.0199 | 49.6% |
+| Nosso modelo | 1.0200 | 0.6123 | 0.0207 | 48.8% |
 | Mercado (de-vig Shin) | 0.9975 | 0.5988 | 0.0167 | 50.6% |
 
 Referência: chute uniforme = ln(3) = 1.0986. O mercado ganha 0.1011 sobre o uniforme; nós
-ganhamos 0.0767 → **capturamos ~76% da informação que o mercado inteiro precifica**. ECE de
-0.0199 confirma modelo **bem calibrado** (sem bug de calibração). Coerente com §21 (ganhamos do
+ganhamos 0.0786 → **capturamos ~78% da informação que o mercado inteiro precifica**. ECE de
+0.0207 confirma modelo **bem calibrado** (sem bug de calibração). Coerente com §21 (ganhamos do
 `/predictions` da API-Football em 26/26 competições): somos bons *entre modelos*; o mercado é o
 agregador mais eficiente que existe e continua à frente. **Para lucrar não basta ser bom — é
 preciso ser melhor que o mercado por mais que o vig.**
 
+Observação metodológica relevante: quando o artefato congelado foi (por engano) degradado para
+uma base parcial, o log-loss **piorou** (1.0219) mas o ROI **melhorou** (−5.85%) — evidência
+direta de que, com N desta ordem, **ROI é dominado por ruído e não serve para ranquear modelos**.
+Use log-loss/ECE para qualidade de modelo e CLV para habilidade de aposta.
+
 ### 25.3 Poder estatístico: as baterias anteriores eram subdimensionadas
 
-- Detectar edge de **2%** com 80% de poder: **N ≈ 20.100 apostas**. Temos 722 (§24) / 8.117 (§20).
-- Detectar edge de **5%**: N ≈ 3.216.
+- Detectar edge de **2%** com 80% de poder: **N ≈ 19.400 apostas**. Temos 722 (§24) / 8.117 (§20).
+- Detectar edge de **5%**: N ≈ 3.110.
 
 **Nenhuma conclusão de §24 (B e C) tinha poder para ser conclusiva em qualquer direção.** O
 gargalo do projeto é **dado**, não modelagem — refinar método com N desta ordem é desperdício.
@@ -1685,8 +1703,8 @@ gargalo do projeto é **dado**, não modelagem — refinar método com N desta o
 
 | Liga | % da informação do mercado capturada | Acurácia modelo vs mercado |
 |---|---:|---|
-| Brasileirão Série A | **85%** | 52.0% vs 51.8% — **modelo ganha** |
-| Premier League | **65%** | 47.4% vs 49.5% — mercado ganha |
+| Brasileirão Série A | **83%** | 50.9% vs 51.8% |
+| Premier League | **71%** | 46.8% vs 49.5% |
 
 Hipótese (não confirmada — N=342/380, pode ser ruído): a Premier League é o mercado mais
 eficientemente precificado do futebol; ligas com menos atenção quantitativa internacional
