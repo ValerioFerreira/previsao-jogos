@@ -154,6 +154,15 @@ menos, decide melhor e paga menos vig* (`/desempenho` + alfa de cotação do §2
 | Persistir histórico de odds | decisão de schema | CLV mensurável (§25.5) |
 | Migrar blobs do Neon | WorkDrive ativo | `match_detail_cache` fora do Neon |
 | Rever §24 com base completa | itens 1-3 acima | números de N>10k no §24 e no v2 |
+| **Expansão de mercados** | ver `docs/PLANO_EXPANSAO_MERCADOS.md` | gate §6-C definido + candidatos julgados |
+
+**Expansão de mercados (plano aprovado 2026-07-29, nada executado)**: há ~15 mercados novos
+abertos com o dado que **já está no cache**, sem gastar cota de API — 7 estatísticas da API que
+nunca viraram coluna, mais tudo que `events` (99,9% de cobertura, minuto exato) permite derivar.
+O plano completo, com catálogo, armadilhas de dado e critérios, está em
+**`docs/PLANO_EXPANSAO_MERCADOS.md`**. Achado central: **os mercados de contagem em produção
+nunca passaram por gate nenhum** — a Fase 0 é definir o gate §6-C, a Fase 1 é aplicá-lo
+retroativamente aos 7 mercados já no ar. As Fases 2 e 4 (clube) dependem do mirror completo.
 
 **Odds históricas**: `backend/scripts/fetch_historical_odds.py` está pronto (352 arquivos: 22
 ligas × 16 temporadas, `--list` mostra o plano). Em 2026-07-28 o domínio
