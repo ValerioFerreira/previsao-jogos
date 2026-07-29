@@ -54,6 +54,13 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa
   máquina nova)**.
 - **`docs/ARQUITETURA_MONETIZACAO.md`** — desenho original da monetização (créditos/apostas/admin).
+- **`docs/PLANO_EXPANSAO_MERCADOS.md`** — **plano aprovado 2026-07-29, nada executado.** ~15 mercados
+  novos abertos com dado que **já está no cache** (7 `type` de `/fixtures/statistics` que nunca
+  viraram coluna no `STAT_MAP` + tudo que `events` permite derivar — 99,9% de cobertura, minuto
+  exato), **sem gastar cota de API**. Achado central: **os mercados de contagem em produção nunca
+  passaram por gate nenhum** (`grep` por CV/fold nos `train_*_market.py` volta vazio;
+  `predictor.py:762` admite "exibido cru"), então a Fase 0 é **definir o gate §6-C** e a Fase 1 é
+  aplicá-lo retroativamente aos 7 mercados já no ar. **Leia antes de propor mercado novo.**
 - **`backend/docs/PESQUISA_CLUBES.md`** — diário completo da pesquisa de clubes (literatura,
   candidatos, protocolo, todos os experimentos); **`backend/docs/RELATORIO_FINAL_PESQUISA_CLUBES.md`**
   — números consolidados (gerado por `scripts/clubs_consolidate.py`).
