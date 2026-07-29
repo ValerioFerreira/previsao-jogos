@@ -70,7 +70,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
       {/* Container principal offset pelo sidebar para evitar sobreposição e centralizar no espaço visível */}
       <div
         className={`flex-1 flex flex-col min-w-0 w-full transition-all duration-300 ${
-          isSidebar ? (isCollapsed ? "md:ml-20" : "md:ml-64") : ""
+          isSidebar ? "md:ml-64" : ""
         }`}
       >
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-6 sm:px-6 md:py-8 lg:px-8">
