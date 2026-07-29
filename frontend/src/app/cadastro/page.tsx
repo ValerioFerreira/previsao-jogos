@@ -2,18 +2,20 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowRight, CheckCircle2, Mail } from "lucide-react";
+import { Loader2, ArrowRight, CheckCircle2, Mail, Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { authApi } from "@/lib/authApi";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 
 type Step = "dados" | "otp" | "senha";
 
 export default function CadastroPage() {
   const { setSession } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   const [step, setStep] = useState<Step>("dados");
   const [busy, setBusy] = useState(false);
@@ -26,16 +28,20 @@ export default function CadastroPage() {
   const [setupToken, setSetupToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockActive, setCapsLockActive] = useState(false);
 
   useEffect(() => {
-    // código de indicação (independente do ?ref= do afiliado) — via /convite/[code] (que
-    // redireciona pra cá com ?indicacao=) ou direto na URL de cadastro
     const fromUrl = new URLSearchParams(window.location.search).get("indicacao");
     if (fromUrl) {
       setReferralCode(fromUrl.toUpperCase());
       setReferralSource("link");
     }
   }, []);
+
+  const handleKeyEvents = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    setCapsLockActive(e.getModifierState("CapsLock"));
+  };
 
   const maskCPF = (v: string) => {
     let r = v.replace(/\D/g, "");
@@ -77,8 +83,18 @@ export default function CadastroPage() {
         referral_code: referralCode.trim() || undefined,
         referral_source: referralCode.trim() ? referralSource : undefined,
       });
+      toast({
+        title: "Código enviado!",
+        description: `Enviamos o código de verificação para ${form.email.trim()}.`,
+      });
+      console.log("[Signup] Cadastro inicial enviado com sucesso para:", form.email.trim());
       setStep("otp");
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    } catch (e) {
+      const msg = (e as Error).message || "Erro ao registrar dados de cadastro.";
+      setErr(msg);
+      toast({ variant: "destructive", title: "Erro no cadastro", description: msg });
+      console.error("[Signup] Erro no envio de dados de cadastro:", e);
+    } finally { setBusy(false); }
   }
 
   async function submitOtp(e: React.FormEvent) {
@@ -87,20 +103,59 @@ export default function CadastroPage() {
     try {
       const { setup_token } = await authApi.verifyEmail(form.email.trim(), code.trim());
       setSetupToken(setup_token);
+      toast({
+        title: "E-mail verificado!",
+        description: "Defina sua senha para concluir.",
+      });
+      console.log("[Signup] OTP verificado com sucesso para:", form.email.trim());
       setStep("senha");
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    } catch (e) {
+      const msg = (e as Error).message || "Código inválido ou expirado.";
+      setErr(msg);
+      toast({ variant: "destructive", title: "Erro de verificação", description: msg });
+      console.error("[Signup] Erro na verificação do OTP:", e);
+    } finally { setBusy(false); }
   }
 
   async function submitSenha(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
-    if (password !== confirm) { setErr("As senhas não coincidem."); return; }
+    if (password !== confirm) {
+      const msg = "As senhas não coincidem.";
+      setErr(msg);
+      toast({ variant: "destructive", title: "Erro de validação", description: msg });
+      return;
+    }
     setBusy(true);
     try {
       const t = await authApi.setPassword(setupToken, password);
       await setSession(t);
+      toast({
+        title: "Cadastro concluído com sucesso!",
+        description: "Bem-vindo(a) ao ApostaInfo!",
+      });
+      console.log("[Signup] Senha definida e conta ativada para:", form.email.trim());
       router.push("/");
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    } catch (e) {
+      const msg = (e as Error).message || "Erro ao definir senha de cadastro.";
+      setErr(msg);
+      toast({ variant: "destructive", title: "Erro na criação da senha", description: msg });
+      console.error("[Signup] Erro ao definir senha no cadastro:", e);
+    } finally { setBusy(false); }
+  }
+
+  async function handleResendOtp() {
+    setErr(null);
+    try {
+      await authApi.resendOtp(form.email.trim());
+      toast({ title: "Código reenviado!", description: `Novo código enviado para ${form.email.trim()}` });
+      console.log("[Signup] OTP reenviado para:", form.email.trim());
+    } catch (e) {
+      const msg = (e as Error).message || "Erro ao reenviar código.";
+      setErr(msg);
+      toast({ variant: "destructive", title: "Erro ao reenviar", description: msg });
+      console.error("[Signup] Erro ao reenviar OTP:", e);
+    }
   }
 
   return (
@@ -168,7 +223,7 @@ export default function CadastroPage() {
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verificar"}
               </Button>
               <button type="button" className="text-sm text-muted-foreground hover:text-foreground w-full"
-                onClick={() => authApi.resendOtp(form.email.trim()).then(() => setErr(null)).catch((e) => setErr((e as Error).message))}>
+                onClick={handleResendOtp}>
                 Reenviar código
               </button>
             </form>
@@ -181,13 +236,48 @@ export default function CadastroPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="pw">Senha</Label>
-                <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  placeholder="mín. 8 caracteres, com letras e números" required autoComplete="new-password" />
+                <div className="relative">
+                  <Input
+                    id="pw"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handleKeyEvents}
+                    onKeyUp={handleKeyEvents}
+                    placeholder="mín. 8 caracteres, com letras e números"
+                    required
+                    autoComplete="new-password"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                    title={showPassword ? "Ocultar senha" : "Visualizar senha"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="pw2">Confirmar senha</Label>
-                <Input id="pw2" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required autoComplete="new-password" />
+                <Input
+                  id="pw2"
+                  type={showPassword ? "text" : "password"}
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  onKeyDown={handleKeyEvents}
+                  onKeyUp={handleKeyEvents}
+                  required
+                  autoComplete="new-password"
+                />
               </div>
+              {capsLockActive && (
+                <div className="flex items-center gap-1.5 text-xs text-amber-500 font-medium pt-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Caps Lock está ativado!
+                </div>
+              )}
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Concluir cadastro"}
               </Button>

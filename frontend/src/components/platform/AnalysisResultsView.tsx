@@ -76,7 +76,7 @@ export function SectionDivider({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-4 mt-8 mb-4">
       <div className="h-px flex-1 bg-gradient-to-r from-transparent to-border" />
-      <h3 className="text-lg font-heading font-bold uppercase tracking-wide whitespace-nowrap text-center">{children}</h3>
+      <h3 className="text-sm sm:text-base md:text-lg font-heading font-bold uppercase tracking-wide text-center px-1 flex-shrink">{children}</h3>
       <div className="h-px flex-1 bg-gradient-to-l from-transparent to-border" />
     </div>
   );
@@ -358,26 +358,26 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers, 
               )}
               <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(home)}</p>
               <p className="text-3xl font-bold font-mono text-emerald-400">{prediction.vencedor.probabilidades[home]}%</p>
-              <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center">
-                odd justa: {oddRangeStr(prediction.vencedor.probabilidades[home])}
+              <div className="text-[10px] text-muted-foreground mt-1.5 flex flex-col items-center gap-1">
+                <span>odd justa: {oddRangeStr(prediction.vencedor.probabilidades[home])}</span>
                 <BookmakerOddsBadge
                   label={`Resultado — Vitória de ${teamPt(home)}`}
                   entries={bmEntries(bookmakerOdds, "resultado", "Home")}
                   fairMin={prediction.odds?.vencedor?.[home]?.faixa_odd_justa?.min}
                 />
-              </p>
+              </div>
             </div>
             <div className="text-center w-[30%] min-w-[82px] border-x border-border/50">
               <p className="text-sm font-medium text-muted-foreground mb-1">Empate</p>
               <p className="text-2xl font-bold font-mono text-muted-foreground">{prediction.vencedor.probabilidades["Empate"]}%</p>
-              <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center">
-                odd justa: {oddRangeStr(prediction.vencedor.probabilidades["Empate"])}
+              <div className="text-[10px] text-muted-foreground mt-1.5 flex flex-col items-center gap-1">
+                <span>odd justa: {oddRangeStr(prediction.vencedor.probabilidades["Empate"])}</span>
                 <BookmakerOddsBadge
                   label="Resultado — Empate"
                   entries={bmEntries(bookmakerOdds, "resultado", "Draw")}
                   fairMin={prediction.odds?.vencedor?.["Empate"]?.faixa_odd_justa?.min}
                 />
-              </p>
+              </div>
             </div>
             <div className="text-center w-[30%] min-w-[82px]">
               {teamLogoUrl(teamIds[away]) && (
@@ -385,14 +385,14 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers, 
               )}
               <p className="text-sm font-medium text-foreground mb-1 truncate">{teamPt(away)}</p>
               <p className="text-3xl font-bold font-mono text-cyan-400">{prediction.vencedor.probabilidades[away]}%</p>
-              <p className="text-[10px] text-muted-foreground mt-1 flex items-center justify-center">
-                odd justa: {oddRangeStr(prediction.vencedor.probabilidades[away])}
+              <div className="text-[10px] text-muted-foreground mt-1.5 flex flex-col items-center gap-1">
+                <span>odd justa: {oddRangeStr(prediction.vencedor.probabilidades[away])}</span>
                 <BookmakerOddsBadge
                   label={`Resultado — Vitória de ${teamPt(away)}`}
                   entries={bmEntries(bookmakerOdds, "resultado", "Away")}
                   fairMin={prediction.odds?.vencedor?.[away]?.faixa_odd_justa?.min}
                 />
-              </p>
+              </div>
             </div>
           </div>
         </div>

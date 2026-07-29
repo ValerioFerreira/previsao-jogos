@@ -169,11 +169,41 @@ def main() -> int:
              for i in range(7)]
     check("429 aparece após o limite", 429 in codes, str(codes))
 
+    print("\n[8] conta de teste: reset manual de senha e invalidação de sessões")
+    from app.domains.admin.router import router as admin_router
+    from app.domains.admin import service as admin_service
+    from app.core import security
+    api.include_router(admin_router)
+    
+    # Criar um usuário admin para simular a chamada
+    db_session = SessionLocal()
+    admin_user = User(
+        full_name="Admin Teste", email="admin@teste.com", cpf="12345678901",
+        phone="11999999999", status="active", role="owner"
+    )
+    db_session.add(admin_user)
+    db_session.commit()
+    admin_token = security.create_access_token(str(admin_user.id), extra={"role": "owner"})
+    db_session.close()
+
+    r = client.post(
+        "/admin/test-account/reset-password",
+        json={"password": "NovaSenhaTeste123"},
+        headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    check("reset da conta de teste -> 200", r.status_code == 200, f"{r.status_code} {r.text[:180]}")
+    check("mensagem de sucesso devolvida", bool(r.status_code == 200 and "resetada com sucesso" in r.text))
+
+    # Verificar se o login com a nova senha funciona para teste@gmail.com
+    r_login = client.post("/auth/login", json={"email": "teste@gmail.com", "password": "NovaSenhaTeste123"})
+    check("login na conta de teste com nova senha -> 200", r_login.status_code == 200, f"{r_login.status_code} {r_login.text[:180]}")
+
     srv.shutdown()
     print("\n" + "=" * 56)
-    print("FALHAS: " + ", ".join(falhas) if falhas else "CADASTRO PONTA A PONTA: TUDO PASSOU")
+    print("FALHAS: " + ", ".join(falhas) if falhas else "CADASTRO E ADMIN: TUDO PASSOU")
     print("=" * 56)
     return 1 if falhas else 0
+
 
 
 if __name__ == "__main__":

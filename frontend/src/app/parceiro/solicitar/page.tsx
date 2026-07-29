@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import InfoTooltip from "@/components/platform/InfoTooltip";
+import { useToast } from "@/components/ui/use-toast";
+
 
 const DISCOUNT_TIERS = [5, 10, 15, 20, 25];
 const COMMISSION_BUDGET_PCT = 30;
@@ -41,6 +43,7 @@ function maskPhone(raw: string): string {
 }
 
 export default function SolicitarParceriaPage() {
+  const { toast } = useToast();
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -101,13 +104,26 @@ export default function SolicitarParceriaPage() {
         code_prefix: codePrefix.trim() || undefined,
         ref_partner: refPartner || undefined,
       });
+      toast({
+        title: "Solicitação enviada com sucesso!",
+        description: "Analisaremos sua proposta e entraremos em contato em breve.",
+      });
+      console.log("[Partner] Solicitação de parceria registrada para:", form.email.trim());
       setDone(true);
     } catch (e) {
-      setErr((e as Error).message);
+      const errorMsg = (e as Error).message || "Erro ao enviar solicitação de parceria.";
+      setErr(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Erro na solicitação",
+        description: errorMsg,
+      });
+      console.error("[Partner] Erro ao enviar proposta de parceria:", e);
     } finally {
       setBusy(false);
     }
   }
+
 
   if (done) {
     return (

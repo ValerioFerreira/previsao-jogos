@@ -4,7 +4,7 @@ import Link from 'next/link';
 export default function Footer() {
   return (
     <footer className="border-t border-border/50 bg-card/40 mt-auto backdrop-blur-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 space-y-2.5">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3.5 pb-24 md:pb-3.5 space-y-2.5">
         {/* Texto descritivo mais longo no topo */}
         <p className="text-[10.5px] text-muted-foreground/60 leading-relaxed text-justify italic">
           Esta plataforma é uma ferramenta de análise quantitativa e inteligência preditiva. Projeções são estimativas baseadas em modelos matemáticos e não constituem garantia de resultados. O mercado esportivo envolve risco de capital. Utilize a inteligência estatística de forma consciente.
@@ -12,7 +12,7 @@ export default function Footer() {
 
         {/* Linha única abaixo: Aviso do ministério à esquerda e Termos/Créditos à direita */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2 border-t border-border/20 text-xs">
-          <p className="text-[10.5px] sm:text-[11px] font-semibold text-amber-400/90 tracking-wide uppercase bg-amber-500/10 border border-amber-500/20 py-1 px-3 rounded-lg shadow-sm">
+          <p className="text-[10.5px] sm:text-[11px] font-semibold text-amber-400/90 tracking-wide uppercase bg-amber-500/10 border border-amber-500/20 py-1.5 px-3 rounded-lg shadow-sm text-center w-full sm:w-auto">
             ⚠️ Ministério da Fazenda adverte: aposta não é investimento
           </p>
 

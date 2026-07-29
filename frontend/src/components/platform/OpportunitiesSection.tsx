@@ -140,6 +140,7 @@ export default function OpportunitiesSection({ prediction, home, away, fixtureId
   const [bookmakerOdds, setBookmakerOdds] = useState<BookmakerOddsResponse | null>(null);
   const [selectedMarket, setSelectedMarket] = useState<string>("Todos os Mercados");
   const [selectedHouse, setSelectedHouse] = useState<string>("Todas as Casas");
+  const [evExpanded, setEvExpanded] = useState(false);
 
   useEffect(() => {
     if (!fixtureId) { setBookmakerOdds(null); return; }
@@ -190,31 +191,31 @@ export default function OpportunitiesSection({ prediction, home, away, fixtureId
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4 mt-8 mb-4">
+      <div className="flex items-center gap-3 mt-8 mb-4">
         <div className="h-px flex-1 bg-gradient-to-r from-transparent to-emerald-500/40" />
-        <h3 className="text-lg font-heading font-bold uppercase tracking-wide whitespace-nowrap text-center text-emerald-400 flex items-center gap-2">
-          <Sparkles className="w-5 h-5" />
-          Oportunidades Encontradas
+        <h3 className="text-sm sm:text-base md:text-lg font-heading font-bold uppercase tracking-wide text-center text-emerald-400 flex items-center justify-center gap-2 px-1">
+          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+          <span>Oportunidades Encontradas</span>
         </h3>
         <div className="h-px flex-1 bg-gradient-to-l from-transparent to-emerald-500/40" />
       </div>
 
       <div className="bg-card border border-emerald-500/30 rounded-xl p-4 sm:p-5 shadow-sm space-y-4">
         {/* BARRA DE FILTROS */}
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-border/50 bg-muted/20">
-          <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+        <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-border/50 bg-muted/20">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground shrink-0">
             <Filter className="w-3.5 h-3.5 text-emerald-400" />
             <span>Filtros:</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             {/* Filtro de Mercado */}
             <select
               value={selectedMarket}
               onChange={(e) => setSelectedMarket(e.target.value)}
-              className="h-8 text-xs rounded-lg border border-emerald-500/30 bg-muted/60 px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+              className="h-8 text-xs rounded-lg border border-emerald-500/30 bg-muted/60 px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium max-w-[110px] sm:max-w-none truncate"
             >
-              <option value="Todos os Mercados">Todos os Mercados</option>
+              <option value="Todos os Mercados">Mercados</option>
               <option value="Resultado">Resultado</option>
               <option value="Gols">Gols</option>
               <option value="Ambas Marcam">Ambas Marcam</option>
@@ -226,10 +227,10 @@ export default function OpportunitiesSection({ prediction, home, away, fixtureId
             <select
               value={selectedHouse}
               onChange={(e) => setSelectedHouse(e.target.value)}
-              className="h-8 text-xs rounded-lg border border-emerald-500/30 bg-muted/60 px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+              className="h-8 text-xs rounded-lg border border-emerald-500/30 bg-muted/60 px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium max-w-[90px] sm:max-w-none truncate"
             >
               {houseOptions.map(h => (
-                <option key={h} value={h}>{h}</option>
+                <option key={h} value={h}>{h === "Todas as Casas" ? "Casas" : h}</option>
               ))}
             </select>
           </div>
@@ -299,14 +300,24 @@ export default function OpportunitiesSection({ prediction, home, away, fixtureId
           </p>
         )}
 
-        <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/40">
-          <strong className="text-foreground">O que é EV (valor esperado)?</strong> Quando a odd oferecida por
-          uma casa paga mais do que a probabilidade real segundo o nosso modelo sugere, a aposta é
-          matematicamente favorável no longo prazo — mas isso{" "}
-          <strong className="text-foreground">não garante lucro em uma aposta individual</strong>. A
-          probabilidade usada é uma <strong className="text-foreground">estimativa</strong> do modelo, não uma
-          certeza. Jogue com responsabilidade.
-        </p>
+        <div className="border-t border-border/40 pt-2 text-xs">
+          <button
+            type="button"
+            onClick={() => setEvExpanded(!evExpanded)}
+            className="flex items-center gap-1.5 font-semibold text-foreground hover:text-emerald-400 transition-colors focus:outline-none"
+          >
+            <span className="inline-flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-[9px] w-4 h-4 rounded-full shrink-0">i</span>
+            <span>O que é EV (valor esperado)?</span>
+            <span className="text-[10px] text-muted-foreground font-normal">
+              {evExpanded ? "(recolher)" : "(ler mais)"}
+            </span>
+          </button>
+          {evExpanded && (
+            <p className="text-muted-foreground leading-relaxed mt-2 pl-6">
+              Quando a odd oferecida por uma casa paga mais do que a probabilidade real segundo o nosso modelo sugere, a aposta é matematicamente favorável no longo prazo — mas isso <strong className="text-foreground">não garante lucro em uma aposta individual</strong>. A probabilidade usada é uma <strong className="text-foreground">estimativa</strong> do modelo, não uma certeza. Jogue com responsabilidade.
+            </p>
+          )}
+        </div>
 
         <p className="mt-2 text-[11px] text-muted-foreground flex items-start gap-1.5 pt-2 border-t border-border/40">
           <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />

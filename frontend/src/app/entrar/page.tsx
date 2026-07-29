@@ -2,19 +2,23 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, LogIn } from "lucide-react";
+import { Loader2, LogIn, Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { authApi } from "@/lib/authApi";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function LoginPage() {
   const { isAuthenticated, user, setSession } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockActive, setCapsLockActive] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(false);
@@ -24,6 +28,10 @@ export default function LoginPage() {
     if (isAuthenticated) router.replace(user?.role === "partner" ? "/parceiro/dashboard" : "/");
   }, [isAuthenticated, user, router]);
 
+  const handleKeyEvents = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    setCapsLockActive(e.getModifierState("CapsLock"));
+  };
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
@@ -31,9 +39,21 @@ export default function LoginPage() {
     try {
       const t = await authApi.login(email.trim(), password);
       await setSession(t);
+      toast({
+        title: "Login realizado com sucesso!",
+        description: `Bem-vindo(a) de volta, ${t.user.full_name}!`,
+      });
+      console.log("[Auth] Login bem-sucedido para:", email);
       router.push(t.user.role === "partner" ? "/parceiro/dashboard" : "/");
     } catch (e) {
-      setErr((e as Error).message || "Não foi possível entrar.");
+      const errorMsg = (e as Error).message || "Não foi possível entrar.";
+      setErr(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Falha no login",
+        description: errorMsg,
+      });
+      console.error("[Auth] Erro ao efetuar login:", e);
     } finally {
       setBusy(false);
     }
@@ -45,9 +65,22 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await authApi.forgotPassword(email.trim());
-      setMsg("Se o e-mail existir, enviamos um código para redefinir a senha.");
+      const successMsg = "Se o e-mail existir, enviamos um código para redefinir a senha.";
+      setMsg(successMsg);
+      toast({
+        title: "Código enviado",
+        description: successMsg,
+      });
+      console.log("[Auth] Solicitação de redefinição enviada para:", email);
     } catch (e) {
-      setErr((e as Error).message);
+      const errorMsg = (e as Error).message || "Erro ao solicitar redefinição.";
+      setErr(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Erro ao enviar código",
+        description: errorMsg,
+      });
+      console.error("[Auth] Erro ao enviar código de recuperação:", e);
     } finally {
       setBusy(false);
     }
@@ -94,7 +127,33 @@ export default function LoginPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="password">Senha</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handleKeyEvents}
+                    onKeyUp={handleKeyEvents}
+                    required
+                    autoComplete="current-password"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                    title={showPassword ? "Ocultar senha" : "Visualizar senha"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {capsLockActive && (
+                  <div className="flex items-center gap-1.5 text-xs text-amber-500 font-medium pt-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Caps Lock está ativado!
+                  </div>
+                )}
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (<><LogIn className="w-4 h-4 mr-2" /> Entrar</>)}

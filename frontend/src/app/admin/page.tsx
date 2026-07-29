@@ -14,7 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/use-toast";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
+
 
 function fmt(d: string) { return new Date(d).toLocaleString("pt-BR"); }
 
@@ -155,12 +157,18 @@ function PartnerRevenueChart({ items }: { items: Record<string, unknown>[] }) {
 
 export default function AdminPage() {
   const { user, loading } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   const isOwner = user && (user.role === "owner" || user.email === "valerioeducfin@gmail.com");
   const isManager = user && user.role === "manager";
   const isAdmin = isOwner || isManager;
 
+  const [testPassword, setTestPassword] = useState("");
+  const [testAccountBusy, setTestAccountBusy] = useState(false);
+  const [testAccountMsg, setTestAccountMsg] = useState<string | null>(null);
+
   const [users, setUsers] = useState<AdminUser[]>([]);
+
   const [q, setQ] = useState("");
   const [payments, setPayments] = useState<Record<string, unknown>[]>([]);
   const [promos, setPromos] = useState<Record<string, unknown>[]>([]);
@@ -473,8 +481,62 @@ export default function AdminPage() {
   }
 
   async function resendInvite(a: Record<string, unknown>) {
-    try { await adminApi.resendAffiliateInvite(String(a.id)); await loadAffiliates(); } catch (e) { setErr((e as Error).message); }
+    try {
+      await adminApi.resendAffiliateInvite(String(a.id));
+      const targetContact = String(a.contact_email || a.name || "");
+      toast({
+        title: "Convite reenviado com sucesso!",
+        description: `Um novo e-mail com link de ativação válido foi enviado para ${targetContact}.`,
+      });
+      console.log(`[Admin] Convite de parceiro reenviado para affiliate_id=${a.id}, email=${targetContact}`);
+      await loadAffiliates();
+    } catch (e) {
+      const errMsg = (e as Error).message || "Erro ao reenviar convite.";
+      setErr(errMsg);
+      toast({
+        variant: "destructive",
+        title: "Erro ao reenviar convite",
+        description: errMsg,
+      });
+      console.error(`[Admin] Erro ao reenviar convite para affiliate_id=${a.id}:`, e);
+    }
   }
+
+  async function resetTestAccount(e: React.FormEvent) {
+    e.preventDefault();
+    if (!testPassword || testPassword.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "Senha inválida",
+        description: "A senha deve ter no mínimo 6 caracteres.",
+      });
+      return;
+    }
+    setTestAccountBusy(true);
+    setTestAccountMsg(null);
+    try {
+      const res = await adminApi.resetTestAccountPassword(testPassword);
+      setTestAccountMsg(res.message);
+      setTestPassword("");
+      toast({
+        title: "Senha da Conta de Teste Resetada!",
+        description: res.message,
+      });
+      console.log("[Admin] Reset da conta de teste realizado:", res);
+    } catch (err) {
+      const errMsg = (err as Error).message || "Falha ao resetar a senha da conta de teste.";
+      setErr(errMsg);
+      toast({
+        variant: "destructive",
+        title: "Erro ao resetar conta de teste",
+        description: errMsg,
+      });
+      console.error("[Admin] Erro no reset da conta de teste:", err);
+    } finally {
+      setTestAccountBusy(false);
+    }
+  }
+
 
   async function toggleDemoAccess(a: Record<string, unknown>) {
     try { await adminApi.setAffiliateDemoAccess(String(a.id), !a.demo_access_enabled); await loadAffiliates(); } catch (e) { setErr((e as Error).message); }
@@ -1611,8 +1673,47 @@ export default function AdminPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Gerenciar Conta de Teste */}
+            <Card className="mt-6 border-amber-500/30 bg-amber-500/5">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-amber-500" />
+                  Gerenciar Conta de Teste (teste@gmail.com)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Altere manualmente a senha da conta de teste (<strong>teste@gmail.com</strong>). A nova senha será salva imediatamente e <strong>todas as sessões ativas desta conta serão revogadas (deslogando todos os usuários conectados a ela)</strong>.
+                </p>
+                {testAccountMsg && (
+                  <div className="p-3 text-xs rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                    {testAccountMsg}
+                  </div>
+                )}
+                <form onSubmit={resetTestAccount} className="flex flex-wrap gap-3 items-end max-w-lg">
+                  <div className="flex-1 min-w-[200px] space-y-1.5">
+                    <Label htmlFor="test-account-pass">Nova Senha</Label>
+                    <Input
+                      id="test-account-pass"
+                      type="password"
+                      placeholder="Digite a nova senha..."
+                      value={testPassword}
+                      onChange={(e) => setTestPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <Button type="submit" variant="default" disabled={testAccountBusy} className="bg-amber-600 hover:bg-amber-700 text-white">
+                    {testAccountBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Resetar Senha e Deslogar Todos
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           </TabsContent>
         )}
+
 
         {/* ---------------- Análise Aprofundada ---------------- */}
         <TabsContent value="deep">

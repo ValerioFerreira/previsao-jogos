@@ -147,4 +147,11 @@ export const adminApi = {
 
   publishLegal: (body: { type: string; title: string; body_md: string }) =>
     authFetch("/admin/legal/publish", { method: "POST", body: JSON.stringify(body) }),
+
+  resetTestAccountPassword: (password: string) =>
+    authFetch<{ ok: boolean; message: string }>("/admin/test-account/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
 };
+

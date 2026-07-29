@@ -104,20 +104,16 @@ export function HandicapsCard({ d, home, away, teamIds }: DProps & { teamIds: Re
               )}
             </div>
             {/* Cabeçalho das colunas */}
-            <div className="flex items-center justify-between text-[9px] uppercase tracking-wide text-muted-foreground/80 pb-1 border-b border-border/40">
-              <span>Linha</span>
-              <span className="flex items-baseline gap-1.5 shrink-0">
-                <span>Probabilidade</span>
-                <span>Odd Justa</span>
-              </span>
+            <div className="grid grid-cols-[1.2fr_1fr_1fr] text-[9px] uppercase tracking-wide text-muted-foreground/80 pb-1 border-b border-border/40 text-right">
+              <span className="text-left">Linha</span>
+              <span>Prob.</span>
+              <span>Odd Justa</span>
             </div>
             {lines(team).map(({ key, label, o }) => (
-              <div key={key} className="flex items-center justify-between text-xs py-1 border-t border-border/20">
-                <span className="text-muted-foreground">{label}</span>
-                <span className="flex items-baseline gap-1.5 shrink-0">
-                  <span className="font-mono font-bold text-emerald-400">{o ? `${o.prob.toFixed(1)}%` : "—"}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">{o ? o.odd_justa.toFixed(2) : ""}</span>
-                </span>
+              <div key={key} className="grid grid-cols-[1.2fr_1fr_1fr] text-xs py-1 border-t border-border/20 text-right items-center">
+                <span className="text-left text-muted-foreground">{label}</span>
+                <span className="font-mono font-bold text-emerald-400">{o ? `${o.prob.toFixed(1)}%` : "—"}</span>
+                <span className="font-mono text-[10px] text-muted-foreground">{o ? o.odd_justa.toFixed(2) : ""}</span>
               </div>
             ))}
           </div>

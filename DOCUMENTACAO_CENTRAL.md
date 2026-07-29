@@ -1547,3 +1547,215 @@ seção de oportunidades listou linhas reais com EV>0.
 janela de retenção de 1-14 dias já processados manualmente durante o teste); o cron de produção
 (a cada ~3h) povoa as tabelas novas prospectivamente a partir do próximo deploy — sem retrofit
 retroativo possível (dado por-casa nunca foi persistido antes desta sessão).
+
+## 23. [RETIRADO] Bateria de Experimentos: Hipóteses A, B e C (v1, 2026-07-27) — ver §24
+
+A versão original desta seção (escrita em 2026-07-27, nunca commitada) foi **retirada em
+2026-07-28** após revisão crítica. Motivo: `scripts/hypothesis_testing_suite.py` não usava o
+`Predictor` de produção (usava um sigmoid ad-hoc sobre média de gols, sem Elo/GAP/calibração) e
+gerava odds 100% sintéticas a partir da própria probabilidade do modelo (`odd = (1/p_model) *
+multiplicador_fixo`) — circular por construção, então o "alfa" aparecia garantido
+independentemente de qualquer edge real. Rodava também in-sample sobre uma base
+(`club_features_enriched.parquet`, 21.130 jogos/4 torneios) inconsistente com a produção atual
+(272.918 jogos/72 torneios), sem CV temporal (violando o gate §6), e a tabela por competição não
+tinha piso de amostra (linhas de n=1 reportando 100% de acerto). Os números que estavam registrados
+aqui (§23.1-23.3) também não batiam com os CSVs que o próprio script gerou (ex.: doc dizia Premier
+League ROI +16.96%, CSV real do script dizia +2.34%) — divergência nunca explicada.
+
+**Contradição não sinalizada na época**: esta bateria concluía "alfa garantido"/edge positivo,
+contradizendo diretamente a bateria de valor/CLV já registrada em §20 (dados reais, 8117 fixtures,
+bootstrap 20k + correção Bonferroni/BH-FDR), que concluiu **sem edge robusto em nenhuma linha
+testada**. Ninguém comparou os dois antes de promover §23 ao doc-mestre.
+
+`docs/RELATORIO_HIPOTESES_A_B_C.md` (v1) e `scripts/hypothesis_testing_suite.py` foram mantidos no
+repo com aviso de descarte (rastreabilidade), não apagados. Reexecução honesta (modelo de produção
+via `Predictor.predict_from_row`, odds reais de `data-test/*.csv`, split point-in-time via modelo
+congelado) registrada em **§24**.
+
+## 24. Hipóteses A, B e C (v2, honesta) — modelo de produção real + odds reais (2026-07-28)
+
+Reexecução completa das Hipóteses A/B/C do §23, desta vez com o `Predictor` de produção real
+(`predict_from_row`, artefato congelado `model_artifacts_clubes_2025frozen/`, cutoff
+2025-07-01, sem vazamento) e odds 100% reais (`data-test/*.csv`, football-data.co.uk) — nada
+fabricado. Relatório completo em `docs/RELATORIO_HIPOTESES_A_B_C_v2.md`.
+
+### 24.1 Escopo real (limitação a comunicar, não esconder)
+
+Esta máquina só tem 4 competições de clube no espelho local (`data/club_raw_cache.sqlite`:
+Brasileirão A/B, Premier League, Champions League — 21.130 jogos), não as 83 competições/272.918
+jogos do artefato de produção atual (retreinado em outra máquina, 2026-07-22, §19.8). O modelo
+congelado desta rodada foi treinado só nessas 4 ligas (19.574 jogos pré-corte). Das 4, só
+**Premier League** (380/380) e **Brasileirão Série A** (342/380) têm odds reais em `data-test/`.
+**N final: 722 partidas reais, temporada 2025/26.** Backfill das competições faltantes
+(`mirror_club_cache.py`) iniciado em 2026-07-28 — ver §24.5.
+
+### 24.2 Hipótese A — Alfa de cotação (real, robusto)
+
+Comparar a melhor odd real (`Max`) vs a pior odd individual real disponível, no pick do modelo:
+**Alfa = +7.70%** IC95%[+6.46%,+9.04%] no 1x2 (N=722) e **+2.65%** IC95%[+2.26%,+3.05%] no O/U
+2.5 (N=380, Premier League). Todos os recortes excluem zero — é dispersão estrutural de mercado,
+estatisticamente sólida. **Não é vantagem do modelo**, é vantagem de comparar casas (mensagem
+defensável: "escolher a melhor cotação reduz a perda esperada", não "dá lucro" — o ROI segue
+negativo na melhor casa em 3 dos 4 recortes).
+
+### 24.3 Hipótese B — Modelo vs 3 perfis de apostador (sem edge robusto)
+
+Perfis pedidos originalmente (favoritista, emocional-por-gols = sempre Over 2.5 já que BTTS não
+existe em `data-test`, faixa de odd 1.70-2.20) comparados ao pick do modelo, mesma fonte de
+preço (`book="Avg"`) pra isolar seleção de comparação de casas. Bootstrap + Bonferroni/BH-FDR.
+
+**Correção de enquadramento (mesma data, ver §25)**: a leitura inicial testou os ROIs contra
+**zero**, que é o benchmark errado. Com vig de 6.05%, o ROI esperado de qualquer apostador sem
+vantagem é **−5.71%**. Contra esse benchmark, o ROI agregado do modelo (−5.85%) fica a
+**−0.04σ** — aderência quase perfeita à expectativa de "sem edge", nem bom nem ruim. Os
+extremos (Premier League −12.95% = −1.52σ; Brasileirão +2.04% = +1.42σ) ficam dentro do ruído
+nos dois sentidos. **Nada aqui é estatisticamente conclusivo**: detectar edge de 2% exigiria
+~20.100 apostas e temos 722. **Corrobora §20 ("sem edge robusto"), não contradiz** — ao
+contrário do §23 (v1, retirado). Não usar para claim de "modelo bate apostador comum".
+
+### 24.4 Hipótese C — Desagregação por liga/ano (piso N≥100, sem linha de N=1)
+
+Por liga: Brasileirão +2.04% IC95%[−9.06%,+13.03%]; Premier League −12.95%
+IC95%[−22.69%,−3.09%] (exclui zero, mas **não** exclui o benchmark de −5.37% dessa liga —
+ver §25). Por ano: como só há uma temporada real disponível
+(2025/26), a "desagregação por ano" é essa mesma temporada cortada pelo calendário civil (2025:
+N=528, ROI −0.17%, inclui 0; 2026: N=194, ROI −21.29%, exclui 0) — **não é teste de consistência
+multi-temporada** como o §23 (v1) fabricou ("10 de 11 anos lucrativos, 2010-2026").
+
+### 24.5 Pendências
+
+- `mirror_club_cache.py` (backfill das ~79 competições faltantes) bloqueado nesta máquina por
+  falta de credenciais: precisava de `APIFOOTBALL_KEY` (copiada de `.env` da raiz pra
+  `backend/.env` nesta sessão — cota OK, 67.530/75.000 restantes, assinatura válida até
+  2026-08-19) **e** de `DATABASE_URL` real do Neon (aqui `backend/.env` só tem
+  `sqlite:///./dev_verify.db`, um stand-in local de dev sem a tabela `club_match_detail_cache`)
+  — aguardando o dono adicionar a connection string real.
+- Assim que o backfill terminar: rerodar `build_clubs_dataset.py --stage all` →
+  `backtest_train_frozen_model.py --cutoff 2025-07-01` → `backtest_odds_ingest.py` →
+  `backtest_match_games.py` → `backtest_generate_predictions.py` → os 3 scripts
+  `adhoc_hipotese_{a,b,c}_*.py` — mesma cadeia desta rodada, só com a base completa (72
+  torneios), que deve ampliar bastante o N de todas as três hipóteses (mais ligas cobertas por
+  `data-test/`, incluindo ligas continentais se houver fonte equivalente).
+
+## 25. Diagnóstico modelo × mercado — o benchmark correto, o vig e o poder estatístico (2026-07-28)
+
+Gerado por `backend/scripts/adhoc_diagnostico_modelo_vs_mercado.py` sobre as mesmas 722 partidas
+do §24, comparando a probabilidade do modelo com a **probabilidade do próprio mercado de-vigada**
+(Shin, `devig_methods.py`). Saída em `data/reports/diagnostico_modelo_vs_mercado.csv`.
+**Esta seção reenquadra §19, §20 e §24 — leia antes de propor qualquer hipótese de valor/EV.**
+
+### 25.1 O benchmark não é zero — é o vig
+
+Vig (overround) médio das odds: **6.05%**. Logo o ROI esperado de *qualquer* apostador sem
+vantagem nenhuma é **−5.71%**. Comparar ROI contra zero (erro cometido na 1ª leitura do §24)
+faz um modelo perfeitamente são parecer quebrado.
+
+| Recorte | ROI observado | ROI esperado s/ edge | Distância |
+|---|---:|---:|---:|
+| Pooled (722) | −5.85% | −5.71% | **−0.04σ** |
+| Brasileirão A (342) | +2.04% | −6.08% | +1.42σ |
+| Premier League (380) | −12.95% | −5.37% | −1.52σ |
+
+O agregado está a **quatro centésimos de desvio-padrão** da teoria. Não é resultado ruim — é
+resultado *na expectativa*, com aderência quase desconfortável.
+
+### 25.2 O modelo não está quebrado: captura ~76% da informação do mercado
+
+| | log-loss | Brier | ECE | Acurácia |
+|---|---:|---:|---:|---:|
+| Nosso modelo | 1.0219 | 0.6137 | 0.0199 | 49.6% |
+| Mercado (de-vig Shin) | 0.9975 | 0.5988 | 0.0167 | 50.6% |
+
+Referência: chute uniforme = ln(3) = 1.0986. O mercado ganha 0.1011 sobre o uniforme; nós
+ganhamos 0.0767 → **capturamos ~76% da informação que o mercado inteiro precifica**. ECE de
+0.0199 confirma modelo **bem calibrado** (sem bug de calibração). Coerente com §21 (ganhamos do
+`/predictions` da API-Football em 26/26 competições): somos bons *entre modelos*; o mercado é o
+agregador mais eficiente que existe e continua à frente. **Para lucrar não basta ser bom — é
+preciso ser melhor que o mercado por mais que o vig.**
+
+### 25.3 Poder estatístico: as baterias anteriores eram subdimensionadas
+
+- Detectar edge de **2%** com 80% de poder: **N ≈ 20.100 apostas**. Temos 722 (§24) / 8.117 (§20).
+- Detectar edge de **5%**: N ≈ 3.216.
+
+**Nenhuma conclusão de §24 (B e C) tinha poder para ser conclusiva em qualquer direção.** O
+gargalo do projeto é **dado**, não modelagem — refinar método com N desta ordem é desperdício.
+
+### 25.4 Achado novo: eficiência de mercado difere por liga (hipótese aberta)
+
+| Liga | % da informação do mercado capturada | Acurácia modelo vs mercado |
+|---|---:|---|
+| Brasileirão Série A | **85%** | 52.0% vs 51.8% — **modelo ganha** |
+| Premier League | **65%** | 47.4% vs 49.5% — mercado ganha |
+
+Hipótese (não confirmada — N=342/380, pode ser ruído): a Premier League é o mercado mais
+eficientemente precificado do futebol; ligas com menos atenção quantitativa internacional
+(Brasileirão, séries inferiores, ligas menores) são onde uma vantagem informacional local teria
+mais chance de existir. **Se há edge em algum lugar, não é onde estávamos olhando.** Testável
+assim que o backfill de competições (§24.5) e as temporadas históricas ampliarem a base.
+
+### 25.5 Consequências práticas
+
+1. **Métrica primária passa a ser CLV** (closing line value), não ROI: converge com N muito
+   menor. Bloqueado hoje porque o histórico de odds não é persistido (só o snapshot mais recente
+   vai pro Neon e os `.jsonl` do Render são efêmeros) — é o fix nº1 da migração pro WorkDrive (§26).
+2. **Mensagem comercial defensável** é a do §24.2 (alfa de comparar casas, robusto) e a que já
+   está no ar em `/desempenho` ("o modelo perde menos"), **não** promessa de lucro.
+3. **Três baterias independentes (§19, §20, §25) convergem**: bater o mercado provavelmente não é
+   o negócio. O negócio é o usuário perder menos, decidir melhor e pagar menos vig.
+
+## 26. Zoho WorkDrive como repositório oficial de dados (2026-07-28)
+
+Decisão do dono: **o WorkDrive passa a ser a fonte da verdade de todos os dados**; no Neon fica
+só o que precisa de query em runtime. Motivador concreto: nesta sessão o backfill de 83
+competições ficou inacessível porque o dado existia **só em outra máquina**, o
+`club_features_enriched.parquet` local divergia da produção (21k/4 torneios vs 273k/72), e o
+histórico de odds do Render é efêmero (impede medir CLV, §25.5).
+
+### 26.1 Regra de ouro
+
+**Nenhum dado pode ter sua ÚNICA cópia numa máquina local.** O diretório local é cache derivado
+e descartável: apagar `backend/data/` e rodar `datastore_sync pull` deve restaurar tudo.
+WorkDrive é armazenamento de **arquivos** — não dá `SELECT` nele; dado que precisa de query em
+runtime continua no Neon.
+
+### 26.2 Arquitetura (3 camadas)
+
+- **WorkDrive** — raw caches, datasets de treino, `data-test/`, histórico de snapshots de odds,
+  artefatos (todas as versões), relatórios, `historico_completo.json`.
+- **Neon** — usuário/monetização, agregados `*_agg`, `odds_bookmaker_latest`/`*_registry`.
+  Blobs (`match_detail_cache`, `club_match_detail_cache`) devem **migrar** pro WorkDrive.
+- **Cache local** — efêmero, gitignored, regenerável.
+
+**Artefatos de produção: modo híbrido** (decisão explícita do dono). `model_artifacts{,_clubes}/`
+(120 MB) **continuam no git** — deploy sem dependência externa e boot rápido — **e** são
+espelhados no WorkDrive como fonte da verdade/versionamento. Evita que uma indisponibilidade do
+WorkDrive derrube um deploy de produção.
+
+### 26.3 Implementação
+
+- `backend/app/core/datastore.py` — `DataStore` (Protocol) + `LocalStore` + `WorkDriveStore` +
+  `get_datastore()`, trocável por `DATA_STORE=local|workdrive`. Mesmo padrão dos adapters de
+  pagamento/nota fiscal (nunca hardcode o provedor num domínio). `fetch()` é a função que
+  scripts/serviços devem usar no lugar de caminho hardcoded.
+- `data/MANIFEST.yaml` — registro declarado de cada dataset (caminho, camada, dono, cadência,
+  se é crítico em runtime). **Todo dado novo deve ser registrado aqui.**
+- `backend/scripts/datastore_sync.py` — `status` / `push` / `pull` / `verify`, incremental por
+  sha256 (`backend/data/.datastore_state.json`). `verify` consulta o **remoto de verdade**, não o
+  estado local — é o que faz cumprir a regra de ouro.
+
+**Estado atual (2026-07-28)**: validado ponta a ponta com `DATA_STORE=local` (push incremental,
+pull preservando subpastas, verify). Dois bugs reais pegos no teste e corrigidos: o `pull`
+achatava `reports/performance/x.json` em `reports/x.json`, e o `verify` confiava no estado local
+(daria "tudo certo" falso com remoto vazio). `verify` hoje acusa **952 MB / 119 arquivos** com
+cópia única em máquina local.
+
+### 26.4 Pendente — credenciais do WorkDrive
+
+Faltam (criar em `api-console.zoho.com`, colocar em `backend/.env`): `ZOHO_CLIENT_ID`,
+`ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_WORKDRIVE_FOLDER_ID`. **Atenção ao data
+center** — contas UE/Índia/Austrália usam domínios distintos (`.eu`, `.in`, `.com.au`) em
+`ZOHO_ACCOUNTS_BASE`/`ZOHO_WORKDRIVE_BASE`; é a mesma pegadinha já documentada no ZeptoMail.
+Com as chaves no lugar, o único passo é `DATA_STORE=workdrive python -m scripts.datastore_sync push`.
+
+

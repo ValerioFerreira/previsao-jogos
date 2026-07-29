@@ -266,3 +266,8 @@ class SharedAnalysisRequest(BaseModel):
 class OkResponse(BaseModel):
     ok: bool = True
     detail: str | None = None
+
+
+class TestAccountResetRequest(BaseModel):
+    password: str = Field(min_length=6, max_length=128)
+

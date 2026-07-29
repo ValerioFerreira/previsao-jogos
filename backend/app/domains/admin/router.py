@@ -445,3 +445,11 @@ def delete_shared_analysis(shared_id: str, request: Request,
 def audit_log(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
               _: User = Depends(require_owner), db: Session = Depends(get_db)):
     return service.list_audit(db, limit, offset)
+
+
+# ---------- conta de teste ----------
+@router.post("/test-account/reset-password")
+def reset_test_account_password(data: schemas.TestAccountResetRequest, request: Request,
+                                admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.reset_test_account_password(db, admin, data.password, client_ip(request))
+

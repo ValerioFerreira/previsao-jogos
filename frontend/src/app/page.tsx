@@ -837,7 +837,7 @@ export default function Previsoes() {
             <SectionDivider>MONTE SUA SELEÇÃO</SectionDivider>
             {analysis?.type === 'future_match' && !analysis?.is_free ? (
               <div className="max-w-3xl mx-auto mb-2">
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 mb-4 text-sm text-muted-foreground leading-relaxed">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 mb-4 text-sm text-muted-foreground leading-relaxed text-justify">
                   <p className="mb-2">
                     <b className="text-foreground">Oferta ParcerIA</b><br />
                     Você utilizou um crédito de análise para uma partida agendada (<b className="text-foreground">{teamPt(homeTeamId)} x {teamPt(awayTeamId)}</b> - {fmtMatchDateTime(matchDate)}).

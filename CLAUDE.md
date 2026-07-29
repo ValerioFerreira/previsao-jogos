@@ -94,6 +94,10 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   mas a **exibição ao cliente é sob demanda** (`invoice_requested_at` +
   `POST /payments/orders/{id}/request-invoice` + botão "Solicitar nota fiscal" na Carteira).
 - `app/core/{config,email,startup,security,rate_limit}.py` — config/JWT/OTP/e-mail/guarda de boot.
+- `app/core/datastore.py` — **camada de dados (2026-07-28, §26)**. `DataStore` Protocol +
+  `LocalStore`/`WorkDriveStore` + `get_datastore()`, trocável por `DATA_STORE=local|workdrive`
+  (mesmo padrão dos adapters de pagamento). `fetch(logical_path)` resolve do cache ou baixa.
+  Registro dos dados em `data/MANIFEST.yaml`; CLI em `scripts/datastore_sync.py`.
 - `app/db/connection.py` — engine SQLAlchemy (Neon) + `truncate_and_append`.
 - `model_artifacts/*.joblib` — modelos em produção (DC, NB/GP, `scorer_model`, `shots_prop_model`, calibradores).
   Opcionais (ausência = mercado não exposto, `Predictor.__init__` checa `os.path.exists`):
@@ -125,6 +129,15 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   partir do `home_elo_pre`/`away_elo_pre` já presente no dataset de treino; sem custo de API).
 - **Experimentos/testes (gate §6):** `exp6..15_*.py`, `test_player_cards.py`, `test_player_fouls.py`,
   `promotion_validation.py`, etc. **Resultados registrados em `DOCUMENTACAO_CENTRAL.md` §8/§9.**
+- **Backtest honesto com odds reais (§24/§25, 2026-07-28)** — cadeia nesta ordem:
+  `backtest_odds_ingest.py` (lê `data-test/`) → `backtest_match_games.py` →
+  `backtest_train_frozen_model.py --cutoff DATA` (modelo congelado, nunca sobrescreve produção) →
+  `backtest_generate_predictions.py` (usa `Predictor.predict_from_row`, point-in-time) →
+  `adhoc_hipotese_{a,b,c}_*.py` (alfa de cotação / perfis de apostador / desagregação) e
+  `adhoc_diagnostico_modelo_vs_mercado.py` (**rode este primeiro numa análise de valor**: dá o
+  vig, o benchmark correto e o poder estatístico — evita comparar ROI contra zero).
+  `fetch_historical_odds.py` amplia `data-test/` com temporadas antigas (ver §25.3).
+- **Dados:** `datastore_sync.py` (`status`/`push`/`pull`/`verify`) — sincroniza com o WorkDrive.
 - **Pesquisa de clubes (`clubs_*.py` + `/backend/research_clubs/`):** protocolo único, ratings da
   literatura, modelos estatísticos/GBM/state-space/ensemble/deep tabular. Ver `DOCUMENTACAO_CENTRAL.md
   §13` e `backend/docs/PESQUISA_CLUBES.md` antes de propor um novo candidato — muita coisa já foi
@@ -159,6 +172,13 @@ teste de UI autenticado.
 - **Antes de testar hipótese de modelo:** conferir `DOCUMENTACAO_CENTRAL.md` §9 **e** §13 (pesquisa
   de clubes) — muita coisa já foi reprovada (não repetir). **Após testar qualquer hipótese,
   registrar o resultado lá** (ou em `backend/docs/PESQUISA_CLUBES.md` se for sobre clubes).
+- **Antes de testar hipótese de odds/valor/EV/alfa de cotação:** conferir também
+  `DOCUMENTACAO_CENTRAL.md` §19-§20 (bateria de valor/CLV em escala, 8117 partidas reais,
+  concluiu **sem edge robusto** em nenhuma linha) e §23-§24 (bateria A/B/C — v1 com odds
+  sintéticas foi retirada por circularidade; v2 honesta reaproveita `Predictor.predict_from_row`
+  + odds reais de `data-test/`). **Nunca fabricar odds a partir da probabilidade do próprio
+  modelo** (circular por construção — qualquer "alfa" aparece garantido independente de edge
+  real); usar sempre odds de mercado independentes (coletadas ou de terceiros).
 - **Promoção de modelo** exige o **gate §6** (CV temporal, reduzir log-loss sem piorar ECE, consistente).
   Pesquisa em branch (`clubs` ou nova) **não dá push para `main`** a menos que bata a produção real
   sob o gate — é a exceção documentada em §13.
@@ -169,8 +189,14 @@ teste de UI autenticado.
 - **Neon:** não reintroduzir varredura de blobs (`SELECT raw FROM match_detail_cache`) em runtime — use
   os agregados. Ver `ARCHITECTURE.md §3.1`. O mesmo vale para `club_match_detail_cache` — sempre usar
   o espelho local (`data/club_raw_cache.sqlite`), nunca puxar os blobs do Neon em runtime/jobs.
+- **DADOS (novo, 2026-07-28 — §26):** a fonte da verdade é o **Zoho WorkDrive**, não a máquina
+  local. **Nenhum dado pode ter cópia única em máquina local.** Todo dado novo entra em
+  `data/MANIFEST.yaml`; acesso via `app/core/datastore.py::fetch()` em vez de caminho hardcoded;
+  sincronize com `python -m scripts.datastore_sync {status,push,pull,verify}`. `verify` falha
+  (exit 1) se algum dado do manifesto não tiver cópia remota — rode antes de encerrar sessão.
 - **Ambiente novo (outra máquina):** ver `ARCHITECTURE.md §7` — venv não é portável, `requirements.txt`
-  separa produção de pesquisa, `data/` é gitignored e precisa ser regenerado ou copiado.
+  separa produção de pesquisa, `data/` é gitignored. **Comece por `docs/HANDOFF_PROXIMA_MAQUINA.md`**
+  e por `datastore_sync pull` (não copie dado na mão entre máquinas — foi o que quebrou em 2026-07-28).
 - **Monetização:** cupom (benefício ao usuário) e afiliado (comissão) são **independentes** — nunca
   acoplar a lógica dos dois. Gateway/nota fiscal são adapters trocáveis (`PaymentGateway`/
   `InvoiceProvider` Protocol) — nunca hardcode o provedor num domínio; troque via `PAYMENT_PROVIDER`

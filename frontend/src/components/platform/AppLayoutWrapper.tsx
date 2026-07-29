@@ -52,12 +52,12 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
 
   return (
     <div className="relative flex min-h-screen flex-col bg-background selection:bg-emerald-500/20 selection:text-emerald-400">
-      {/* Header superior */}
+      {/* Header superior (visível se menu for superior ou em mobile) */}
       <div className={isSidebar ? "md:hidden" : ""}>
         <Header onToggleLayout={toggleLayout} navLayout={navLayout} />
       </div>
 
-      {/* Sidebar lateral */}
+      {/* Sidebar lateral (visível em telas md+ quando layout="sidebar") */}
       {isSidebar && (
         <Sidebar
           navLayout={navLayout}
@@ -67,19 +67,19 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
         />
       )}
 
-      {/* Conteúdo principal */}
-      <main
-        className={`flex-1 w-full max-w-7xl mx-auto px-4 py-6 sm:px-6 md:py-8 lg:px-8 transition-all duration-300 ${
-          isSidebar ? (isCollapsed ? "md:pl-24" : "md:pl-72") : ""
+      {/* Container principal offset pelo sidebar para evitar sobreposição e centralizar no espaço visível */}
+      <div
+        className={`flex-1 flex flex-col min-w-0 w-full transition-all duration-300 ${
+          isSidebar ? (isCollapsed ? "md:ml-20" : "md:ml-64") : ""
         }`}
       >
-        {children}
-      </main>
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-6 sm:px-6 md:py-8 lg:px-8">
+          {children}
+        </main>
 
-      {/* Footer */}
-      <Footer />
+        {/* Footer alinhado com a área visível */}
+        <Footer />
+      </div>
     </div>
   );
 }
-
-

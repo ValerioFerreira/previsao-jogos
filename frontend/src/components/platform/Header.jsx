@@ -36,7 +36,7 @@ export default function Header({ onToggleLayout, navLayout }) {
     <>
       <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14 gap-4">
+          <div className="flex items-center justify-between md:grid md:grid-cols-[1fr_auto_1fr] h-14 gap-4">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2.5 shrink-0 group justify-self-start">
               <div className="relative flex items-center justify-center">

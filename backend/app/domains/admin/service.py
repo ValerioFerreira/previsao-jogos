@@ -1570,3 +1570,57 @@ def get_public_shared_analysis(db: Session, token: str) -> dict:
         "scope": s.scope, "tournament": s.tournament, "neutral": s.neutral,
         "match_date": s.match_date, "league_name": s.league_name,
     }
+
+
+def reset_test_account_password(db: Session, admin: User, new_password: str, ip: str | None) -> dict:
+    from datetime import datetime, timezone
+    from sqlalchemy import delete
+    from app.core import security
+    from app.domains.users.models import AuthSession
+    from app.domains.enums import UserRole, UserStatus
+    from app.domains.wallet.service import get_or_create_wallet
+
+
+    test_email = "teste@gmail.com"
+    user = db.execute(select(User).where(User.email == test_email)).scalar_one_or_none()
+
+    if user is None:
+        test_cpf = "99999999999"
+        if db.execute(select(User).where(User.cpf == test_cpf)).scalar_one_or_none():
+            test_cpf = f"000{uuid.uuid4().int % 100000000:08d}"
+        user = User(
+            full_name="Conta Teste",
+            email=test_email,
+            cpf=test_cpf,
+            phone="11999990001",
+            status=UserStatus.active,
+            role=UserRole.user,
+            email_verified_at=datetime.now(timezone.utc),
+            signup_ip=ip or "127.0.0.1",
+        )
+        db.add(user)
+        db.flush()
+        get_or_create_wallet(db, user.id)
+
+
+    user.password_hash = security.hash_password(new_password)
+    user.status = UserStatus.active
+    if not user.email_verified_at:
+        user.email_verified_at = datetime.now(timezone.utc)
+    user.failed_login_count = 0
+    user.locked_until = None
+
+    del_res = db.execute(delete(AuthSession).where(AuthSession.user_id == user.id))
+    terminated_sessions = getattr(del_res, "rowcount", 0)
+
+    audit(db, admin, "test_account_password_reset", "user", user.id,
+          after={"email": test_email, "terminated_sessions": terminated_sessions}, ip=ip)
+    db.commit()
+
+    return {
+        "ok": True,
+        "email": test_email,
+        "message": f"Senha da conta de teste ({test_email}) resetada com sucesso! Todas as sessões ativas foram desconectadas.",
+        "terminated_sessions": terminated_sessions,
+    }
+

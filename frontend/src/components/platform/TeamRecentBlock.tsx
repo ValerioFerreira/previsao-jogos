@@ -33,10 +33,12 @@ export function RecentMatchRow({ match, onOpen }: { match: RecentMatch; onOpen?:
     >
       <span className={`flex items-center justify-center w-5 h-5 rounded-[4px] border font-bold text-[11px] shrink-0 ${color}`}>{result}</span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold truncate">
-          {match.is_home ? 'Casa x ' : 'Fora x '}{teamPt(match.opponent)}
-          <span className="font-mono font-normal text-muted-foreground ml-1.5">{placar}</span>
-        </p>
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="text-xs font-semibold truncate">
+            {match.is_home ? 'Casa x ' : 'Fora x '}{teamPt(match.opponent)}
+          </span>
+          <span className="font-mono text-xs text-muted-foreground shrink-0">{placar}</span>
+        </div>
         <p className="text-[9px] text-muted-foreground truncate">
           {formatDateBR(match.date)}{match.competition ? ` · ${competitionPt(match.competition)}` : ''}
         </p>
