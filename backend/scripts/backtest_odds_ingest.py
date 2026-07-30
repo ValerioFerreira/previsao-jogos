@@ -139,16 +139,40 @@ def norm_team_name(raw: str, country: str, tournament: str, candidates: dict,
     return None
 
 
-def ingest_csvs(candidates, aliases, log):
+def _csv_paths(include_historical: bool):
+    """(caminho, temporada) de cada CSV do football-data.
+
+    `data-test/*.csv` e a temporada corrente (sem pasta). `data-test/historical/<AABB>/<DIV>.csv`
+    sao as 16 temporadas baixadas em 2026-07-30 por `scripts/fetch_historical_odds.py` -- mesmo
+    provedor, mesmo schema, mesmo `div` no nome do arquivo, entao o `backtest_league_map.json`
+    vale sem alteracao. Antes desta mudanca o glob era so o plano e as 305 temporadas historicas
+    ficavam invisiveis para o backtest (ver DOCUMENTACAO_CENTRAL.md secao 28.3).
+    """
+    out = [(p, "atual") for p in sorted(DATA_TEST.glob("*.csv"))]
+    if include_historical:
+        out += [(p, p.parent.name) for p in sorted(DATA_TEST.glob("historical/*/*.csv"))]
+    return out
+
+
+def ingest_csvs(candidates, aliases, log, include_historical: bool = True):
     rows = []
-    for path in sorted(DATA_TEST.glob("*.csv")):
+    for path, season in _csv_paths(include_historical):
         div = path.stem
         cfg = LEAGUE_MAP["csv_div"].get(div)
         if cfg is None:
             print(f"  [aviso] Div '{div}' sem entrada em backtest_league_map.json -- pulando")
             continue
         country, tournament = cfg["country"], cfg["tournament"]
-        df = pd.read_csv(path, encoding="cp1252", low_memory=False)
+        # Temporadas antigas trazem bytes que nao sao cp1252 valido; latin-1 nunca falha e
+        # cobre o mesmo repertorio para os nomes de time deste provedor.
+        try:
+            df = pd.read_csv(path, encoding="cp1252", low_memory=False, on_bad_lines="skip")
+        except UnicodeDecodeError:
+            df = pd.read_csv(path, encoding="latin-1", low_memory=False, on_bad_lines="skip")
+        if "Date" not in df.columns or "HomeTeam" not in df.columns:
+            print(f"  [aviso] {season}/{div}: sem colunas Date/HomeTeam -- pulando")
+            continue
+        df = df[df["HomeTeam"].notna()]
         df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
 
         markets = {}
@@ -162,7 +186,7 @@ def ingest_csvs(candidates, aliases, log):
                 continue
             home_norm = norm_team_name(str(r["HomeTeam"]), country, tournament, candidates, aliases, log)
             away_norm = norm_team_name(str(r["AwayTeam"]), country, tournament, candidates, aliases, log)
-            base = dict(source="csv", div=div, country=country, tournament=tournament,
+            base = dict(source="csv", div=div, season=season, country=country, tournament=tournament,
                         date=r["Date"], home_team_raw=r["HomeTeam"], away_team_raw=r["AwayTeam"],
                         home_team_norm=home_norm, away_team_norm=away_norm, covered=cfg["covered"])
             for col, info in markets.items():
@@ -224,7 +248,9 @@ def ingest_xlsx(candidates, aliases, log, year: int):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--year", type=int, default=2025,
-                    help="Filtro de ano p/ o xlsx (historico 2012-2026); os 22 CSVs sao sempre 2025/26 inteiro.")
+                    help="Filtro de ano p/ o xlsx (historico 2012-2026); os CSVs entram inteiros.")
+    ap.add_argument("--no-historical", action="store_true",
+                    help="ignora data-test/historical/ e le so a temporada corrente")
     a = ap.parse_args()
 
     print("=" * 80)
@@ -236,8 +262,10 @@ def main():
     print(">> Carregando nomes de time reais do nosso dataset (universo do fuzzy match)...")
     candidates = build_team_candidates()
 
-    print(">> Lendo 22 CSVs (temporada 2025/26)...")
-    rows_csv = ingest_csvs(candidates, aliases, log)
+    n_hist = len(list(DATA_TEST.glob("historical/*/*.csv")))
+    print(f">> Lendo CSVs: temporada corrente"
+          f"{'' if a.no_historical else f' + {n_hist} arquivos historicos'}...")
+    rows_csv = ingest_csvs(candidates, aliases, log, include_historical=not a.no_historical)
 
     print(f">> Lendo new_leagues_data.xlsx (filtrado para ano {a.year})...")
     rows_xlsx = ingest_xlsx(candidates, aliases, log, a.year)
