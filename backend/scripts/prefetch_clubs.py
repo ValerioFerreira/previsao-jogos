@@ -231,9 +231,24 @@ LEAGUES_EXPANSION_20260730 = [
 
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"
+LOCAL_DB = Path(__file__).resolve().parents[1] / "data" / "club_raw_cache.sqlite"
+
+# Modo local-only (`--local-only`): grava so no espelho SQLite, sem tocar no Neon.
+# Motivo (2026-07-30): data/MANIFEST.yaml lista `club_match_detail_cache` em
+# `neon_to_migrate` -- os blobs brutos DEVEM sair do Neon, nao crescer nele. A expansao
+# de 2026-07-30 acrescenta dezenas de milhares de fixtures que nao sao lidas em runtime
+# por ninguem; manda-las pro Neon so aumentaria armazenamento e egress a troco de nada.
+LOCAL_ONLY = False
+
+
+def set_local_only(flag: bool) -> None:
+    global LOCAL_ONLY
+    LOCAL_ONLY = bool(flag)
 
 
 def ensure_table():
+    if LOCAL_ONLY:
+        return
     from app.db.connection import engine
     with engine.begin() as c:
         c.execute(text(
@@ -243,11 +258,29 @@ def ensure_table():
         ))
 
 
+def local_cached_ids() -> set:
+    """Fixtures já presentes no espelho local. É a fonte certa no modo local-only e
+    também o caminho barato quando o objetivo é só saber o que falta baixar."""
+    import sqlite3
+    if not LOCAL_DB.exists():
+        return set()
+    conn = sqlite3.connect(str(LOCAL_DB))
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS raw (key TEXT PRIMARY KEY, fixture_id INTEGER, "
+                     "league_id INTEGER, season INTEGER, raw TEXT)")
+        return {r[0] for r in conn.execute("SELECT fixture_id FROM raw") if r[0] is not None}
+    finally:
+        conn.close()
+
+
 def cached_ids() -> set:
+    if LOCAL_ONLY:
+        return local_cached_ids()
     from app.db.connection import engine
     with engine.connect() as c:
         rows = c.execute(text(f"SELECT fixture_id FROM {TABLE}")).fetchall()
-    return {r[0] for r in rows if r[0] is not None}
+    neon = {r[0] for r in rows if r[0] is not None}
+    return neon | local_cached_ids()
 
 
 _write_lock = threading.Lock()
@@ -277,33 +310,49 @@ def flush_writes():
             return
         batch = _write_buffer
         _write_buffer = []
-    from app.db.connection import engine
-    with engine.begin() as c:
-        c.execute(text(
-            f"INSERT INTO {TABLE} (key, fixture_id, league_id, season, raw, cached_at) "
-            "VALUES (:k,:f,:l,:s,:r, now()) ON CONFLICT (key) DO UPDATE SET raw=EXCLUDED.raw, cached_at=now()"
-        ), [{"k": k, "f": f, "l": l, "s": s, "r": json.dumps(r, ensure_ascii=False)} for k, f, l, s, r in batch])
+    if not LOCAL_ONLY:
+        from app.db.connection import engine
+        with engine.begin() as c:
+            c.execute(text(
+                f"INSERT INTO {TABLE} (key, fixture_id, league_id, season, raw, cached_at) "
+                "VALUES (:k,:f,:l,:s,:r, now()) ON CONFLICT (key) DO UPDATE SET raw=EXCLUDED.raw, cached_at=now()"
+            ), [{"k": k, "f": f, "l": l, "s": s, "r": json.dumps(r, ensure_ascii=False)} for k, f, l, s, r in batch])
     _local_put_batch(batch)
 
 
-def _local_put_batch(batch):
+def _local_put_batch(batch, _attempts: int = 5):
     """Espelho local de clubes (data/club_raw_cache.sqlite) — os jobs pesados leem
-    do disco em vez de puxar blobs do Neon (ARCHITECTURE.md §3.1). Silencioso em falha."""
-    try:
-        import sqlite3
-        path = Path(__file__).resolve().parents[1] / "data" / "club_raw_cache.sqlite"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(path))
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS raw (key TEXT PRIMARY KEY, fixture_id INTEGER, "
-            "league_id INTEGER, season INTEGER, raw TEXT)")
-        conn.executemany(
-            "INSERT OR REPLACE INTO raw(key, fixture_id, league_id, season, raw) VALUES (?,?,?,?,?)",
-            [(k, f, l, s, json.dumps(r, ensure_ascii=False)) for k, f, l, s, r in batch])
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
+    do disco em vez de puxar blobs do Neon (ARCHITECTURE.md §3.1).
+
+    NÃO é mais silencioso (mudança de 2026-07-30). O `except: pass` original engolia
+    `database is locked`: qualquer leitura longa concorrente (um build de features, por
+    exemplo) segurava o lock compartilhado e o lote inteiro de fixtures recém-baixadas
+    era descartado sem uma linha de log — dado pago em cota e perdido em silêncio.
+    Agora há retry com espera crescente e, se ainda assim falhar, o erro aparece.
+    """
+    import sqlite3
+    path = Path(__file__).resolve().parents[1] / "data" / "club_raw_cache.sqlite"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [(k, f, l, s, json.dumps(r, ensure_ascii=False)) for k, f, l, s, r in batch]
+    for attempt in range(_attempts):
+        try:
+            conn = sqlite3.connect(str(path), timeout=60)
+            try:
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS raw (key TEXT PRIMARY KEY, fixture_id INTEGER, "
+                    "league_id INTEGER, season INTEGER, raw TEXT)")
+                conn.executemany(
+                    "INSERT OR REPLACE INTO raw(key, fixture_id, league_id, season, raw) "
+                    "VALUES (?,?,?,?,?)", rows)
+                conn.commit()
+                return
+            finally:
+                conn.close()
+        except Exception as e:
+            if attempt == _attempts - 1:
+                print(f"[ERRO] espelho local: {len(rows)} fixtures NAO gravadas ({e})", flush=True)
+                return
+            time.sleep(2 * (attempt + 1))
 
 
 def main():

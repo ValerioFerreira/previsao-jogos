@@ -1812,3 +1812,142 @@ força de time já capturada pelo Elo — mesmo padrão que já reprovou xG 3x.
 ranking desta pesquisa, mas muda a leitura: os candidatos que **trazem dado novo** (job `/injuries`,
 cobertura de odds forward para CLV) sobem de prioridade sobre os que só refinam método
 (calibração Dirichlet/Beta). O PLANO 7 (2026-07-30) age nessa ordem.
+
+## 28. Retomada da coleta: pipeline quebrado, odds destravadas e dívida documental (2026-07-30)
+
+Auditoria do repositório e da infraestrutura de coleta antes de retomar o uso da cota diária.
+Achou três problemas silenciosos e um desbloqueio grande. **Assinatura API-Football (Ultra) vence
+2026-08-19** — 20 dias no momento desta seção; o plano priorizou o que é irreversível.
+
+### 28.1 O pipeline diário estava meio-morto havia 16 dias
+
+A tarefa `\PrevisaoJogos\PrefetchWorldCup` tem `ExecutionTimeLimit = PT3H`. Ela inicia 06:30 e vinha
+sendo **morta às 09:30** (`LastTaskResult 267014` = SCHED_S_TASK_TERMINATED) ainda dentro de
+`prefetch_wc_data.py --all-nations`. Os passos seguintes do `prefetch_wc.cmd` nunca chegavam a rodar:
+`build_scorer_model`, `build_shots_prop_model` e `precompute_aggregates`. Evidência: no log
+`data/state/prefetch_wc.log` o último marcador `----- precompute agregados` é de **14/07 12:37**, e
+os mtimes de `model_artifacts/scorer_model.joblib` e `shots_prop_model.joblib` estavam congelados na
+mesma data. Ou seja, **os agregados servidos ao site (árbitro/minutagem/quadrantes) ficaram 16 dias
+parados** e ~5k de cota/dia eram gastos sem concluir nada.
+
+Duas causas no `prefetch_wc_data.py`, ambas corrigidas:
+
+1. **Um round-trip ao Neon por fixture candidata** (`cache_get`). Com 249 seleções × 17 temporadas
+   isso virava dezenas de milhares de round-trips — o custo era latência de banco, não de API. Agora
+   as chaves do espelho local são carregadas de uma vez (`raw_cache.local_keys()`, nova).
+2. **Re-listagem cega do histórico inteiro todo dia** (~4.200 chamadas), com o histórico já saturado.
+   Agora há estado em `data/state/wc_seasons_done.json`; a temporada corrente e a anterior nunca são
+   marcadas como exauridas.
+
+Correções estruturais: `scripts/rebuild_models.cmd` (novo) separa rebuild de coleta — **rebuild não
+pode depender de coleta terminar** — como tarefa `\PrevisaoJogos\RebuildModels`;
+`scripts/prefetch_wc_full.cmd` (novo) faz a varredura histórica semanalmente enquanto o run diário
+usa `--floor 2024`; e o `ExecutionTimeLimit` da tarefa sobe para PT8H.
+
+### 28.2 Odd histórica não existe — e dois filtros estrangulavam a coleta forward
+
+Verificado por sonda direta: `/odds?fixture=<jogo de 2025>` devolve 0 resultados e
+`/odds?league=39&season=2025` devolve 0 resultados. **A API-Football não serve odd retroativa.** Só
+dá para acumular para a frente, então cada dia não coletado é perda permanente — o que torna os dois
+bugs abaixo mais caros do que pareciam:
+
+- `collect_club_odds_forward.py` filtrava `LEAGUES` casando o **nome** da liga contra as chaves de
+  `tournament_weights` do `meta.json`. Os rótulos vêm de fontes diferentes (`"Serie A (Italia)"` vs
+  `"Serie A Italia"`, `"Championship (Inglaterra)"` vs `"Championship"`, `"Super Lig"` vs
+  `"Süper Lig"` com mojibake). Medido: **28 das 83 ligas** entravam. Ficavam de fora Serie A italiana,
+  Championship, Ligue 2, Saudi, J1, K League, Colômbia, Chile, Peru, Uruguai, FA Cup. Filtro removido:
+  odd de liga ainda não treinada custa 1 requisição de uma cota ~90% ociosa, e perder a janela é
+  irreversível.
+- `collect_odds_backfill.py` importava `target_league_ids()`, que lista os subdiretórios de
+  `data/raw/fixtures/` — **41 diretórios, todos de seleção**. As 83 competições de clube eram
+  ignoradas: `odds_history.sqlite` tinha **12 fixtures** depois de dias rodando. Agora tem
+  `--scope {selecao,clube,ambos}` (default `ambos`, 124 ligas) e um pré-filtro de fixtures já
+  coletadas no dia — sem ele, as 8 execuções diárias da tarefa `CollectOdds` re-baixavam a janela
+  inteira toda vez.
+
+### 28.3 O desbloqueio: 107.095 partidas com odds reais, custo zero de cota
+
+`data/MANIFEST.yaml` registrava que o domínio `football-data.co.uk` estava inacessível e que
+`scripts/fetch_historical_odds.py` "nunca rodou contra a fonte real". **O bloqueio era da máquina
+onde o §24 rodou, não do domínio**: da máquina de coleta o download funciona. Resultado: 305 arquivos
+(33 MB, 16 temporadas × 22 divisões europeias) em `data-test/historical/`.
+
+| | antes | depois |
+|---|---:|---:|
+| partidas com odds 1X2 | 722 | **107.095** |
+| partidas com Max/Avg e O/U 2.5 | 380 | **37.243** |
+
+O §25.3 estabelece que detectar um edge de 2% com 80% de poder exige **N≈19.400**. O gargalo
+estatístico que tornava inconclusivas as conclusões de §24.3 e §24.4 **deixa de existir para 1X2 e
+O/U**. Reexecutar as Hipóteses B e C sobre esta base é a próxima tarefa de pesquisa óbvia — e agora
+com poder para dar resposta em qualquer direção, inclusive negativa.
+
+### 28.4 Coletas novas
+
+- **`/injuries` em massa** (`scripts/collect_injuries.py`, novo). O endpoint devolve a liga inteira
+  numa resposta **sem paginação** (Premier League 2025 = 3.417 registros em 1 chamada) e cada registro
+  vem amarrado a um `fixture_id` — **é retroativo, serve para treinar**, não é só "quem está fora
+  hoje". Varredura completa: **868 chamadas → 175.595 registros, 27.551 fixtures, 746 times**.
+  Cobertura **desigual, e isso importa**: grandes europeias a partir de 2020/21, Brasileirão só a
+  partir de 2024, Libertadores quase nada. Qualquer feature derivada precisa carregar a flag
+  `inj_has_data` junto — "0 desfalques" por falta de cobertura não é "elenco cheio".
+- **Expansão de 83 → 150 competições de clube.** `GET /leagues` enumerado e filtrado por cobertura
+  real (`coverage.fixtures.statistics_fixtures` **e** `lineups`, o mínimo que as features exigem):
+  108 competições não coletadas, das quais **67 sobrevivem à curadoria** (excluídas as de seleção —
+  pertencem ao pipeline `prefetch_wc_data.py` — além de futebol feminino e categorias de base, cujas
+  dinâmicas contaminariam o modelo masculino de clube). Entram como constante **separada**
+  `LEAGUES_EXPANSION_20260730`, atrás de `--include-expansion`/`--only-expansion`: **coletar não é
+  treinar**; a inclusão no artefato de produção passa pelo gate §6 numa decisão à parte. Rodada em
+  `--local-only` — `data/MANIFEST.yaml` lista `club_match_detail_cache` em `neon_to_migrate`, então
+  os blobs novos vão só para o espelho SQLite, não engordam o Neon.
+
+### 28.5 Achado que economiza cota: `coach` e `formation` já estavam no blob
+
+O `RELATORIO_NOVAS_VARIAVEIS.md` supunha que troca de técnico exigiria `/coachs` e continuidade de
+elenco exigiria `/transfers` (~11k chamadas). **Não exige**: `lineups[].coach.id`,
+`lineups[].formation` e `lineups[].startXI[].player.id` já estão dentro de cada blob em
+`club_raw_cache.sqlite` desde sempre. `scripts/build_squad_context_features.py` (novo) deriva de
+graça, sobre as 273 mil partidas já coletadas: mandato do técnico (jogos e dias), técnico
+recém-chegado, troca no último jogo, estabilidade de formação, continuidade de escalação (Jaccard
+entre escalações consecutivas) e tamanho do núcleo fixo.
+
+**Todas point-in-time estritas** — só jogos anteriores; a escalação da própria partida nunca entra,
+porque o blob só existe depois do jogo. A única exceção é declarada e isolada em colunas próprias
+(`*_inj_*`, lista de desfalques da própria partida, que é informação pública pré-jogo e é assim que
+seria usada em produção).
+
+### 28.6 Outros bugs achados no caminho
+
+- `prefetch_clubs_parallel.py::budget_ok_locked` comparava o header
+  `x-ratelimit-requests-remaining` (**por minuto**, teto 450) contra `--margin 500`: a condição era
+  verdadeira já na primeira chamada e o script parava alegando `LIMITE_DIARIO` sem baixar nada. É o
+  mesmo bug documentado em `scripts/quota_tracker.py:8-20`, que tinha escapado neste arquivo.
+- `prefetch_clubs._local_put_batch` tinha `except Exception: pass`. Um `database is locked` (leitura
+  longa concorrente) descartava o lote inteiro de fixtures recém-baixadas **sem uma linha de log** —
+  dado pago em cota e perdido em silêncio. Agora tem retry com espera crescente e loga a falha.
+- **Gasto duplicado de cota**: `app/main.py` subia uma thread de 3h no import que chamava os mesmos
+  coletores forward que a tarefa Windows `CollectOdds` já roda a cada 3h — e no Render seria um loop
+  por worker, escrevendo nas mesmas tabelas do Neon ao mesmo tempo. Agora atrás de
+  `ENABLE_INPROC_SCHEDULER` (default **off**). A rota `GET /api/cron/refresh-upcoming` (protegida por
+  `CRON_TOKEN`) segue disponível para acionamento externo.
+
+### 28.7 Dívida documental de 24-26/07 (código que entrou sem registro)
+
+- **SGP (Same Game Parlay)** — `app/domains/bets/markets.py`, commit `10434d3`. Particiona as pernas
+  da aposta: as de placar (1X2/BTTS/Over-Under) são resolvidas por **soma exata sobre a matriz
+  conjunta Dixon-Coles** `snapshot["gols"]["matrix"]` (`markets.py:174-203`), o que trata redundância
+  entre pernas e detecta combinação impossível (HTTP 400); as de contagem (escanteios/cartões/chutes)
+  passam por uma **cópula gaussiana** (`markets.py:103-131`). **Limitação conhecida: a matriz Σ da
+  cópula é hardcoded e chutada** (`markets.py:94-100` — 0,22 / 0,55 / 0,30 / 0,18 / 0,05), não
+  estimada dos dados; é candidata natural a uma bateria de validação. Segunda limitação: análises
+  salvas **antes** de `10434d3` não têm o campo `matrix` e caem no fallback de independência. Não há
+  UI própria — o SGP aparece só como a odd combinada dentro de "Monte sua Seleção".
+- **RBAC** — commits `1d73660`/`380bf22`. Papéis hoje: `user`, `partner`, `owner`, `manager`;
+  `admin`/`superadmin` foram removidos do enum **sem migração de dados**. O enum é VARCHAR
+  (`native_enum=False`, `app/domains/enums.py:1`), então o schema não quebra, **mas qualquer linha
+  em Neon com `role='admin'` vira `LookupError` ao carregar**. *Verificação pendente do dono:*
+  `SELECT role, COUNT(*) FROM users GROUP BY role`.
+- **Carteira** — `app/domains/wallet/service.py:28-37,77-83` força `available_balance = 100.00` para
+  `owner`/`manager`/`partner` a cada leitura **e** a cada transação. Efeito prático: parceiro nunca
+  gasta crédito de verdade, e o débito da análise fica registrado em `CreditTransaction` mas o saldo
+  volta a 100 na mesma operação. *Confirmar com o dono se é intencional.*

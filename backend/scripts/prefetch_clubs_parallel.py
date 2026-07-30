@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import text
 from app.services.fixture_fetch import _get
 from scripts.prefetch_clubs import (LEAGUES, LEAGUES_EXPANSION_20260730, FINISHED, TABLE,
-                                    ensure_table, cached_ids, _local_put_batch)
+                                    ensure_table, cached_ids, _local_put_batch, set_local_only)
 from scripts import quota_tracker
 
 MAX_RETRIES = 4
@@ -42,7 +42,12 @@ MAX_RETRIES = 4
 def neon_put(fixture_id, league_id, season, raw):
     """Só o Neon -- seguro em paralelo (pool de conexões do SQLAlchemy + ON CONFLICT
     idempotente). O espelho local (SQLite) fica só no escritor único (não gosta de
-    escrita concorrente) -- ver prefetch_clubs._local_put_batch."""
+    escrita concorrente) -- ver prefetch_clubs._local_put_batch.
+
+    No-op sob `--local-only` (ver prefetch_clubs.LOCAL_ONLY)."""
+    import scripts.prefetch_clubs as _pc
+    if _pc.LOCAL_ONLY:
+        return
     from app.db.connection import engine
     key = f"club|{league_id}|{fixture_id}"
     with engine.begin() as c:
@@ -83,7 +88,14 @@ def main():
                     help="acrescenta LEAGUES_EXPANSION_20260730 ao alvo")
     ap.add_argument("--only-expansion", action="store_true",
                     help="coleta SOMENTE a lista de expansao")
+    ap.add_argument("--local-only", action="store_true",
+                    help="grava so no espelho SQLite, sem escrever no Neon (ver MANIFEST: "
+                         "club_match_detail_cache esta em neon_to_migrate)")
     a = ap.parse_args()
+
+    if a.local_only:
+        set_local_only(True)
+        print("[MODO LOCAL-ONLY] blobs vao so para data/club_raw_cache.sqlite", flush=True)
 
     targets = list(LEAGUES)
     if a.only_expansion:

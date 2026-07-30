@@ -60,7 +60,13 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   de dados) + comitê técnico de 3; achados em `backend/docs/PESQUISA_VARIAVEIS_EXTERNAS.md`,
   relatório final priorizado (6 seções, ranking, roadmap 4 fases) em
   `backend/docs/RELATORIO_NOVAS_VARIAVEIS.md` — nenhuma promoção feita, aguarda decisão do dono
-  sobre o que entra no gate §6**.
+  sobre o que entra no gate §6**, **§28 retomada da coleta (2026-07-30) — pipeline diário estava
+  morto desde 14/07 (tarefa morta pelo `ExecutionTimeLimit`, rebuilds e agregados 16 dias parados);
+  odds de clube saíam em 28 de 83 ligas e o backfill durável ignorava clubes por inteiro; **odd
+  histórica não existe na API** (só forward, cada dia perdido é permanente); 107.095 partidas com
+  odds reais baixadas do football-data.co.uk a custo zero (era 722 — fecha o gargalo de poder do
+  §25.3); `/injuries` coletado em massa (868 chamadas, 175.595 registros, retroativo); +67
+  competições de clube; e a dívida documental de SGP/RBAC/carteira**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa
