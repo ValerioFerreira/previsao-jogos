@@ -64,6 +64,22 @@ datasets:
       ATENÇÃO: a cópia local (4 torneios/21k jogos) diverge da produção (72 torneios/273k).
       A versão do WorkDrive deve ser sempre a que gerou o artefato de produção vigente.
 
+  - id: squad_context_features
+    path: backend/data/built/squad_context_features.parquet
+    remote: derived/squad_context_features.parquet
+    layer: derived
+    size_mb: 5
+    runtime_critical: false
+    owner: modelagem
+    refresh: "scripts/build_squad_context_features.py --scope clube"
+    notes: >
+      Contexto de elenco derivado a custo ZERO de cota (coach.id/formation/startXI já
+      vinham no blob local). 326.386 linhas, mandato do técnico, estabilidade de formação,
+      continuidade de escalação (Jaccard) e núcleo fixo — todas point-in-time estritas.
+      Colunas *_inj_* usam a lista de desfalques da PRÓPRIA partida (informação pública
+      pré-jogo, exceção declarada) e sempre vêm com *_inj_has_data — 0 sem cobertura não
+      é elenco cheio. Candidato a testar sob o gate §6 (RELATORIO_NOVAS_VARIAVEIS.md §3).
+
   # ------------------------------------------------------------------ odds reais
   - id: odds_datatest
     path: data-test/
