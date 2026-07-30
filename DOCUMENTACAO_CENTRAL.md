@@ -1808,6 +1808,16 @@ Variáveis em `backend/.env`: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SEC
 `GOOGLE_OAUTH_REFRESH_TOKEN` (as 3 do passo 4), `GOOGLE_DRIVE_FOLDER_ID` (do passo 3).
 Com as chaves no lugar, o único passo é `DATA_STORE=gdrive python -m scripts.datastore_sync push`.
 
+**Ativado e validado em 2026-07-30, mesmo dia**: ciclo completo (`upload`/`exists`/`stat`/
+`download`/`list`) testado contra a API real e passou. Duas armadilhas do fluxo de consentimento,
+registradas pra não repetir: (1) app em modo "Testing" no OAuth consent screen exige que o e-mail
+do dono seja adicionado em **Test users** antes de autorizar, senão dá `Erro 403: access_denied`;
+(2) mesmo com o e-mail liberado, o Google mostra uma tela extra "app não verificado" — tem que
+clicar **Avançado → Acessar (app) (não seguro)** antes de chegar na tela normal de permissão,
+senão a autorização nunca completa (o servidor local do `google_oauth_setup.py` fica esperando e
+expira em 5 min sem receber nada). Push do backlog completo (~9 GB / 1256 arquivos, acumulado
+pela coleta do §28) disparado na sequência.
+
 ## 27. Pesquisa ampla de novas variáveis/dados/abordagens (2026-07-24)
 
 Dono pediu levantamento amplo de candidatos a nova variável/dado/abordagem capazes de aumentar a
