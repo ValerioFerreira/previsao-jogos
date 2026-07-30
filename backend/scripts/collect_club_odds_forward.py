@@ -5,7 +5,7 @@ scripts/collect_club_odds_forward.py
 ======================================
 Coletor FORWARD de odds pré-jogo para CLUBES — mesma lógica de
 collect_odds_forward.py (só olha jogos ainda não iniciados; odds só existem
-1-14 dias antes do jogo, sem histórico retroativo), mas alvo = as 26 ligas de
+1-14 dias antes do jogo, sem histórico retroativo), mas alvo = as 83 ligas de
 clubes rastreadas (scripts/prefetch_clubs.py::LEAGUES), não as ligas de seleção.
 
 Preenche a lacuna documentada na Fase 8 da pesquisa de clubes
@@ -47,20 +47,27 @@ SNAP_DIR = ODDS_DIR / "club_snapshots"
 REGISTRY = ODDS_DIR / "club_registry.json"
 
 
-def _trained_target_leagues() -> dict[int, str]:
-    """Restringe a coleta às ligas que o artefato de clube TREINADO conhece
-    (`tournament_weights` do meta.json) -- mesmo padrão de
-    collect_odds_forward.py::target_league_ids() pro lado seleção (só ligas
-    que o modelo sabe prever). Evita listar partida de time fora do roster."""
-    meta_path = ROOT / "model_artifacts_clubes" / "meta.json"
-    try:
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        trained = set(meta.get("tournament_weights", {}).keys())
-    except Exception:
-        trained = set()
-    if not trained:
-        return {lid: name for lid, name in LEAGUES}
-    return {lid: name for lid, name in LEAGUES if name in trained}
+def _target_leagues() -> dict[int, str]:
+    """Alvo da coleta = TODAS as ligas de clube rastreadas (`prefetch_clubs.LEAGUES`).
+
+    ATENÇÃO -- bug corrigido em 2026-07-30 (§28 do doc-mestre). Esta função filtrava
+    `LEAGUES` casando o NOME da liga contra as chaves de `tournament_weights` do
+    `model_artifacts_clubes/meta.json`. Os dois nomes vêm de fontes diferentes: `LEAGUES`
+    usa rótulos escritos à mão e desambiguados por país ("Serie A (Italia)",
+    "Championship (Inglaterra)", "Super Lig") e o `meta.json` guarda o nome cru da
+    API-Football, às vezes com mojibake ("Serie A Italia", "Championship", "Süper Lig").
+    Resultado medido: só **28 das 83** ligas entravam na coleta -- Serie A italiana,
+    Championship, Ligue 2, Saudi, J1, K League, Colômbia, Chile, Peru, Uruguai e FA Cup
+    ficavam de fora apesar de treinadas e com cache completo.
+
+    O filtro foi removido em vez de consertado: odd é dado FORWARD e irreversível (a
+    API-Football não serve odd retroativa -- verificado: `/odds?fixture=<jogo antigo>`
+    volta vazio), então perder um dia de uma liga é perda permanente, enquanto coletar
+    odd de uma liga que o modelo ainda não prevê custa 1 requisição de uma cota que está
+    ~90% ociosa. A canonização de nome de time (`_canonical_name`) segue valendo e é o
+    que casa a partida com o roster quando a liga é treinada.
+    """
+    return {lid: name for lid, name in LEAGUES}
 
 
 def _trained_team_names_by_id() -> dict[int, str]:
@@ -79,7 +86,7 @@ def _trained_team_names_by_id() -> dict[int, str]:
     return {int(tid): name for name, tid in team_ids.items()}
 
 
-TARGET_LEAGUES = _trained_target_leagues()
+TARGET_LEAGUES = _target_leagues()
 TEAM_NAMES_BY_ID = _trained_team_names_by_id()
 
 

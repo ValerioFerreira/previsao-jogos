@@ -32,7 +32,9 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import text
 from app.services.fixture_fetch import _get
-from scripts.prefetch_clubs import LEAGUES, FINISHED, TABLE, ensure_table, cached_ids, _local_put_batch
+from scripts.prefetch_clubs import (LEAGUES, LEAGUES_EXPANSION_20260730, FINISHED, TABLE,
+                                    ensure_table, cached_ids, _local_put_batch)
+from scripts import quota_tracker
 
 MAX_RETRIES = 4
 
@@ -77,7 +79,17 @@ def main():
     ap.add_argument("--to", dest="fto", type=int, default=2010)
     ap.add_argument("--workers", type=int, default=10)
     ap.add_argument("--rps", type=float, default=6.5)  # 390/min, com folga do teto de 450/min
+    ap.add_argument("--include-expansion", action="store_true",
+                    help="acrescenta LEAGUES_EXPANSION_20260730 ao alvo")
+    ap.add_argument("--only-expansion", action="store_true",
+                    help="coleta SOMENTE a lista de expansao")
     a = ap.parse_args()
+
+    targets = list(LEAGUES)
+    if a.only_expansion:
+        targets = list(LEAGUES_EXPANSION_20260730)
+    elif a.include_expansion:
+        targets = targets + list(LEAGUES_EXPANSION_20260730)
 
     ensure_table()
     have = cached_ids()
@@ -87,16 +99,23 @@ def main():
     def budget_ok_locked():
         if state["calls"] >= a.max:
             state["stop"] = "MAX"; return False
-        if state["rem"] is not None and state["rem"] <= a.margin:
+        # BUG CORRIGIDO 2026-07-30: comparava `state["rem"]`, alimentado pelo header
+        # `x-ratelimit-requests-remaining` -- que e POR MINUTO (teto 450), nao a cota
+        # diaria. Com o default `--margin 500` a condicao era verdadeira ja na primeira
+        # chamada e o script parava alegando "LIMITE_DIARIO" sem baixar nada. Agora usa a
+        # cota real do quota_tracker (lida do GET /status). Mesmo bug ja documentado em
+        # scripts/quota_tracker.py:8-20.
+        if quota_tracker.remaining() <= a.margin:
             state["stop"] = "LIMITE_DIARIO"; return False
         return True
 
     print(f"Clubs prefetch PARALELO | ja em cache: {len(have)} fixtures | "
-          f"{len(LEAGUES)} ligas | workers={a.workers} rps={a.rps}", flush=True)
+          f"{len(targets)} ligas | workers={a.workers} rps={a.rps} | "
+          f"cota restante {quota_tracker.remaining()}", flush=True)
 
     # 1) Listagem sequencial (barata) -- monta a fila de fixtures novas por liga/temporada.
     todo = []  # (fixture_id, league_id, season)
-    for league_id, nome in LEAGUES:
+    for league_id, nome in targets:
         with slock:
             if not budget_ok_locked():
                 break

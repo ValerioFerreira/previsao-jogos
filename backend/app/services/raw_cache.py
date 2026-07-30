@@ -58,6 +58,23 @@ def local_count(scope: str = "selecao") -> int:
         return 0
 
 
+def local_keys(scope: str = "selecao") -> set[str]:
+    """Todas as chaves já presentes no espelho local, de uma vez só.
+
+    Existe para o prefetch conseguir fazer o teste "já tenho este jogo?" em memória.
+    Antes ele chamava `cache_get()` (um round-trip ao Neon) por fixture candidata —
+    com 249 seleções × 17 temporadas isso virava dezenas de milhares de round-trips e
+    era o que estourava o ExecutionTimeLimit da tarefa agendada (ver §28 do doc-mestre).
+    """
+    try:
+        conn = _conn(scope)
+        keys = {k for (k,) in conn.execute("SELECT key FROM raw")}
+        conn.close()
+        return keys
+    except Exception:
+        return set()
+
+
 def local_put(key: str, fixture_id, raw: dict) -> None:
     """Grava/atualiza um jogo no espelho local (idempotente). Silencioso em falha."""
     try:

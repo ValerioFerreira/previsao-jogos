@@ -145,6 +145,90 @@ LEAGUES = [
     (172, "First League (Bulgaria)"),
     (274, "Liga 1 (Indonesia)"),
 ]
+# ---------------------------------------------------------------------------------
+# EXPANSAO 2026-07-30 -- competicoes de CLUBE masculino ainda nao coletadas, filtradas
+# por cobertura real da API (`GET /leagues`): so entram temporadas com
+# `coverage.fixtures.statistics_fixtures` E `coverage.fixtures.lineups`, que e o minimo
+# que as nossas features exigem. Excluidas de proposito: competicoes de SELECAO (pertencem
+# ao pipeline `prefetch_wc_data.py`), futebol feminino e categorias de base -- dinamicas
+# diferentes, contaminariam o modelo masculino de clube.
+#
+# LISTA SEPARADA DE PROPOSITO. `LEAGUES` continua sendo o alvo de producao (odds forward,
+# backfill de historico, `tournament_weights` do artefato). Coletar != treinar: estas
+# entram no espelho local agora porque a assinatura da API vence em 2026-08-19 e odd/dado
+# nao coletado e perda permanente; a decisao de inclui-las no treino passa pelo gate SS6.
+#
+# Ative com `--include-expansion`.
+LEAGUES_EXPANSION_20260730 = [
+    (41, "League One (England)"),                       # 11 temp 2015-2025, League
+    (48, "League Cup (England)"),                       # 11 temp 2015-2025, Cup
+    (219, "2. Liga (Austria)"),                         # 11 temp 2015-2025, League
+    (283, "Liga I (Romania)"),                          # 11 temp 2016-2026, League
+    (529, "Super Cup (Germany)"),                       # 11 temp 2015-2025, Cup
+    (204, "1. Lig (Turkey)"),                           # 10 temp 2016-2025, League
+    (206, "Turkiye Kupas (Turkey)"),                    # 10 temp 2016-2025, Cup
+    (528, "Community Shield (England)"),                # 10 temp 2015-2025, Cup
+    (556, "Super Cup (Spain)"),                         # 10 temp 2016-2025, Cup
+    (42, "League Two (England)"),                       # 9 temp 2017-2025, League
+    (547, "Super Cup (Italy)"),                         # 9 temp 2016-2025, Cup
+    (286, "Super Liga (Serbia)"),                       # 8 temp 2019-2026, League
+    (318, "1. Division (Cyprus)"),                      # 8 temp 2018-2025, League
+    (20, "CAF Confederation Cup"),                      # 7 temp 2019-2025, Cup
+    (46, "EFL Trophy (England)"),                       # 7 temp 2019-2025, Cup
+    (89, "Eerste Divisie (Netherlands)"),               # 7 temp 2016-2025, League
+    (90, "KNVB Beker (Netherlands)"),                   # 7 temp 2019-2025, Cup
+    (114, "Superettan (Sweden)"),                       # 7 temp 2020-2026, League
+    (332, "Super Liga (Slovakia)"),                     # 7 temp 2019-2025, League
+    (475, "Paulista - A1 (Brazil)"),                    # 7 temp 2020-2026, League
+    (15, "FIFA Club World Cup"),                        # 6 temp 2019-2025, Cup
+    (97, "Taca da Liga (Portugal)"),                    # 6 temp 2019-2024, Cup
+    (108, "Cup (Poland)"),                              # 6 temp 2019-2024, Cup
+    (116, "Premier League (Belarus)"),                  # 6 temp 2020-2026, League
+    (236, "First League (Russia)"),                     # 6 temp 2021-2026, League
+    (237, "Cup (Russia)"),                              # 6 temp 2020-2025, Cup
+    (526, "Trophee des Champions (France)"),            # 6 temp 2020-2025, Cup
+    (543, "Super Cup (Netherlands)"),                   # 6 temp 2019-2024, Cup
+    (551, "Super Cup (Turkey)"),                        # 6 temp 2020-2025, Cup
+    (373, "1. SNL (Slovenia)"),                         # 5 temp 2019-2023, League
+    (479, "Canadian Premier League (Canada)"),          # 5 temp 2020-2026, League
+    (65, "Coupe de la Ligue (France)"),                 # 4 temp 2015-2019, Cup
+    (212, "Cup (Croatia)"),                             # 4 temp 2019-2024, Cup
+    (357, "Premier Division (Ireland)"),                # 4 temp 2023-2026, League
+    (145, "Challenger Pro League (Belgium)"),           # 3 temp 2023-2025, League
+    (185, "League Cup (Scotland)"),                     # 3 temp 2023-2026, Cup
+    (504, "King's Cup (Saudi-Arabia)"),                 # 3 temp 2023-2025, Cup
+    (714, "Cup (Egypt)"),                               # 3 temp 2022-2024, Cup
+    (772, "Leagues Cup"),                               # 3 temp 2023-2025, Cup
+    (389, "Premier League (Kazakhstan)"),               # 2 temp 2022-2023, League
+    (624, "Carioca - 1 (Brazil)"),                      # 2 temp 2025-2026, League
+    (1032, "Copa de la Liga Profesional (Argentina)"),  # 2 temp 2023-2024, League
+    (134, "Torneo Federal A (Argentina)"),              # 1 temp 2026-2026, League
+    (199, "Cup (Greece)"),                              # 1 temp 2025-2025, Cup
+    (255, "USL Championship (USA)"),                    # 1 temp 2020-2020, League
+    (256, "USL League Two (USA)"),                      # 1 temp 2026-2026, League
+    (261, "National Division (Luxembourg)"),            # 1 temp 2025-2025, League
+    (293, "K League 2 (South-Korea)"),                  # 1 temp 2020-2020, League
+    (302, "League Cup (United-Arab-Emirates)"),         # 1 temp 2025-2025, Cup
+    (327, "Erovnuli Liga (Georgia)"),                   # 1 temp 2026-2026, League
+    (363, "Premier League (Ethiopia)"),                 # 1 temp 2025-2025, League
+    (371, "First League (Macedonia)"),                  # 1 temp 2025-2025, League
+    (404, "Campionato (San-Marino)"),                   # 1 temp 2025-2025, League
+    (406, "Professional League (Oman)"),                # 1 temp 2025-2025, League
+    (421, "Division di Honor (Aruba)"),                 # 1 temp 2025-2025, League
+    (435, "Primera Division RFEF - Group 1 (Spain)"),   # 1 temp 2025-2025, League
+    (436, "Primera Division RFEF - Group 2 (Spain)"),   # 1 temp 2025-2025, League
+    (487, "First Amateur Division (Belgium)"),          # 1 temp 2025-2025, League
+    (492, "Tweede Divisie (Netherlands)"),              # 1 temp 2025-2025, League
+    (500, "FA Cup (Malaysia)"),                         # 1 temp 2025-2025, Cup
+    (567, "Ligi kuu Bara (Tanzania)"),                  # 1 temp 2025-2025, League
+    (588, "National League (Myanmar)"),                 # 1 temp 2025-2025, League
+    (622, "Pernambucano - 1 (Brazil)"),                 # 1 temp 2025-2025, League
+    (768, "Arab Club Champions Cup"),                   # 1 temp 2023-2023, Cup
+    (813, "Elite Two (Cameroon)"),                      # 1 temp 2026-2026, League
+    (1104, "Liga 3 (Georgia)"),                         # 1 temp 2026-2026, League
+    (1232, "Copa De La Liga (Peru)"),                   # 1 temp 2026-2026, Cup
+]
+
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"
 
@@ -228,7 +312,17 @@ def main():
     ap.add_argument("--margin", type=int, default=200)
     ap.add_argument("--from", dest="ffrom", type=int, default=2026)
     ap.add_argument("--to", dest="fto", type=int, default=2015)
+    ap.add_argument("--include-expansion", action="store_true",
+                    help="acrescenta LEAGUES_EXPANSION_20260730 (67 competicoes novas) ao alvo")
+    ap.add_argument("--only-expansion", action="store_true",
+                    help="coleta SOMENTE a lista de expansao (as 83 de producao ja estao saturadas)")
     a = ap.parse_args()
+
+    targets = list(LEAGUES)
+    if a.only_expansion:
+        targets = list(LEAGUES_EXPANSION_20260730)
+    elif a.include_expansion:
+        targets = targets + list(LEAGUES_EXPANSION_20260730)
 
     ensure_table()
     have = cached_ids()
@@ -241,8 +335,8 @@ def main():
             state["parou"] = "LIMITE_DIARIO"; return False
         return True
 
-    print(f"Clubs prefetch | ja em cache: {len(have)} fixtures | ligas: {[n for _, n in LEAGUES]}", flush=True)
-    for league_id, nome in LEAGUES:
+    print(f"Clubs prefetch | ja em cache: {len(have)} fixtures | {len(targets)} ligas alvo", flush=True)
+    for league_id, nome in targets:
         if not budget_ok():
             break
         print(f"== Liga {nome} ({league_id}) ==", flush=True)

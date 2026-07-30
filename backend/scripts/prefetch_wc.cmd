@@ -17,21 +17,25 @@ echo ----- prefetch Clubes %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\prefetch_clubs.py" --max 72000 --margin 500 --from 2026 --to 2010 >> "data\state\prefetch_wc.log" 2>&1
 
 REM 2) Selecoes: so falta pegar jogos novos reais (~poucas dezenas/dia); usa o que sobrar.
+REM --floor 2024 no run DIARIO: o historico profundo ja esta saturado e re-lista-lo todo
+REM dia custava ~4.200 chamadas e estourava o tempo da tarefa. A varredura completa
+REM (--floor 2010) roda semanalmente em \PrevisaoJogos\PrefetchWorldCupFull.
 echo ----- prefetch Selecoes %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
-".venv\Scripts\python.exe" "scripts\prefetch_wc_data.py" --all-nations --max 74000 --margin 300 --floor 2010 >> "data\state\prefetch_wc.log" 2>&1
+".venv\Scripts\python.exe" "scripts\prefetch_wc_data.py" --all-nations --max 74000 --margin 300 --floor 2024 >> "data\state\prefetch_wc.log" 2>&1
 
 REM 2.5) Odds futuras de CLUBES (novo 2026-07-15, preenche a lacuna do backtest de valor --
 REM ver PESQUISA_CLUBES.md Fase 8). Janela curta e barata, roda depois da coleta grande.
 echo ----- odds de clubes %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
 ".venv\Scripts\python.exe" "scripts\collect_club_odds_forward.py" --days 10 >> "data\state\prefetch_wc.log" 2>&1
 
-REM 3) Reconstroi os modelos de jogador (goleador + finalizacoes) com os dados de SELECOES.
-echo ----- rebuild scorer model %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
-".venv\Scripts\python.exe" "scripts\build_scorer_model.py" >> "data\state\prefetch_wc.log" 2>&1
-echo ----- rebuild shots-prop model %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
-".venv\Scripts\python.exe" "scripts\build_shots_prop_model.py" >> "data\state\prefetch_wc.log" 2>&1
+REM 3) Lesoes: /injuries por liga+temporada, 1 chamada cobre a liga inteira (retroativo,
+REM cada registro vem amarrado a um fixture_id). Temporada corrente so -- a varredura
+REM historica completa e manual (--seasons 2020-2026).
+echo ----- coleta injuries %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
+".venv\Scripts\python.exe" "scripts\collect_injuries.py" --current-only >> "data\state\prefetch_wc.log" 2>&1
 
-REM 4) Precompute dos agregados (arbitro/minutagem/quadrantes) -> tabelas pequenas no Neon.
-REM Le o bruto do espelho LOCAL; o site passa a ler bytes em vez de escanear ~44 MB.
-echo ----- precompute agregados %DATE% %TIME% ----- >> "data\state\prefetch_wc.log"
-".venv\Scripts\python.exe" "scripts\precompute_aggregates.py" >> "data\state\prefetch_wc.log" 2>&1
+REM NOTA (2026-07-30): build_scorer_model / build_shots_prop_model / precompute_aggregates
+REM SAIRAM daqui e viraram a tarefa separada \PrevisaoJogos\RebuildModels
+REM (scripts\rebuild_models.cmd). Motivo: esta tarefa era morta pelo ExecutionTimeLimit
+REM antes de chegar neles, e os 3 nao rodavam desde 2026-07-14. Rebuild nao pode depender
+REM de coleta terminar.

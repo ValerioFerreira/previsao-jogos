@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from fastapi import FastAPI, HTTPException, Query, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -608,5 +609,17 @@ def _start_3h_scheduler():
     t = threading.Thread(target=_loop, daemon=True, name="3h_fixture_collector")
     t.start()
 
-_start_3h_scheduler()
+
+# Desligado por padrão desde 2026-07-30 (§28 do doc-mestre). Este loop chama os MESMOS
+# coletores (`collect_odds_forward` / `collect_club_odds_forward`) que a tarefa do Windows
+# \PrevisaoJogos\CollectOdds já roda a cada 3h na máquina de coleta: ligado nos dois lugares,
+# a cota da API-Football era gasta em dobro e as duas pontas escreviam nas mesmas tabelas do
+# Neon ao mesmo tempo. Pior no Render, onde cada worker do processo subia o seu próprio loop.
+# A rota `GET /api/cron/refresh-upcoming` (protegida por CRON_TOKEN) continua disponível para
+# acionamento externo. Para religar o loop interno: ENABLE_INPROC_SCHEDULER=1.
+if os.getenv("ENABLE_INPROC_SCHEDULER", "").strip().lower() in ("1", "true", "yes"):
+    print("[BACKGROUND CRON] ENABLE_INPROC_SCHEDULER ativo — subindo scheduler interno de 3h.")
+    _start_3h_scheduler()
+else:
+    print("[BACKGROUND CRON] scheduler interno desligado (ENABLE_INPROC_SCHEDULER != 1).")
 

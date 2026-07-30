@@ -14,5 +14,9 @@ REM fecha o loop: resolve os jogos que ja terminaram (barato ate haver jogos res
 ".venv\Scripts\python.exe" "scripts\resolve_results.py" >> "data\odds\collect.log" 2>&1
 REM backfill duravel de TODAS as odds da janela (7d passados + futuro) em odds_history.sqlite,
 REM p/ acumular dataset rotulavel dos mercados novos (btts/escanteios/cartoes). Idempotente.
-".venv\Scripts\python.exe" "scripts\collect_odds_backfill.py" --past 7 --future 14 --buffer 300 >> "data\odds\collect.log" 2>&1
+REM 2026-07-30: --scope ambos passa a incluir as 83 ligas de CLUBE (antes so selecao, por um
+REM filtro que lia data\raw\fixtures\ -- ver docstring do script). Buffer subiu de 300 p/ 2000
+REM porque o volume por execucao cresceu ~1000x; o pre-filtro de dia deixa as execucoes
+REM seguintes quase gratuitas.
+".venv\Scripts\python.exe" "scripts\collect_odds_backfill.py" --past 7 --future 14 --buffer 2000 --scope ambos >> "data\odds\collect.log" 2>&1
 endlocal

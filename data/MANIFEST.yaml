@@ -75,12 +75,14 @@ datasets:
     refresh: "download por temporada (football-data.co.uk)"
     notes: >
       Odds reais por casa (Max/Avg/casas individuais, abertura e fechamento).
-      Hoje só a temporada 2025/26 — ampliar para 2010+ é o maior desbloqueio de
-      poder estatístico disponível (ver DOCUMENTACAO_CENTRAL.md §25.3).
-      Inclui recursivamente `data-test/historical/<temporada>/<div>.csv`, alvo do
-      scripts/fetch_historical_odds.py. ATENÇÃO: em 2026-07-28 o domínio
-      football-data.co.uk estava inacessível desta máquina (DNS resolve, TCP dropa,
-      em http e https) — o script existe mas nunca rodou contra a fonte real.
+      RESOLVIDO em 2026-07-30: o bloqueio de rede ao football-data.co.uk era da máquina
+      onde o §24 rodou, não do domínio. Da máquina de coleta o download funcionou:
+      `scripts/fetch_historical_odds.py --from 2010 --to 2026` trouxe 305 arquivos
+      (33 MB, 16 temporadas × 22 divisões) em `data-test/historical/<temporada>/<div>.csv`.
+      Resultado medido: 107.095 partidas com odds 1X2 (era 722) e 37.243 com as colunas
+      Max/Avg e O/U 2.5 — acima do N≈19.400 que o §25.3 aponta como necessário para
+      detectar um edge de 2%. Os 47 "faltantes" são 404 esperados (liga que não existia
+      naquela temporada).
 
   - id: odds_snapshots
     path: backend/data/odds/
@@ -94,6 +96,36 @@ datasets:
       Render, que é efêmero → some a cada deploy. Sem este histórico não dá para medir CLV
       (closing line value), a métrica mais confiável de habilidade em apostas. Empurrar
       para o WorkDrive a cada execução do cron é o fix.
+
+  - id: odds_history
+    path: backend/data/odds_history.sqlite
+    remote: odds/odds_history.sqlite
+    layer: workdrive
+    runtime_critical: false
+    owner: coleta
+    refresh: "cron collect_odds_backfill.py (a cada 3h, janela -7..+14)"
+    notes: >
+      Dataset DURÁVEL de odds (valores, não só metadados) da janela de retenção — é o que
+      permite validar BTTS/escanteios/cartões e medir CLV. Só cresce para a frente: a
+      API-Football não serve odd retroativa (verificado em 2026-07-30:
+      `/odds?fixture=<jogo antigo>` e `/odds?league=&season=` voltam vazios), então cada
+      dia não coletado é perda permanente. Até 2026-07-30 tinha só 12 fixtures porque o
+      filtro de ligas ignorava as 83 competições de clube — corrigido (`--scope ambos`).
+
+  - id: injuries
+    path: backend/data/injuries.sqlite
+    remote: raw/injuries.sqlite
+    layer: workdrive
+    runtime_critical: false
+    owner: coleta
+    refresh: "cron collect_injuries.py --current-only (diário); varredura completa manual"
+    notes: >
+      Lesões/desfalques por liga e temporada (`GET /injuries`), coletado em massa pela
+      primeira vez em 2026-07-30. Retroativo: cada registro vem amarrado a um fixture_id,
+      então serve para treinar, não só para prever. Custo ~600 chamadas para 83 ligas ×
+      7 temporadas. ATENÇÃO à cobertura desigual — grandes europeias a partir de 2020/21,
+      Brasileirão só a partir de 2024, Libertadores quase nada: qualquer feature derivada
+      precisa tratar "sem dado" como categoria própria, nunca como "zero lesões".
 
   # ----------------------------------------------- artefatos de modelo (híbrido)
   - id: artifacts_selecao
