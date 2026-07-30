@@ -283,15 +283,34 @@ class GoogleDriveStore:
 
     # --- Interface DataStore -------------------------------------------------
     def list(self, prefix: str = "") -> list[RemoteFile]:
+        """Lista RECURSIVAMENTE (todas as subpastas), não só os filhos diretos.
+
+        BUG CORRIGIDO 2026-07-30: a versão original só olhava `_children(folder_id)` uma
+        vez, então qualquer dataset com subpastas (`reports/tier2_.../`,
+        `odds/snapshots/club_snapshots/`, etc.) tinha a maioria dos arquivos invisível —
+        `verify` reportava 1100 arquivos "só locais" que na verdade já tinham sido
+        enviados no `push`, só que aninhados. `expand()` (o lado local, via
+        `Path.rglob("*")`) sempre foi recursivo; `list()` (o lado remoto) precisa bater
+        com o mesmo contrato.
+        """
         folder_id = self.root_folder_id
         if prefix:
-            folder_id, _ = self._resolve(prefix.rstrip("/") + "/_", create_missing=False)
+            try:
+                folder_id, _ = self._resolve(prefix.rstrip("/") + "/_", create_missing=False)
+            except FileNotFoundError:
+                return []
         out: list[RemoteFile] = []
-        for c in self._children(folder_id):
-            if self._is_folder(c):
-                continue
-            out.append(RemoteFile(path=f"{prefix.rstrip('/')}/{c.get('name')}".lstrip("/"),
-                                  size=int(c.get("size", 0) or 0), remote_id=c.get("id", "")))
+        stack: list[tuple[str, str]] = [(folder_id, prefix.rstrip("/"))]
+        while stack:
+            fid, path_prefix = stack.pop()
+            for c in self._children(fid):
+                name = c.get("name", "")
+                full = f"{path_prefix}/{name}".lstrip("/")
+                if self._is_folder(c):
+                    stack.append((c["id"], full))
+                    continue
+                out.append(RemoteFile(path=full, size=int(c.get("size", 0) or 0),
+                                      remote_id=c.get("id", "")))
         return out
 
     def exists(self, logical_path: str) -> bool:

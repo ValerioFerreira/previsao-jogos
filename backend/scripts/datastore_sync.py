@@ -196,7 +196,17 @@ def cmd_pull(manifest: dict, args) -> None:
             continue
         if ds["layer"] not in REMOTE_LAYERS:
             continue
-        remote_files = store.list(ds["remote"].rstrip("/"))
+        raw = ds["path"]
+        is_single_file = "*" not in raw and not raw.endswith("/")
+        if is_single_file:
+            # Mesmo bug de verify: store.list(prefix) tenta resolver o prefixo como
+            # PASTA -- pra um dataset de arquivo único o "prefixo" é o próprio arquivo,
+            # e o Drive não lista filhos de um arquivo. stat() direto é o equivalente.
+            remote = ds["remote"].rstrip("/")
+            st = store.stat(remote)
+            remote_files = [st] if st else []
+        else:
+            remote_files = store.list(ds["remote"].rstrip("/"))
         for rf in remote_files:
             if rf.path in seen:          # entradas do manifesto podem se sobrepor
                 continue
@@ -228,6 +238,20 @@ def cmd_verify(manifest: dict, args) -> None:
     print(f"Conferindo contra o remoto ({store.name})...")
     for ds in manifest["datasets"]:
         if ds["layer"] not in REMOTE_LAYERS:
+            continue
+        raw = ds["path"]
+        is_single_file = "*" not in raw and not raw.endswith("/")
+        if is_single_file:
+            # BUG CORRIGIDO 2026-07-30: store.list(prefix) tenta RESOLVER o prefixo como
+            # pasta (`_resolve(prefix + "/_")`) -- para um dataset de arquivo único (ex.:
+            # club_raw_cache.sqlite), o "prefixo" é o próprio arquivo, não uma pasta, e o
+            # Drive não deixa listar filhos de um arquivo -- `list()` levantava
+            # FileNotFoundError e o verify inteiro abortava sem checar o resto do manifesto.
+            # expand() sempre devolve no máximo 1 item pra esse caso, então checar direto
+            # com exists() é tão barato quanto e correto.
+            for local, remote in expand(ds):
+                if not store.exists(remote):
+                    violations.append((ds["id"], remote, local.stat().st_size))
             continue
         remote_index = {rf.path for rf in store.list(ds["remote"].rstrip("/"))}
         for local, remote in expand(ds):
