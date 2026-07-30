@@ -139,6 +139,7 @@ def main():
                 state["calls"] += 1
             try:
                 fxs, rem = _get("/fixtures", league=league_id, season=season)
+                quota_tracker.note_call()
                 time.sleep(0.15)
                 if rem is not None:
                     with slock:
@@ -179,6 +180,7 @@ def main():
             limiter.acquire()
             try:
                 resp, rem = _get("/fixtures", id=fid)
+                quota_tracker.note_call()
                 if rem is not None:
                     with slock:
                         state["rem"] = int(rem)
