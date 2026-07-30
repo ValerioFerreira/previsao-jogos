@@ -123,8 +123,9 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
 - `app/core/datastore.py` — **camada de dados (2026-07-28, §26 — provedor Google Drive desde
   2026-07-30)**. `DataStore` Protocol + `LocalStore`/`GoogleDriveStore` + `get_datastore()`,
   trocável por `DATA_STORE=local|gdrive` (mesmo padrão dos adapters de pagamento). Auth via
-  Service Account (JWT, sem interação humana — a pasta do Drive precisa ser compartilhada com o
-  `client_email` dela). `fetch(logical_path)` resolve do cache ou baixa. Registro dos dados em
+  OAuth2 de um usuário real (refresh token) — Service Account **não funciona** pra escrita numa
+  pasta comum do Meu Drive (sem cota própria, ver §26.4); setup único via
+  `scripts/google_oauth_setup.py`. `fetch(logical_path)` resolve do cache ou baixa. Registro dos dados em
   `data/MANIFEST.yaml`; CLI em `scripts/datastore_sync.py`.
 - `app/db/connection.py` — engine SQLAlchemy (Neon) + `truncate_and_append`.
 - `model_artifacts/*.joblib` — modelos em produção (DC, NB/GP, `scorer_model`, `shots_prop_model`, calibradores).

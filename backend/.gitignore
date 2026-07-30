@@ -25,6 +25,9 @@ reports/
 /*.json
 !railway.json
 
+# Credenciais (nunca commitar -- chave de service account do Google Drive, etc.)
+secrets/
+
 # Model Checkpoints & Backups
 model_artifacts_backup/
 model_artifacts_apifootball/

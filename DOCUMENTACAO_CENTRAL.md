@@ -1761,40 +1761,51 @@ Drive derrube um deploy de produção.
 - `backend/app/core/datastore.py` — `DataStore` (Protocol) + `LocalStore` + `GoogleDriveStore` +
   `get_datastore()`, trocável por `DATA_STORE=local|gdrive`. Mesmo padrão dos adapters de
   pagamento/nota fiscal (nunca hardcode o provedor num domínio). `fetch()` é a função que
-  scripts/serviços devem usar no lugar de caminho hardcoded. Auth via Service Account (JWT,
-  `google-auth`), sem interação humana — a pasta do Drive precisa ser compartilhada (papel
-  Editor) com o `client_email` da service account. Upload em blocos via protocolo resumível do
-  Drive (não lê o arquivo inteiro em memória — importa pro `club_raw_cache.sqlite`, ~7 GB hoje).
+  scripts/serviços devem usar no lugar de caminho hardcoded. Auth via **OAuth2 de um usuário
+  real** (refresh token) — ver §26.4 sobre por que não é Service Account. Upload em blocos via
+  protocolo resumível do Drive (não lê o arquivo inteiro em memória — importa pro
+  `club_raw_cache.sqlite`, ~7 GB hoje).
 - `data/MANIFEST.yaml` — registro declarado de cada dataset (caminho, camada, dono, cadência,
   se é crítico em runtime). **Todo dado novo deve ser registrado aqui.**
 - `backend/scripts/datastore_sync.py` — `status` / `push` / `pull` / `verify`, incremental por
   sha256 (`backend/data/.datastore_state.json`). `verify` consulta o **remoto de verdade**, não o
-  estado local — é o que faz cumprir a regra de ouro.
+  estado local — é o que faz cumprir a regra de ouro. Carrega `backend/.env` via `python-dotenv`
+  no próprio script (não depende do pydantic-settings do app FastAPI).
+- `backend/scripts/google_oauth_setup.py` — helper de setup único: abre o navegador, captura o
+  código de autorização num servidor HTTP local (`http://localhost:8765/`), troca por um refresh
+  token e imprime as 3 variáveis prontas pra colar em `.env`.
 
 **Estado atual (2026-07-30)**: validado ponta a ponta com `DATA_STORE=local` (push incremental,
 pull preservando subpastas, verify). Dois bugs reais pegos no teste e corrigidos: o `pull`
 achatava `reports/performance/x.json` em `reports/x.json`, e o `verify` confiava no estado local
 (daria "tudo certo" falso com remoto vazio). `status` hoje acusa **~8 GB / 1255 arquivos** com
 cópia única em máquina local — cresceu bastante desde 2026-07-28 (952 MB) por causa da coleta do
-§28 (expansão de competições, lesões, odds históricas, contexto de elenco). `GoogleDriveStore`
-em si ainda **não foi executado contra a API real** — só contra `LocalStore` — porque a credencial
-ainda não existia quando foi escrito.
+§28 (expansão de competições, lesões, odds históricas, contexto de elenco).
 
-### 26.4 Pendente — credenciais do Google Drive
+**`GoogleDriveStore` testado contra a API real pela primeira vez em 2026-07-30, e a primeira
+tentativa (Service Account) não funcionou:** service account não tem cota de armazenamento
+própria — mesmo compartilhada como Editor numa pasta comum do Meu Drive, `upload()` falhava com
+`storageQuotaExceeded` ("Service Accounts do not have storage quota. Leverage shared drives...").
+Shared Drive exige Google Workspace pago, que a conta do dono (Gmail pessoal) não tem. Trocado
+para **OAuth2 com refresh token de um usuário real** (o dono) — mesmo esquema que o WorkDrive já
+usava antes, e a única forma de escrever numa pasta do Meu Drive comum via API. `list()`/`stat()`
+(leitura) chegaram a funcionar com service account antes da troca; `upload()` (escrita) que
+expôs o problema.
 
-Faltam (criar em `console.cloud.google.com`, colocar em `backend/.env`):
+### 26.4 Ativação (OAuth2, passo único)
 
-1. Criar/escolher um projeto no Google Cloud e ativar a **Google Drive API**.
-2. `IAM & Admin → Service Accounts` → criar uma service account → gerar uma **chave JSON**.
-3. No Google Drive normal (não o do projeto — o pessoal/organizacional de quem administra),
-   criar (ou escolher) uma pasta e **compartilhá-la** com o e-mail da service account (campo
-   `client_email` do JSON, formato `algo@projeto.iam.gserviceaccount.com`), papel **Editor** —
-   sem isso a service account não enxerga nada (ela não tem Drive próprio com cota).
-4. Pegar o ID da pasta na URL: `https://drive.google.com/drive/folders/<ID>`.
+1. `console.cloud.google.com` → criar/escolher um projeto → ativar a **Google Drive API**.
+2. `APIs & Services → Credentials → Create Credentials → OAuth client ID`, tipo **Desktop app**
+   (não Service Account, não Web application — Desktop aceita qualquer porta localhost sem
+   registrar URL de redirect). Se pedir tela de consentimento: tipo External, adicionar o
+   próprio e-mail como test user (não precisa publicar).
+3. Criar/escolher uma pasta normal no Google Drive do dono, pegar o ID na URL
+   (`https://drive.google.com/drive/folders/<ID>`).
+4. `python -m scripts.google_oauth_setup --client-id ID --client-secret SECRET` — abre o
+   navegador, pede consentimento, imprime as 3 variáveis prontas.
 
-Variáveis: `GOOGLE_SERVICE_ACCOUNT_JSON` (caminho pro arquivo) **ou**
-`GOOGLE_SERVICE_ACCOUNT_JSON_B64` (o JSON inteiro em base64 numa linha só — útil pra plataformas
-que só aceitam env var, tipo Render), e `GOOGLE_DRIVE_FOLDER_ID` (o ID do passo 4).
+Variáveis em `backend/.env`: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+`GOOGLE_OAUTH_REFRESH_TOKEN` (as 3 do passo 4), `GOOGLE_DRIVE_FOLDER_ID` (do passo 3).
 Com as chaves no lugar, o único passo é `DATA_STORE=gdrive python -m scripts.datastore_sync push`.
 
 ## 27. Pesquisa ampla de novas variáveis/dados/abordagens (2026-07-24)

@@ -139,67 +139,74 @@ class LocalStore:
 
 
 class GoogleDriveStore:
-    """Google Drive via API REST v3 + Service Account (JWT, sem interação humana).
+    """Google Drive via API REST v3 + OAuth2 (refresh token de um usuário real).
 
     Credenciais (env / backend/.env):
-      GOOGLE_SERVICE_ACCOUNT_JSON      — caminho pro arquivo JSON da service account, OU
-      GOOGLE_SERVICE_ACCOUNT_JSON_B64  — o mesmo JSON em base64 numa única linha (útil pra
-                                          plataformas onde só dá pra setar env var, tipo Render)
-      GOOGLE_DRIVE_FOLDER_ID           — pasta raiz do repositório de dados
+      GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN
+      GOOGLE_DRIVE_FOLDER_ID   — pasta raiz do repositório de dados
 
-    Passo humano obrigatório: a pasta do Drive precisa ser COMPARTILHADA (papel "Editor")
-    com o e-mail da service account (`client_email` dentro do JSON, formato
-    `algo@projeto.iam.gserviceaccount.com`) — a service account não tem Drive próprio com
-    cota de armazenamento, só acessa o que for compartilhado com ela.
+    ATENÇÃO — por que não é Service Account: essa era a implementação original (JWT, sem
+    interação humana), mas Service Account do Google **não tem cota de armazenamento
+    própria** — mesmo compartilhada como Editor numa pasta normal do Meu Drive, o upload
+    falha com `storageQuotaExceeded` ("Service Accounts do not have storage quota").
+    Só funciona com Shared Drive (exige Google Workspace pago) ou delegando pra um usuário
+    real via OAuth2 — que é o caso aqui (conta pessoal do dono). Descoberto rodando contra
+    a API real em 2026-07-30 (a suíte de testes só cobria `LocalStore`).
 
-    Nota de implementação: como o WorkDrive, o Google Drive endereça arquivos por **id**,
-    não por caminho, e permite nomes duplicados na mesma pasta. Este adapter mantém um
-    índice caminho-lógico → id, resolvido navegando as pastas a partir de
+    Passo humano único: gerar o refresh token uma vez com
+    `python -m scripts.google_oauth_setup` (abre o navegador, pede consentimento, imprime
+    o token) — depois disso a renovação do access token é automática.
+
+    Nota de implementação: como o WorkDrive (adapter anterior), o Google Drive endereça
+    arquivos por **id**, não por caminho, e permite nomes duplicados na mesma pasta. Este
+    adapter mantém um índice caminho-lógico → id, resolvido navegando as pastas a partir de
     `GOOGLE_DRIVE_FOLDER_ID` (query `'{parent}' in parents`) e cacheado em memória por
-    processo — mesmo padrão do WorkDriveStore que este substituiu.
+    processo.
     """
 
     name = "gdrive"
-    _SCOPES = ["https://www.googleapis.com/auth/drive"]
+    _SCOPES = "https://www.googleapis.com/auth/drive"
+    _TOKEN_URL = "https://oauth2.googleapis.com/token"
     _API_BASE = "https://www.googleapis.com/drive/v3"
     _UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3"
 
     def __init__(self) -> None:
         self.root_folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "")
-        json_path = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-        json_b64 = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON_B64", "")
+        self.client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
+        self.client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "")
+        self.refresh_token = os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN", "")
         missing = [k for k, v in {
             "GOOGLE_DRIVE_FOLDER_ID": self.root_folder_id,
+            "GOOGLE_OAUTH_CLIENT_ID": self.client_id,
+            "GOOGLE_OAUTH_CLIENT_SECRET": self.client_secret,
+            "GOOGLE_OAUTH_REFRESH_TOKEN": self.refresh_token,
         }.items() if not v]
-        if not json_path and not json_b64:
-            missing.append("GOOGLE_SERVICE_ACCOUNT_JSON ou GOOGLE_SERVICE_ACCOUNT_JSON_B64")
         if missing:
             raise RuntimeError(
                 "DATA_STORE=gdrive mas faltam credenciais: " + ", ".join(missing) +
-                ". Crie a service account em https://console.cloud.google.com/iam-admin/serviceaccounts "
-                "e compartilhe a pasta do Drive com o client_email dela (papel Editor)."
+                ". Veja `python -m scripts.google_oauth_setup --help`."
             )
-        self._creds = self._load_credentials(json_path, json_b64)
+        self._token: Optional[str] = None
         self._folder_cache: dict[str, str] = {}
 
-    # --- Auth (JWT de service account, sem consentimento de usuário) ---------
-    def _load_credentials(self, json_path: str, json_b64: str):
-        from google.oauth2 import service_account
-        if json_b64:
-            import base64
-            import json as _json
-            info = _json.loads(base64.b64decode(json_b64))
-            return service_account.Credentials.from_service_account_info(info, scopes=self._SCOPES)
-        path = Path(json_path)
-        if not path.exists():
-            raise RuntimeError(f"GOOGLE_SERVICE_ACCOUNT_JSON aponta pra arquivo inexistente: {path}")
-        return service_account.Credentials.from_service_account_file(str(path), scopes=self._SCOPES)
+    # --- OAuth (token de acesso renovado a partir do refresh token) ----------
+    def _access_token(self) -> str:
+        if self._token:
+            return self._token
+        import httpx
+        resp = httpx.post(self._TOKEN_URL, data={
+            "client_id": self.client_id, "client_secret": self.client_secret,
+            "refresh_token": self.refresh_token, "grant_type": "refresh_token",
+        }, timeout=30)
+        resp.raise_for_status()
+        token = resp.json().get("access_token")
+        if not token:
+            raise RuntimeError(f"Google OAuth: refresh não retornou access_token: {resp.json()}")
+        self._token = token
+        return token
 
     def _headers(self) -> dict:
-        import google.auth.transport.requests
-        if not self._creds.valid:
-            self._creds.refresh(google.auth.transport.requests.Request())
-        return {"Authorization": f"Bearer {self._creds.token}"}
+        return {"Authorization": f"Bearer {self._access_token()}"}
 
     # --- Navegação de pastas -------------------------------------------------
     def _children(self, folder_id: str) -> list[dict]:

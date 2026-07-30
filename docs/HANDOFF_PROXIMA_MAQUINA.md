@@ -39,16 +39,15 @@ camada foi construída e testada (§26).
 É o passo que impede a próxima máquina de repetir o problema desta.
 
 ```bash
-# 1) credenciais em backend/.env (criar em https://console.cloud.google.com):
-#    a) crie um projeto -> APIs & Services -> ative "Google Drive API"
-#    b) IAM & Admin -> Service Accounts -> criar -> gerar chave JSON
-#    c) crie/escolha uma pasta no SEU Google Drive normal e COMPARTILHE com o
-#       e-mail da service account (campo "client_email" do JSON), papel Editor
-#       -- sem isso a service account nao enxerga a pasta (nao tem Drive proprio)
-#    d) pegue o ID da pasta na URL (https://drive.google.com/drive/folders/<ID>)
-#
-#    GOOGLE_SERVICE_ACCOUNT_JSON=/caminho/para/a-chave.json   (ou _B64= com o JSON em base64)
-#    GOOGLE_DRIVE_FOLDER_ID=<ID da pasta compartilhada>
+# 1) credenciais em backend/.env -- OAuth2 de usuario real, NAO Service Account (ver
+#    o porque logo abaixo -- ja tentamos Service Account e nao funciona):
+#    a) console.cloud.google.com -> crie um projeto -> APIs & Services -> ative "Google Drive API"
+#    b) APIs & Services -> Credentials -> Create Credentials -> OAuth client ID,
+#       tipo "Desktop app" (aceita qualquer porta localhost sem pre-registrar)
+#    c) crie/escolha uma pasta no Google Drive normal (do dono), pegue o ID na URL
+#       (https://drive.google.com/drive/folders/<ID>)
+#    d) cd backend && python -m scripts.google_oauth_setup --client-id ID --client-secret SECRET
+#       -- abre o navegador, pede consentimento, imprime as 3 variaveis prontas
 
 cd backend
 DATA_STORE=gdrive python -m scripts.datastore_sync status   # o que existe local vs remoto
@@ -64,14 +63,15 @@ tempo (expansão de competições, lesões, odds históricas, contexto de elenco
 **Regra de ouro**: nenhum dado pode ter cópia única em máquina local. Dado novo → registrar em
 `data/MANIFEST.yaml` → acessar via `app/core/datastore.py::fetch()` → `push`.
 
-⚠️ **Cuidado documentado**: o `GoogleDriveStore` foi escrito e testado contra `LocalStore` (fluxo
-completo, incluindo `status`) mas **nunca foi executado contra a API real do Google Drive** — a
-credencial ainda não existia quando o adapter foi escrito. Espere ajustar detalhes de
-endpoint/paginação na primeira execução real, especialmente `_resolve()` (o Drive endereça por
-**id**, não por caminho, e permite nomes duplicados na mesma pasta) e o upload resumível
-(`upload()` faz streaming em blocos de 1 MiB via protocolo de 2 passos — `initiate` + `PUT` na
-`Location` retornada — para não estourar memória com o `club_raw_cache.sqlite`, hoje ~7 GB). Valide
-com um dataset pequeno (`--id reports`) antes de subir os gigabytes do `club_raw_cache`.
+⚠️ **Cuidado real, já pego em 2026-07-30 — não repita**: a primeira implementação do
+`GoogleDriveStore` usava Service Account (JWT, sem interação humana — mesmo padrão de qualquer
+API server-to-server). `list()`/`stat()` (leitura) funcionaram. `upload()` (escrita) falhou com
+`403 storageQuotaExceeded: Service Accounts do not have storage quota` — mesmo com a pasta
+compartilhada como Editor. É limitação real do Google: service account só escreve em Shared
+Drive (exige Google Workspace pago). Numa conta Gmail pessoal comum, a única forma de escrever
+numa pasta do Meu Drive via API é **OAuth2 autenticado como o próprio usuário** (o que o adapter
+usa agora). Se você está lendo isto achando "vou simplificar voltando pra Service Account",
+não — já foi tentado e não funciona pra este caso.
 
 ---
 

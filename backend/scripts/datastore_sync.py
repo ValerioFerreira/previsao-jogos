@@ -40,6 +40,13 @@ try:
 except Exception:
     pass
 
+# Carrega backend/.env pro processo (GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_FOLDER_ID, etc.)
+# -- diferente do app FastAPI, um script standalone não sobe o pydantic-settings, e mesmo esse
+# só populava os campos declarados em Settings, nunca os.environ. Sem isso, GoogleDriveStore.
+# __init__ (que lê os.environ.get(...) puro) nunca vê as credenciais do .env.
+from dotenv import load_dotenv  # noqa: E402
+load_dotenv(BACKEND_ROOT / ".env")
+
 from app.core.datastore import get_datastore, sha256_file  # noqa: E402
 
 MANIFEST = REPO_ROOT / "data" / "MANIFEST.yaml"
