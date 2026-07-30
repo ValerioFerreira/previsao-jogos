@@ -48,7 +48,19 @@ Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/fronten
   `backend/data/reports/adhoc_compare_apifootball/RELATORIO_FINAL.md`**, **§22 "Verificador de
   Bets" (odds por casa nos cards, `GET /api/odds/bookmakers`, tabelas Neon
   `{,club_}odds_bookmaker_latest`) + seção "Oportunidades Encontradas" (EV positivo,
-  100% client-side) na Análise, mesmo dia**.
+  100% client-side) na Análise, mesmo dia**, **§23 RETIRADO (bateria A/B/C v1 era circular — odds
+  sintéticas derivadas da própria probabilidade do modelo) e §24 sua reexecução honesta com odds
+  reais (2026-07-28)**, **§25 diagnóstico modelo × mercado — LEIA ANTES DE PROPOR HIPÓTESE DE
+  VALOR/EV: o benchmark não é zero, é o vig (−5,71%); capturamos ~78% da informação do mercado;
+  detectar edge de 2% exige N≈19.400, então o gargalo do projeto é DADO, não modelagem; métrica
+  primária passa a ser CLV, não ROI**, **§26 Zoho WorkDrive como fonte da verdade de dados — regra
+  de ouro: nenhum dado pode ter cópia única em máquina local (`data/MANIFEST.yaml` +
+  `scripts/datastore_sync.py`)**, **§27 pesquisa ampla de novas variáveis/dados/abordagens
+  (2026-07-24) — 7 agentes de domínio (papers/empresas/blogs/open source/Kaggle/engenharia/fontes
+  de dados) + comitê técnico de 3; achados em `backend/docs/PESQUISA_VARIAVEIS_EXTERNAS.md`,
+  relatório final priorizado (6 seções, ranking, roadmap 4 fases) em
+  `backend/docs/RELATORIO_NOVAS_VARIAVEIS.md` — nenhuma promoção feita, aguarda decisão do dono
+  sobre o que entra no gate §6**.
 - **`ARCHITECTURE.md`** — infra/banco. **§3.1 otimização de Network Transfer do Neon**, **§5 camada de
   usuários/monetização**, **§6 e-mail transacional (ZeptoMail)**, **§7 ambiente de pesquisa
   reproduzível (venv, segredos, dados, jobs em background — leia antes de rodar experimentos numa

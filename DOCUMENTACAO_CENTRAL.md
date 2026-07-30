@@ -1776,4 +1776,39 @@ center** — contas UE/Índia/Austrália usam domínios distintos (`.eu`, `.in`,
 `ZOHO_ACCOUNTS_BASE`/`ZOHO_WORKDRIVE_BASE`; é a mesma pegadinha já documentada no ZeptoMail.
 Com as chaves no lugar, o único passo é `DATA_STORE=workdrive python -m scripts.datastore_sync push`.
 
+## 27. Pesquisa ampla de novas variáveis/dados/abordagens (2026-07-24)
 
+Dono pediu levantamento amplo de candidatos a nova variável/dado/abordagem capazes de aumentar a
+capacidade preditiva. Auditoria interna prévia (3 agentes Explore): modelos/features de produção,
+histórico completo de ~60 hipóteses já testadas/reprovadas, fontes de dado/endpoints já avaliados —
+usada como bloco de contexto para não repetir pesquisa já feita (regra de ouro do CLAUDE.md).
+
+**Execução**: 7 agentes de domínio em paralelo (papers acadêmicos, empresas de análise, blogs
+técnicos, repositórios open source, competições Kaggle, engenharia de ML aplicada, fontes de dados
+comerciais/gratuitas), consolidados em `backend/docs/PESQUISA_VARIAVEIS_EXTERNAS.md`. Comitê técnico
+de 3 revisores independentes (rigor estatístico/viés, viabilidade de dados/engenharia, estratégia/
+roadmap) revisou o material — round 1 completo e independente; round 2 (cross-review formal ponto a
+ponto) foi interrompido pelo limite semanal de subagentes da plataforma, e a síntese de convergência
+foi feita diretamente pelo orquestrador (sem divergência de fato encontrada entre os 3 — nota de
+honestidade metodológica registrada no relatório final).
+
+**Resultado**: `backend/docs/RELATORIO_NOVAS_VARIAVEIS.md` — 6 seções (auditoria, ~15 novas
+variáveis curadas, ranking de prioridade de 24 candidatos, 5 hipóteses inéditas com plano de
+validação, tabela de 14 fontes de dados avaliadas, roadmap em 4 fases). Top 5 recomendado pra
+começar (custo de dado zero, reusa infraestrutura já existente): calibração Dirichlet no 1X2,
+calibração Beta em chutes, job de coleta `/injuries` de clube em massa, auditoria leakage-aware da
+cascata chutes→escanteios→cartões, monitoramento PSI de drift. Achado mais forte com evidência
+externa (mas caro de implementar): Compound Poisson para escanteios com backtest real contra odds
+HKJC (Sharpe 3,07 vs 1,52 do Poisson simples). Confirma-se o "muro de dados" (xT/OBV/VAEP/Packing
+Rate/xGOT bloqueados por falta de coordenadas x/y na API-Football) e vários ratings "alternativos"
+ao Elo (SciSkill, Opta Power Rankings, valor de mercado de elenco) descartados por confounding com
+força de time já capturada pelo Elo — mesmo padrão que já reprovou xG 3x.
+
+**Decisão registrada**: nenhuma variável foi implementada ou testada sob o gate §6 nesta pesquisa —
+é backlog priorizado, aguardando decisão do dono sobre o que entra em teste real primeiro.
+
+**Reenquadramento posterior (§25)**: o diagnóstico de 2026-07-28 concluiu que o gargalo do projeto é
+**dado, não modelagem** (poder estatístico: detectar edge de 2% exige N≈19.400). Isso não invalida o
+ranking desta pesquisa, mas muda a leitura: os candidatos que **trazem dado novo** (job `/injuries`,
+cobertura de odds forward para CLV) sobem de prioridade sobre os que só refinam método
+(calibração Dirichlet/Beta). O PLANO 7 (2026-07-30) age nessa ordem.
