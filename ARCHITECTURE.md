@@ -377,9 +377,33 @@ confirme a identidade: `Get-CimInstance Win32_Process -Filter "ProcessId=<pid>"`
 resumíveis retomam do checkpoint sem perder trabalho.
 
 ### 7.5 Coleta diária automática (Windows Task Scheduler, `\PrevisaoJogos\`)
-Ver `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` para o estado corrente de cada tarefa. Resumo: 4 tarefas
-(`PrefetchWorldCup` 06:30, `CollectResolved` 05:00, `CollectPlayerForm` 00:01, `CollectOdds` a
-cada ~3h) rodando os `.cmd` em `backend/scripts/*.cmd`, cada um chamando o `.venv\Scripts\python.exe`
-local. Numa máquina nova, recriar as tarefas aponta os `.cmd` para o novo path do repo (os `.cmd`
-resolvem o próprio diretório via `%~dp0`, então só o Task Scheduler precisa ser reconfigurado, não
-os scripts).
+Ver `ESTADO_ATUAL_E_PROXIMOS_PASSOS.md` para o estado corrente de cada tarefa. Cada uma roda um
+`.cmd` em `backend/scripts/`, que chama o `.venv\Scripts\python.exe` local. Numa máquina nova,
+recriar as tarefas aponta os `.cmd` para o novo path do repo (os `.cmd` resolvem o próprio diretório
+via `%~dp0`, então só o Task Scheduler precisa ser reconfigurado, não os scripts).
+
+| Tarefa | Quando | `.cmd` | O que faz |
+|---|---|---|---|
+| `PrefetchWorldCup` | 06:30 diário | `prefetch_wc.cmd` | clubes → seleções (`--floor 2024`) → odds forward de clube → `/injuries` da temporada corrente |
+| `PrefetchWorldCupFull` | dom 03:00 | `prefetch_wc_full.cmd` | varredura histórica de seleções (`--floor 2010`) |
+| `RebuildModels` | 12:00 diário | `rebuild_models.cmd` | `build_scorer_model` + `build_shots_prop_model` + `precompute_aggregates` |
+| `CollectOdds` | a cada 3h | `collect_odds_task.cmd` | odds forward (seleção + clube) → `resolve_results` → backfill durável (`--scope ambos`) |
+| `CollectExpansion` | 14:00 diário | `collect_expansion.cmd` | backfill das 67 competições de `LEAGUES_EXPANSION_20260730` |
+| `CollectResolved` | 05:00 diário | `collect_resolved.cmd` | jogos resolvidos da Copa |
+| `CollectPlayerForm` | 00:01 diário | `collect_player_form.cmd` | **experimental, provavelmente quebrada** (aponta para path pré-monorepo) |
+| `SettleBets` | ~30 min | `settle_bets.cmd` | liquidação de apostas (não é coleta) |
+
+**Três armadilhas já pagas (2026-07-30, ver `DOCUMENTACAO_CENTRAL.md` §28):**
+
+1. **`ExecutionTimeLimit` mata a tarefa no meio, em silêncio.** `PrefetchWorldCup` tinha PT3H e vinha
+   sendo morta dentro do prefetch de seleções por 16 dias — os passos seguintes (rebuilds, agregados)
+   nunca rodavam e ninguém percebeu, porque a tarefa "terminava". Hoje é PT8H, e **rebuild não
+   depende mais de coleta terminar** (é a tarefa `RebuildModels`). Ao diagnosticar coleta parada,
+   olhe `LastTaskResult`: `267014` = terminada pelo limite, `267011` = nunca rodou, `0` = ok.
+2. **Prioridade entre tarefas é por margem de cota, não por horário.** Odd é dado *forward* e
+   irreversível (a API-Football não serve odd retroativa); histórico de partida continua disponível
+   enquanto a assinatura durar. Por isso `CollectExpansion` roda com `--margin 15000`: ela para cedo
+   para que `CollectOdds` sempre encontre cota.
+3. **Não ligue um segundo agendador.** O `_start_3h_scheduler()` de `app/main.py` chama os mesmos
+   coletores que `CollectOdds`; ligado junto, gasta cota em dobro e escreve concorrente no Neon (e no
+   Render seria um loop por worker). Fica atrás de `ENABLE_INPROC_SCHEDULER`, default off.
