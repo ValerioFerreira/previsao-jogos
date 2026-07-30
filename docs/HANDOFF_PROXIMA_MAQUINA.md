@@ -13,50 +13,65 @@ Uma bateria de hipóteses A/B/C (§23) tinha sido executada com **odds fabricada
 de brinquedo**, produzindo números inflados que contradiziam a bateria séria já registrada (§20).
 Isso foi **retirado** (§23 virou nota de retirada) e **refeito de forma honesta** (§24), com o
 modelo de produção real e odds reais. O diagnóstico que explica os resultados está no §25. Uma
-decisão de arquitetura de dados (WorkDrive como fonte da verdade) foi tomada e a camada foi
-construída e testada (§26), mas **falta credencial para ativar**.
+decisão de arquitetura de dados (armazenamento externo como fonte da verdade) foi tomada e a
+camada foi construída e testada (§26).
 
-**Três bloqueios, todos por credencial/rede — nenhum por código:**
+> **Atualização 2026-07-30 (§28)**: dos 3 bloqueios abaixo, **2 já foram resolvidos** numa sessão
+> posterior nesta mesma máquina — o mirror de competições avançou (326.386 jogos / 108 ligas, via
+> `prefetch_clubs_parallel.py --include-expansion`, não via `DATABASE_URL` do Neon) e
+> `football-data.co.uk` respondeu normalmente daqui (107.095 partidas com odds baixadas,
+> **N do backtest saiu de 722 para 73.667**). O provedor de armazenamento também mudou: **era Zoho
+> WorkDrive, agora é Google Drive** — nenhuma credencial de Zoho chegou a ser criada, então a troca
+> não perdeu nenhum dado. As instruções abaixo já refletem o provedor novo.
+
+**Bloqueios remanescentes:**
 
 | # | Bloqueio | O que falta | Impacto |
 |---|---|---|---|
-| 1 | Mirror de competições | `DATABASE_URL` real do Neon | N do backtest preso em 722 |
-| 2 | WorkDrive | 4 vars `ZOHO_*` | Dados ainda com cópia única local |
-| 3 | Odds históricas | rede que alcance football-data.co.uk | N preso em 1 temporada |
+| 1 | ~~Mirror de competições~~ | resolvido em 2026-07-30 (§28) | — |
+| 2 | Armazenamento externo (Google Drive) | credenciais de service account | Dados ainda com cópia única local |
+| 3 | ~~Odds históricas~~ | resolvido em 2026-07-30 (§28) | — |
 
 ---
 
-## 1. Ative o WorkDrive primeiro (§26)
+## 1. Ative o Google Drive primeiro (§26, atualizado §28)
 
 É o passo que impede a próxima máquina de repetir o problema desta.
 
 ```bash
-# 1) credenciais em backend/.env (criar em https://api-console.zoho.com)
-#    ZOHO_CLIENT_ID=...
-#    ZOHO_CLIENT_SECRET=...
-#    ZOHO_REFRESH_TOKEN=...
-#    ZOHO_WORKDRIVE_FOLDER_ID=...
-#    ATENÇÃO ao data center: conta UE/Índia/AU usa domínio diferente —
-#    ZOHO_ACCOUNTS_BASE / ZOHO_WORKDRIVE_BASE (mesma pegadinha do ZeptoMail)
+# 1) credenciais em backend/.env (criar em https://console.cloud.google.com):
+#    a) crie um projeto -> APIs & Services -> ative "Google Drive API"
+#    b) IAM & Admin -> Service Accounts -> criar -> gerar chave JSON
+#    c) crie/escolha uma pasta no SEU Google Drive normal e COMPARTILHE com o
+#       e-mail da service account (campo "client_email" do JSON), papel Editor
+#       -- sem isso a service account nao enxerga a pasta (nao tem Drive proprio)
+#    d) pegue o ID da pasta na URL (https://drive.google.com/drive/folders/<ID>)
+#
+#    GOOGLE_SERVICE_ACCOUNT_JSON=/caminho/para/a-chave.json   (ou _B64= com o JSON em base64)
+#    GOOGLE_DRIVE_FOLDER_ID=<ID da pasta compartilhada>
 
 cd backend
-DATA_STORE=workdrive python -m scripts.datastore_sync status   # o que existe local vs remoto
-DATA_STORE=workdrive python -m scripts.datastore_sync push     # sobe tudo (952 MB na 1ª vez)
-DATA_STORE=workdrive python -m scripts.datastore_sync verify   # exit 1 se algo só existir local
+DATA_STORE=gdrive python -m scripts.datastore_sync status   # o que existe local vs remoto
+DATA_STORE=gdrive python -m scripts.datastore_sync push     # sobe tudo (~8 GB na 1a vez, ver §28)
+DATA_STORE=gdrive python -m scripts.datastore_sync verify   # exit 1 se algo so existir local
 ```
 
 **A máquina que tem os dados bons deve dar `push` ANTES de qualquer máquina dar `pull`.**
-Hoje (2026-07-28) o `verify` acusa **952 MB / 119 arquivos** com cópia única local.
+Em 2026-07-30 (pós-§28) o `status` acusa **~8 GB / 1255 arquivos** com cópia única local — mais
+que os 952 MB de quando este documento foi escrito, porque a coleta avançou bastante nesse meio
+tempo (expansão de competições, lesões, odds históricas, contexto de elenco).
 
 **Regra de ouro**: nenhum dado pode ter cópia única em máquina local. Dado novo → registrar em
 `data/MANIFEST.yaml` → acessar via `app/core/datastore.py::fetch()` → `push`.
 
-⚠️ **Cuidado documentado**: o `WorkDriveStore` foi escrito contra a API REST do WorkDrive mas
-**nunca foi executado contra a API real** (não havia credencial). O `LocalStore` foi testado
-ponta a ponta. Espere ajustar detalhes de endpoint/paginação na primeira execução real —
-especialmente `_resolve()` (WorkDrive endereça por **id**, não por caminho) e o formato de
-resposta de `/files/{id}/files`. Valide com `--dry-run` e um dataset pequeno (`--id reports`)
-antes de subir os 583 MB do `club_raw_cache`.
+⚠️ **Cuidado documentado**: o `GoogleDriveStore` foi escrito e testado contra `LocalStore` (fluxo
+completo, incluindo `status`) mas **nunca foi executado contra a API real do Google Drive** — a
+credencial ainda não existia quando o adapter foi escrito. Espere ajustar detalhes de
+endpoint/paginação na primeira execução real, especialmente `_resolve()` (o Drive endereça por
+**id**, não por caminho, e permite nomes duplicados na mesma pasta) e o upload resumível
+(`upload()` faz streaming em blocos de 1 MiB via protocolo de 2 passos — `initiate` + `PUT` na
+`Location` retornada — para não estourar memória com o `club_raw_cache.sqlite`, hoje ~7 GB). Valide
+com um dataset pequeno (`--id reports`) antes de subir os gigabytes do `club_raw_cache`.
 
 ---
 
@@ -64,7 +79,7 @@ antes de subir os 583 MB do `club_raw_cache`.
 
 Esta máquina só tinha **4 competições** (21.130 jogos: Brasileirão A/B, Premier League,
 Champions League). A produção usa **83 competições / 272.918 jogos / 72 torneios** — coletadas
-em outra máquina e **inacessíveis daqui**. É exatamente o problema que o WorkDrive resolve.
+em outra máquina e **inacessíveis daqui**. É exatamente o problema que o Drive resolve.
 
 ```bash
 cd backend
@@ -136,7 +151,7 @@ Não há nada quebrado no modelo. Os números:
 - **Métrica que deveria virar primária: CLV** (closing line value) — converge com N muito menor
   que ROI. Hoje **impossível de medir** porque o histórico de odds não é persistido (só o
   snapshot mais recente vai pro Neon; os `.jsonl` do Render são efêmeros). **Corrigir isso é o
-  item de maior retorno depois do WorkDrive.**
+  item de maior retorno depois do Drive.**
 
 **Conclusão estratégica**: três baterias independentes (§19, §20, §25) convergem — bater o
 mercado provavelmente não é o negócio. O que é defensável e já está no ar: *o usuário perde
@@ -148,12 +163,12 @@ menos, decide melhor e paga menos vig* (`/desempenho` + alfa de cotação do §2
 
 | Item | Bloqueado por | Pronto quando |
 |---|---|---|
-| Ativar WorkDrive | 4 vars `ZOHO_*` | `datastore_sync verify` sai com exit 0 |
-| Mirror de clubes | `DATABASE_URL` do Neon | dataset com ~72 torneios/273k jogos |
-| Odds históricas | rede (ver abaixo) | `data-test/historical/` populado |
+| Ativar Google Drive | credenciais de service account (§1) | `datastore_sync verify` sai com exit 0 |
+| ~~Mirror de clubes~~ | resolvido 2026-07-30 (§28) — 326.386 jogos/108 ligas | — |
+| ~~Odds históricas~~ | resolvido 2026-07-30 (§28) — `data-test/historical/` populado | — |
 | Persistir histórico de odds | decisão de schema | CLV mensurável (§25.5) |
-| Migrar blobs do Neon | WorkDrive ativo | `match_detail_cache` fora do Neon |
-| Rever §24 com base completa | itens 1-3 acima | números de N>10k no §24 e no v2 |
+| Migrar blobs do Neon | Google Drive ativo | `match_detail_cache` fora do Neon |
+| Rever §24 com base completa | Google Drive ativo (item 1) | números de N>10k no §24 e no v2 (ver §28, N já disponível: 73.667) |
 | **Expansão de mercados** | ver `docs/PLANO_EXPANSAO_MERCADOS.md` | gate §6-C definido + candidatos julgados |
 
 **Expansão de mercados (plano aprovado 2026-07-29, nada executado)**: há ~15 mercados novos
@@ -164,13 +179,13 @@ O plano completo, com catálogo, armadilhas de dado e critérios, está em
 nunca passaram por gate nenhum** — a Fase 0 é definir o gate §6-C, a Fase 1 é aplicá-lo
 retroativamente aos 7 mercados já no ar. As Fases 2 e 4 (clube) dependem do mirror completo.
 
-**Odds históricas**: `backend/scripts/fetch_historical_odds.py` está pronto (352 arquivos: 22
-ligas × 16 temporadas, `--list` mostra o plano). Em 2026-07-28 o domínio
-`football-data.co.uk` estava **inacessível desta máquina**: DNS resolvia (217.160.0.246) mas o
-TCP era descartado em http **e** https, enquanto google/pypi/api-sports respondiam normalmente
-— bloqueio específico do domínio nessa rede. **Tente de outra rede antes de assumir que o
-script está errado** (ele nunca rodou contra a fonte real). Alternativa: baixar pelo navegador
-para `data-test/historical/<temporada>/<div>.csv`.
+**Odds históricas — RESOLVIDO em 2026-07-30 (§28)**: `backend/scripts/fetch_historical_odds.py`
+rodou com sucesso **nesta mesma máquina**, 2 dias depois. O bloqueio de 2026-07-28 (DNS resolvia
+mas o TCP era descartado em http/https especificamente pra `football-data.co.uk`) não se repetiu —
+era transitório ou específico daquela janela de rede, não do domínio nem do script. Resultado: 305
+arquivos, 33 MB, 16 temporadas × 22 divisões, em `data-test/historical/<temporada>/<div>.csv`. Se
+isso voltar a acontecer numa máquina nova, tente de outra rede antes de assumir que o script está
+errado — ele já está validado contra a fonte real.
 
 ---
 

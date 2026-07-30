@@ -4,8 +4,8 @@ Mesma filosofia dos adapters de pagamento/nota fiscal (`PaymentGateway`/`Invoice
 um `Protocol` + adapters trocáveis por env var, nunca o provedor hardcoded num domínio.
 
 Provedores:
-- `local`     — disco local (default seguro; usado em dev/offline e como fallback).
-- `workdrive` — Zoho WorkDrive (fonte da verdade oficial a partir de 2026-07-28).
+- `local`  — disco local (default seguro; usado em dev/offline e como fallback).
+- `gdrive` — Google Drive via Service Account (fonte da verdade oficial a partir de 2026-07-30).
 
 ## Por que existe
 
@@ -20,8 +20,13 @@ tornando impossível medir CLV (a métrica mais confiável de habilidade em apos
 Nenhum dado pode ter sua ÚNICA cópia numa máquina local. O diretório local é **cache
 derivado e descartável** — apagar e rodar `datastore_sync.py pull` deve restaurar tudo.
 
-WorkDrive é armazenamento de ARQUIVOS, não banco: não dá `SELECT` nele. Dado que precisa
+Google Drive é armazenamento de ARQUIVOS, não banco: não dá `SELECT` nele. Dado que precisa
 de query em runtime continua no Neon (ver `data/MANIFEST.yaml`, camada `neon`).
+
+## Nota histórica (2026-07-30)
+
+Este módulo usava Zoho WorkDrive (`WorkDriveStore`, `ZOHO_*`). Trocado por Google Drive antes
+de qualquer credencial ter sido criada — nenhuma migração de dado foi necessária, só o adapter.
 """
 from __future__ import annotations
 
@@ -63,7 +68,7 @@ def sha256_file(path: Path) -> str:
 
 
 class DataStore(Protocol):
-    """Interface mínima de armazenamento. Adapters: LocalStore, WorkDriveStore."""
+    """Interface mínima de armazenamento. Adapters: LocalStore, GoogleDriveStore."""
 
     name: str
 
@@ -83,7 +88,8 @@ class LocalStore:
     sem credencial do WorkDrive (`DATA_STORE=local`).
 
     O 'remoto' aqui é um diretório separado do cache, para que o fluxo push/pull seja
-    exercitado de verdade (e não vire um no-op que esconde bug)."""
+    exercitado de verdade (e não vire um no-op que esconde bug) — mesmo sem credencial
+    do Google Drive."""
 
     name = "local"
 
@@ -132,79 +138,97 @@ class LocalStore:
         return RemoteFile(path=logical_path, size=dst.stat().st_size, checksum=sha256_file(dst))
 
 
-class WorkDriveStore:
-    """Zoho WorkDrive via API REST + OAuth2 (refresh token).
+class GoogleDriveStore:
+    """Google Drive via API REST v3 + Service Account (JWT, sem interação humana).
 
     Credenciais (env / backend/.env):
-      ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN
-      ZOHO_WORKDRIVE_FOLDER_ID   — pasta raiz do repositório de dados
-      ZOHO_ACCOUNTS_BASE         — default https://accounts.zoho.com
-      ZOHO_WORKDRIVE_BASE        — default https://www.zohoapis.com/workdrive/api/v1
+      GOOGLE_SERVICE_ACCOUNT_JSON      — caminho pro arquivo JSON da service account, OU
+      GOOGLE_SERVICE_ACCOUNT_JSON_B64  — o mesmo JSON em base64 numa única linha (útil pra
+                                          plataformas onde só dá pra setar env var, tipo Render)
+      GOOGLE_DRIVE_FOLDER_ID           — pasta raiz do repositório de dados
 
-    ATENÇÃO ao data center: contas na UE/Índia/Austrália usam domínios distintos
-    (`.eu`, `.in`, `.com.au`) tanto em accounts quanto em zohoapis — é a mesma pegadinha
-    já documentada no ZeptoMail (`zeptomail_base_url`). Se os domínios não baterem com a
-    região da conta, a autenticação falha com erro pouco descritivo.
+    Passo humano obrigatório: a pasta do Drive precisa ser COMPARTILHADA (papel "Editor")
+    com o e-mail da service account (`client_email` dentro do JSON, formato
+    `algo@projeto.iam.gserviceaccount.com`) — a service account não tem Drive próprio com
+    cota de armazenamento, só acessa o que for compartilhado com ela.
 
-    Nota de implementação: o WorkDrive endereça arquivos por **id**, não por caminho.
-    Este adapter mantém um índice caminho-lógico → id, resolvido navegando as pastas a
-    partir de `ZOHO_WORKDRIVE_FOLDER_ID` e cacheado em memória por processo.
+    Nota de implementação: como o WorkDrive, o Google Drive endereça arquivos por **id**,
+    não por caminho, e permite nomes duplicados na mesma pasta. Este adapter mantém um
+    índice caminho-lógico → id, resolvido navegando as pastas a partir de
+    `GOOGLE_DRIVE_FOLDER_ID` (query `'{parent}' in parents`) e cacheado em memória por
+    processo — mesmo padrão do WorkDriveStore que este substituiu.
     """
 
-    name = "workdrive"
+    name = "gdrive"
+    _SCOPES = ["https://www.googleapis.com/auth/drive"]
+    _API_BASE = "https://www.googleapis.com/drive/v3"
+    _UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3"
 
     def __init__(self) -> None:
-        self.client_id = os.environ.get("ZOHO_CLIENT_ID", "")
-        self.client_secret = os.environ.get("ZOHO_CLIENT_SECRET", "")
-        self.refresh_token = os.environ.get("ZOHO_REFRESH_TOKEN", "")
-        self.root_folder_id = os.environ.get("ZOHO_WORKDRIVE_FOLDER_ID", "")
-        self.accounts_base = os.environ.get("ZOHO_ACCOUNTS_BASE", "https://accounts.zoho.com")
-        self.api_base = os.environ.get("ZOHO_WORKDRIVE_BASE",
-                                       "https://www.zohoapis.com/workdrive/api/v1")
+        self.root_folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "")
+        json_path = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+        json_b64 = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON_B64", "")
         missing = [k for k, v in {
-            "ZOHO_CLIENT_ID": self.client_id,
-            "ZOHO_CLIENT_SECRET": self.client_secret,
-            "ZOHO_REFRESH_TOKEN": self.refresh_token,
-            "ZOHO_WORKDRIVE_FOLDER_ID": self.root_folder_id,
+            "GOOGLE_DRIVE_FOLDER_ID": self.root_folder_id,
         }.items() if not v]
+        if not json_path and not json_b64:
+            missing.append("GOOGLE_SERVICE_ACCOUNT_JSON ou GOOGLE_SERVICE_ACCOUNT_JSON_B64")
         if missing:
             raise RuntimeError(
-                "DATA_STORE=workdrive mas faltam credenciais: " + ", ".join(missing) +
-                ". Crie em https://api-console.zoho.com e coloque em backend/.env."
+                "DATA_STORE=gdrive mas faltam credenciais: " + ", ".join(missing) +
+                ". Crie a service account em https://console.cloud.google.com/iam-admin/serviceaccounts "
+                "e compartilhe a pasta do Drive com o client_email dela (papel Editor)."
             )
-        self._token: Optional[str] = None
+        self._creds = self._load_credentials(json_path, json_b64)
         self._folder_cache: dict[str, str] = {}
 
-    # --- OAuth ---------------------------------------------------------------
-    def _access_token(self) -> str:
-        if self._token:
-            return self._token
-        import httpx
-        resp = httpx.post(
-            f"{self.accounts_base}/oauth/v2/token",
-            data={"refresh_token": self.refresh_token, "client_id": self.client_id,
-                  "client_secret": self.client_secret, "grant_type": "refresh_token"},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        token = data.get("access_token")
-        if not token:
-            raise RuntimeError(f"WorkDrive: refresh de token não retornou access_token: {data}")
-        self._token = token
-        return token
+    # --- Auth (JWT de service account, sem consentimento de usuário) ---------
+    def _load_credentials(self, json_path: str, json_b64: str):
+        from google.oauth2 import service_account
+        if json_b64:
+            import base64
+            import json as _json
+            info = _json.loads(base64.b64decode(json_b64))
+            return service_account.Credentials.from_service_account_info(info, scopes=self._SCOPES)
+        path = Path(json_path)
+        if not path.exists():
+            raise RuntimeError(f"GOOGLE_SERVICE_ACCOUNT_JSON aponta pra arquivo inexistente: {path}")
+        return service_account.Credentials.from_service_account_file(str(path), scopes=self._SCOPES)
 
     def _headers(self) -> dict:
-        return {"Authorization": f"Zoho-oauthtoken {self._access_token()}",
-                "Accept": "application/vnd.api+json"}
+        import google.auth.transport.requests
+        if not self._creds.valid:
+            self._creds.refresh(google.auth.transport.requests.Request())
+        return {"Authorization": f"Bearer {self._creds.token}"}
 
     # --- Navegação de pastas -------------------------------------------------
     def _children(self, folder_id: str) -> list[dict]:
         import httpx
-        resp = httpx.get(f"{self.api_base}/files/{folder_id}/files",
-                         headers=self._headers(), timeout=60)
-        resp.raise_for_status()
-        return resp.json().get("data", [])
+        out: list[dict] = []
+        page_token = None
+        while True:
+            params = {
+                "q": f"'{folder_id}' in parents and trashed=false",
+                "fields": "nextPageToken, files(id,name,mimeType,size)",
+                "pageSize": 1000,
+                "supportsAllDrives": "true",
+                "includeItemsFromAllDrives": "true",
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            resp = httpx.get(f"{self._API_BASE}/files", headers=self._headers(),
+                             params=params, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            out.extend(data.get("files", []))
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+        return out
+
+    @staticmethod
+    def _is_folder(entry: dict) -> bool:
+        return entry.get("mimeType") == "application/vnd.google-apps.folder"
 
     def _resolve(self, logical_path: str, create_missing: bool = False) -> tuple[str, Optional[str]]:
         """Resolve 'a/b/arquivo.parquet' -> (id_da_pasta_pai, id_do_arquivo|None)."""
@@ -219,26 +243,28 @@ class WorkDriveStore:
                 parent = self._folder_cache[key]
                 continue
             found = next((c for c in self._children(parent)
-                          if c.get("attributes", {}).get("name") == d
-                          and c.get("attributes", {}).get("is_folder")), None)
+                          if c.get("name") == d and self._is_folder(c)), None)
             if found is None:
                 if not create_missing:
-                    raise FileNotFoundError(f"[workdrive] pasta inexistente: {d} (em {logical_path})")
+                    raise FileNotFoundError(f"[gdrive] pasta inexistente: {d} (em {logical_path})")
                 found = self._create_folder(parent, d)
-            parent = found["id"] if "id" in found else found.get("id", "")
+            parent = found["id"]
             self._folder_cache[key] = parent
-        file_entry = next((c for c in self._children(parent)
-                           if c.get("attributes", {}).get("name") == filename), None)
+        file_entry = next((c for c in self._children(parent) if c.get("name") == filename), None)
         return parent, (file_entry.get("id") if file_entry else None)
 
     def _create_folder(self, parent_id: str, name: str) -> dict:
         import httpx
-        resp = httpx.post(f"{self.api_base}/files", headers={**self._headers(),
-                                                            "Content-Type": "application/json"},
-                          json={"data": {"attributes": {"name": name, "parent_id": parent_id},
-                                          "type": "files"}}, timeout=60)
+        resp = httpx.post(
+            f"{self._API_BASE}/files",
+            headers={**self._headers(), "Content-Type": "application/json"},
+            params={"supportsAllDrives": "true"},
+            json={"name": name, "mimeType": "application/vnd.google-apps.folder",
+                  "parents": [parent_id]},
+            timeout=60,
+        )
         resp.raise_for_status()
-        return resp.json().get("data", {})
+        return resp.json()
 
     # --- Interface DataStore -------------------------------------------------
     def list(self, prefix: str = "") -> list[RemoteFile]:
@@ -247,12 +273,10 @@ class WorkDriveStore:
             folder_id, _ = self._resolve(prefix.rstrip("/") + "/_", create_missing=False)
         out: list[RemoteFile] = []
         for c in self._children(folder_id):
-            attrs = c.get("attributes", {})
-            if attrs.get("is_folder"):
+            if self._is_folder(c):
                 continue
-            out.append(RemoteFile(path=f"{prefix.rstrip('/')}/{attrs.get('name')}".lstrip("/"),
-                                  size=int(attrs.get("storage_info", {}).get("size_in_bytes", 0) or 0),
-                                  remote_id=c.get("id", "")))
+            out.append(RemoteFile(path=f"{prefix.rstrip('/')}/{c.get('name')}".lstrip("/"),
+                                  size=int(c.get("size", 0) or 0), remote_id=c.get("id", "")))
         return out
 
     def exists(self, logical_path: str) -> bool:
@@ -270,22 +294,22 @@ class WorkDriveStore:
         if not file_id:
             return None
         import httpx
-        resp = httpx.get(f"{self.api_base}/files/{file_id}", headers=self._headers(), timeout=60)
+        resp = httpx.get(f"{self._API_BASE}/files/{file_id}", headers=self._headers(),
+                         params={"fields": "id,size", "supportsAllDrives": "true"}, timeout=60)
         resp.raise_for_status()
-        attrs = resp.json().get("data", {}).get("attributes", {})
-        return RemoteFile(path=logical_path,
-                          size=int(attrs.get("storage_info", {}).get("size_in_bytes", 0) or 0),
-                          remote_id=file_id)
+        data = resp.json()
+        return RemoteFile(path=logical_path, size=int(data.get("size", 0) or 0), remote_id=file_id)
 
     def download(self, logical_path: str, dest: Path) -> Path:
         import httpx
         _, file_id = self._resolve(logical_path)
         if not file_id:
-            raise FileNotFoundError(f"[workdrive] não existe no remoto: {logical_path}")
+            raise FileNotFoundError(f"[gdrive] não existe no remoto: {logical_path}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp = dest.with_suffix(dest.suffix + ".part")
-        with httpx.stream("GET", f"{self.api_base}/download/{file_id}",
-                          headers=self._headers(), timeout=None, follow_redirects=True) as r:
+        with httpx.stream("GET", f"{self._API_BASE}/files/{file_id}", headers=self._headers(),
+                          params={"alt": "media", "supportsAllDrives": "true"},
+                          timeout=None, follow_redirects=True) as r:
             r.raise_for_status()
             with open(tmp, "wb") as f:
                 for chunk in r.iter_bytes(CHUNK):
@@ -294,27 +318,50 @@ class WorkDriveStore:
         return dest
 
     def upload(self, src: Path, logical_path: str) -> RemoteFile:
+        """Upload resumível (protocolo de 2 passos do Drive) — o arquivo é STREAMED em
+        blocos de `CHUNK`, nunca lido inteiro em memória. Importante aqui: o maior dataset
+        do projeto (`club_raw_cache.sqlite`) passa de 580 MB, e um multipart ingênuo que lê
+        o arquivo inteiro pra montar o corpo da requisição arriscaria estourar memória."""
         import httpx
         if not src.exists():
-            raise FileNotFoundError(f"[workdrive] origem não existe: {src}")
-        parent_id, _ = self._resolve(logical_path, create_missing=True)
-        with open(src, "rb") as fh:
-            resp = httpx.post(
-                f"{self.api_base}/upload",
-                headers={"Authorization": f"Zoho-oauthtoken {self._access_token()}"},
-                params={"parent_id": parent_id, "override-name-exist": "true"},
-                files={"content": (Path(logical_path).name, fh)},
-                timeout=None,
-            )
-        resp.raise_for_status()
-        return RemoteFile(path=logical_path, size=src.stat().st_size, checksum=sha256_file(src))
+            raise FileNotFoundError(f"[gdrive] origem não existe: {src}")
+        parent_id, existing_id = self._resolve(logical_path, create_missing=True)
+        name = Path(logical_path).name
+        metadata = {"name": name} if existing_id else {"name": name, "parents": [parent_id]}
+
+        url = f"{self._UPLOAD_BASE}/files" if not existing_id else f"{self._UPLOAD_BASE}/files/{existing_id}"
+        method = "POST" if not existing_id else "PATCH"
+        size = src.stat().st_size
+        init = httpx.request(
+            method, url,
+            headers={**self._headers(), "Content-Type": "application/json; charset=UTF-8",
+                    "X-Upload-Content-Type": "application/octet-stream",
+                    "X-Upload-Content-Length": str(size)},
+            params={"uploadType": "resumable", "supportsAllDrives": "true"},
+            json=metadata, timeout=60,
+        )
+        init.raise_for_status()
+        session_uri = init.headers.get("Location")
+        if not session_uri:
+            raise RuntimeError(f"[gdrive] upload resumível não retornou Location: {init.headers}")
+
+        def _stream():
+            with open(src, "rb") as fh:
+                while chunk := fh.read(CHUNK):
+                    yield chunk
+
+        put = httpx.put(session_uri, content=_stream(),
+                        headers={"Content-Length": str(size)}, timeout=None)
+        put.raise_for_status()
+        remote_id = put.json().get("id", existing_id or "") if put.content else (existing_id or "")
+        return RemoteFile(path=logical_path, size=size, checksum=sha256_file(src), remote_id=remote_id)
 
 
 def get_datastore(provider: Optional[str] = None) -> DataStore:
-    """Fábrica — trocável por `DATA_STORE` (local | workdrive). Default: local."""
+    """Fábrica — trocável por `DATA_STORE` (local | gdrive). Default: local."""
     name = (provider or os.environ.get("DATA_STORE") or "local").lower()
-    if name == "workdrive":
-        return WorkDriveStore()
+    if name == "gdrive":
+        return GoogleDriveStore()
     return LocalStore()
 
 

@@ -4,7 +4,7 @@
 scripts/datastore_sync.py — sincroniza os dados do projeto com a fonte da verdade.
 ==================================================================================
 
-A fonte da verdade oficial é o Zoho WorkDrive (`DATA_STORE=workdrive`). O provedor
+A fonte da verdade oficial é o Google Drive (`DATA_STORE=gdrive`). O provedor
 `local` (default) permite exercitar todo o fluxo sem credencial.
 
 Comandos:
@@ -16,8 +16,8 @@ Comandos:
 
 Exemplos:
   python -m scripts.datastore_sync status
-  DATA_STORE=workdrive python -m scripts.datastore_sync push --id club_raw_cache
-  DATA_STORE=workdrive python -m scripts.datastore_sync pull
+  DATA_STORE=gdrive python -m scripts.datastore_sync push --id club_raw_cache
+  DATA_STORE=gdrive python -m scripts.datastore_sync pull
 
 Sync incremental: compara sha256 local com o checksum registrado em
 `backend/data/.datastore_state.json` (atualizado a cada push/pull bem-sucedido). Sem isso
@@ -46,7 +46,7 @@ MANIFEST = REPO_ROOT / "data" / "MANIFEST.yaml"
 STATE = BACKEND_ROOT / "data" / ".datastore_state.json"
 
 # Camadas que devem ter cópia no provedor remoto.
-REMOTE_LAYERS = {"workdrive", "git", "derived"}
+REMOTE_LAYERS = {"gdrive", "git", "derived"}
 
 
 def load_manifest() -> dict:
@@ -241,7 +241,7 @@ def cmd_verify(manifest: dict, args) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Sincroniza dados com a fonte da verdade (WorkDrive).")
+    ap = argparse.ArgumentParser(description="Sincroniza dados com a fonte da verdade (Google Drive).")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("status", "push", "pull", "verify"):
         p = sub.add_parser(name)

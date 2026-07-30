@@ -1,22 +1,23 @@
 # MANIFEST.yaml — registro oficial dos dados da ApostaInfo
 # ============================================================
-# Fonte da verdade: Zoho WorkDrive (a partir de 2026-07-28).
+# Fonte da verdade: Google Drive (a partir de 2026-07-30; era Zoho WorkDrive, trocado
+# antes de qualquer credencial ter sido criada — nenhuma migração de dado foi necessária).
 #
 # REGRA DE OURO: nenhum dado pode ter sua ÚNICA cópia numa máquina local.
 # O diretório local é cache derivado e descartável — apagar `backend/data/` e rodar
 # `python -m scripts.datastore_sync pull` deve restaurar tudo.
 #
 # CAMADAS
-#   workdrive : arquivo grande / histórico / artefato. Fonte da verdade.
-#   neon      : precisa de QUERY em runtime (WorkDrive é blob storage, não dá SELECT).
-#   git       : pequeno e crítico no boot da produção — versionado + espelhado no WorkDrive.
-#   derived   : reconstruível a partir de outros dados; sincronizado por conveniência.
+#   gdrive  : arquivo grande / histórico / artefato. Fonte da verdade.
+#   neon    : precisa de QUERY em runtime (Drive é blob storage, não dá SELECT).
+#   git     : pequeno e crítico no boot da produção — versionado + espelhado no Drive.
+#   derived : reconstruível a partir de outros dados; sincronizado por conveniência.
 #
 # Toda entrada nova de dado no projeto DEVE ser registrada aqui.
 
-version: 1
-updated_at: "2026-07-28"
-workdrive_root: "ApostaInfo/data"   # pasta raiz no WorkDrive (ZOHO_WORKDRIVE_FOLDER_ID)
+version: 2
+updated_at: "2026-07-30"
+gdrive_root: "ApostaInfo/data"   # pasta raiz no Drive (GOOGLE_DRIVE_FOLDER_ID)
 
 datasets:
 
@@ -24,7 +25,7 @@ datasets:
   - id: club_raw_cache
     path: backend/data/club_raw_cache.sqlite
     remote: raw/club_raw_cache.sqlite
-    layer: workdrive
+    layer: gdrive
     size_mb: 583
     runtime_critical: false
     owner: coleta
@@ -37,7 +38,7 @@ datasets:
   - id: selecao_raw_cache
     path: backend/data/raw_cache.sqlite
     remote: raw/raw_cache.sqlite
-    layer: workdrive
+    layer: gdrive
     runtime_critical: false
     owner: coleta
     refresh: "cron prefetch_wc_data.py (diário)"
@@ -46,7 +47,7 @@ datasets:
   - id: dataset_selecao
     path: international_features_enriched_apifootball.csv
     remote: datasets/international_features_enriched_apifootball.csv
-    layer: workdrive
+    layer: gdrive
     runtime_critical: false
     owner: modelagem
     refresh: "após cada coleta grande"
@@ -55,14 +56,14 @@ datasets:
   - id: dataset_clubes
     path: backend/data/built/club_features_enriched.parquet
     remote: datasets/club_features_enriched.parquet
-    layer: workdrive
+    layer: gdrive
     size_mb: 7
     runtime_critical: false
     owner: modelagem
     refresh: "build_clubs_dataset.py --stage all"
     notes: >
       ATENÇÃO: a cópia local (4 torneios/21k jogos) diverge da produção (72 torneios/273k).
-      A versão do WorkDrive deve ser sempre a que gerou o artefato de produção vigente.
+      A versão do Drive deve ser sempre a que gerou o artefato de produção vigente.
 
   - id: squad_context_features
     path: backend/data/built/squad_context_features.parquet
@@ -84,7 +85,7 @@ datasets:
   - id: odds_datatest
     path: data-test/
     remote: odds/data-test/
-    layer: workdrive
+    layer: gdrive
     size_mb: 11
     runtime_critical: false
     owner: pesquisa
@@ -103,7 +104,7 @@ datasets:
   - id: odds_snapshots
     path: backend/data/odds/
     remote: odds/snapshots/
-    layer: workdrive
+    layer: gdrive
     runtime_critical: false
     owner: coleta
     refresh: "cron collect_{,club_}odds_forward.py (~3/3h)"
@@ -111,12 +112,12 @@ datasets:
       CRÍTICO E HOJE PERDIDO: série temporal de odds por casa. Vive em .jsonl no disco do
       Render, que é efêmero → some a cada deploy. Sem este histórico não dá para medir CLV
       (closing line value), a métrica mais confiável de habilidade em apostas. Empurrar
-      para o WorkDrive a cada execução do cron é o fix.
+      para o Drive a cada execução do cron é o fix.
 
   - id: odds_history
     path: backend/data/odds_history.sqlite
     remote: odds/odds_history.sqlite
-    layer: workdrive
+    layer: gdrive
     runtime_critical: false
     owner: coleta
     refresh: "cron collect_odds_backfill.py (a cada 3h, janela -7..+14)"
@@ -131,7 +132,7 @@ datasets:
   - id: injuries
     path: backend/data/injuries.sqlite
     remote: raw/injuries.sqlite
-    layer: workdrive
+    layer: gdrive
     runtime_critical: false
     owner: coleta
     refresh: "cron collect_injuries.py --current-only (diário); varredura completa manual"
@@ -147,19 +148,19 @@ datasets:
   - id: artifacts_selecao
     path: backend/model_artifacts/
     remote: artifacts/model_artifacts/
-    layer: git            # + espelhado no workdrive
+    layer: git            # + espelhado no Drive
     size_mb: 44
     runtime_critical: true
     owner: modelagem
     notes: >
       Lido pelo Predictor em runtime. Decisão 2026-07-28: permanece no git (deploy sem
-      dependência externa, boot rápido) E é espelhado no WorkDrive como fonte da verdade
+      dependência externa, boot rápido) E é espelhado no Drive como fonte da verdade
       e versionamento histórico.
 
   - id: artifacts_clubes
     path: backend/model_artifacts_clubes/
     remote: artifacts/model_artifacts_clubes/
-    layer: git            # + espelhado no workdrive
+    layer: git            # + espelhado no Drive
     size_mb: 76
     runtime_critical: true
     owner: modelagem
@@ -167,7 +168,7 @@ datasets:
   - id: artifacts_frozen_2025
     path: backend/model_artifacts_clubes_2025frozen/
     remote: artifacts/model_artifacts_clubes_2025frozen/
-    layer: workdrive
+    layer: gdrive
     size_mb: 5
     runtime_critical: false
     owner: pesquisa
@@ -185,7 +186,7 @@ datasets:
   - id: reports
     path: backend/data/reports/
     remote: reports/
-    layer: workdrive
+    layer: gdrive
     runtime_critical: false
     owner: pesquisa
     notes: "Relatórios de hipóteses/baterias. Gitignored (backend/.gitignore: reports/)."
@@ -193,7 +194,7 @@ datasets:
   - id: historico_completo
     path: data/built/historico_completo.json
     remote: raw/historico_completo.json
-    layer: workdrive
+    layer: gdrive
     size_mb: 205
     runtime_critical: false
     owner: coleta
@@ -214,7 +215,7 @@ neon_only:
   - odds_bookmaker_latest / club_odds_bookmaker_latest (Verificador de Bets)
   - odds_registry / club_odds_registry (metadados de coleta)
 
-# Blobs que DEVEM sair do Neon e ir para o WorkDrive (redução de custo/egress):
+# Blobs que DEVEM sair do Neon e ir para o Drive (redução de custo/egress):
 neon_to_migrate:
   - match_detail_cache        # blobs JSON brutos — já proibidos em runtime pela regra de ouro
   - club_match_detail_cache

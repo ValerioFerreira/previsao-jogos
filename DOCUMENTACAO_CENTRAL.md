@@ -1716,65 +1716,86 @@ assim que o backfill de competições (§24.5) e as temporadas históricas ampli
 
 1. **Métrica primária passa a ser CLV** (closing line value), não ROI: converge com N muito
    menor. Bloqueado hoje porque o histórico de odds não é persistido (só o snapshot mais recente
-   vai pro Neon e os `.jsonl` do Render são efêmeros) — é o fix nº1 da migração pro WorkDrive (§26).
+   vai pro Neon e os `.jsonl` do Render são efêmeros) — é o fix nº1 da migração pro Drive (§26).
 2. **Mensagem comercial defensável** é a do §24.2 (alfa de comparar casas, robusto) e a que já
    está no ar em `/desempenho` ("o modelo perde menos"), **não** promessa de lucro.
 3. **Três baterias independentes (§19, §20, §25) convergem**: bater o mercado provavelmente não é
    o negócio. O negócio é o usuário perder menos, decidir melhor e pagar menos vig.
 
-## 26. Zoho WorkDrive como repositório oficial de dados (2026-07-28)
+## 26. Google Drive como repositório oficial de dados (2026-07-28, provedor trocado 2026-07-30)
 
-Decisão do dono: **o WorkDrive passa a ser a fonte da verdade de todos os dados**; no Neon fica
-só o que precisa de query em runtime. Motivador concreto: nesta sessão o backfill de 83
-competições ficou inacessível porque o dado existia **só em outra máquina**, o
+Decisão do dono: **um armazenamento externo passa a ser a fonte da verdade de todos os dados**;
+no Neon fica só o que precisa de query em runtime. Motivador concreto: nesta sessão o backfill de
+83 competições ficou inacessível porque o dado existia **só em outra máquina**, o
 `club_features_enriched.parquet` local divergia da produção (21k/4 torneios vs 273k/72), e o
 histórico de odds do Render é efêmero (impede medir CLV, §25.5).
+
+**Nota de provedor (2026-07-30)**: a escolha original foi Zoho WorkDrive — desenhada e
+implementada, mas **nenhuma credencial chegou a ser criada e nenhum dado foi enviado**. O dono
+trocou a decisão para **Google Drive** antes da ativação; a troca foi só de adapter
+(`app/core/datastore.py`), sem qualquer migração de dado necessária. Onde este texto ainda disser
+"WorkDrive" fora desta seção, é resquício textual — o provedor vigente é Google Drive.
 
 ### 26.1 Regra de ouro
 
 **Nenhum dado pode ter sua ÚNICA cópia numa máquina local.** O diretório local é cache derivado
 e descartável: apagar `backend/data/` e rodar `datastore_sync pull` deve restaurar tudo.
-WorkDrive é armazenamento de **arquivos** — não dá `SELECT` nele; dado que precisa de query em
+Google Drive é armazenamento de **arquivos** — não dá `SELECT` nele; dado que precisa de query em
 runtime continua no Neon.
 
 ### 26.2 Arquitetura (3 camadas)
 
-- **WorkDrive** — raw caches, datasets de treino, `data-test/`, histórico de snapshots de odds,
+- **Google Drive** — raw caches, datasets de treino, `data-test/`, histórico de snapshots de odds,
   artefatos (todas as versões), relatórios, `historico_completo.json`.
 - **Neon** — usuário/monetização, agregados `*_agg`, `odds_bookmaker_latest`/`*_registry`.
-  Blobs (`match_detail_cache`, `club_match_detail_cache`) devem **migrar** pro WorkDrive.
+  Blobs (`match_detail_cache`, `club_match_detail_cache`) devem **migrar** pro Drive.
 - **Cache local** — efêmero, gitignored, regenerável.
 
 **Artefatos de produção: modo híbrido** (decisão explícita do dono). `model_artifacts{,_clubes}/`
 (120 MB) **continuam no git** — deploy sem dependência externa e boot rápido — **e** são
-espelhados no WorkDrive como fonte da verdade/versionamento. Evita que uma indisponibilidade do
-WorkDrive derrube um deploy de produção.
+espelhados no Drive como fonte da verdade/versionamento. Evita que uma indisponibilidade do
+Drive derrube um deploy de produção.
 
 ### 26.3 Implementação
 
-- `backend/app/core/datastore.py` — `DataStore` (Protocol) + `LocalStore` + `WorkDriveStore` +
-  `get_datastore()`, trocável por `DATA_STORE=local|workdrive`. Mesmo padrão dos adapters de
+- `backend/app/core/datastore.py` — `DataStore` (Protocol) + `LocalStore` + `GoogleDriveStore` +
+  `get_datastore()`, trocável por `DATA_STORE=local|gdrive`. Mesmo padrão dos adapters de
   pagamento/nota fiscal (nunca hardcode o provedor num domínio). `fetch()` é a função que
-  scripts/serviços devem usar no lugar de caminho hardcoded.
+  scripts/serviços devem usar no lugar de caminho hardcoded. Auth via Service Account (JWT,
+  `google-auth`), sem interação humana — a pasta do Drive precisa ser compartilhada (papel
+  Editor) com o `client_email` da service account. Upload em blocos via protocolo resumível do
+  Drive (não lê o arquivo inteiro em memória — importa pro `club_raw_cache.sqlite`, ~7 GB hoje).
 - `data/MANIFEST.yaml` — registro declarado de cada dataset (caminho, camada, dono, cadência,
   se é crítico em runtime). **Todo dado novo deve ser registrado aqui.**
 - `backend/scripts/datastore_sync.py` — `status` / `push` / `pull` / `verify`, incremental por
   sha256 (`backend/data/.datastore_state.json`). `verify` consulta o **remoto de verdade**, não o
   estado local — é o que faz cumprir a regra de ouro.
 
-**Estado atual (2026-07-28)**: validado ponta a ponta com `DATA_STORE=local` (push incremental,
+**Estado atual (2026-07-30)**: validado ponta a ponta com `DATA_STORE=local` (push incremental,
 pull preservando subpastas, verify). Dois bugs reais pegos no teste e corrigidos: o `pull`
 achatava `reports/performance/x.json` em `reports/x.json`, e o `verify` confiava no estado local
-(daria "tudo certo" falso com remoto vazio). `verify` hoje acusa **952 MB / 119 arquivos** com
-cópia única em máquina local.
+(daria "tudo certo" falso com remoto vazio). `status` hoje acusa **~8 GB / 1255 arquivos** com
+cópia única em máquina local — cresceu bastante desde 2026-07-28 (952 MB) por causa da coleta do
+§28 (expansão de competições, lesões, odds históricas, contexto de elenco). `GoogleDriveStore`
+em si ainda **não foi executado contra a API real** — só contra `LocalStore` — porque a credencial
+ainda não existia quando foi escrito.
 
-### 26.4 Pendente — credenciais do WorkDrive
+### 26.4 Pendente — credenciais do Google Drive
 
-Faltam (criar em `api-console.zoho.com`, colocar em `backend/.env`): `ZOHO_CLIENT_ID`,
-`ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_WORKDRIVE_FOLDER_ID`. **Atenção ao data
-center** — contas UE/Índia/Austrália usam domínios distintos (`.eu`, `.in`, `.com.au`) em
-`ZOHO_ACCOUNTS_BASE`/`ZOHO_WORKDRIVE_BASE`; é a mesma pegadinha já documentada no ZeptoMail.
-Com as chaves no lugar, o único passo é `DATA_STORE=workdrive python -m scripts.datastore_sync push`.
+Faltam (criar em `console.cloud.google.com`, colocar em `backend/.env`):
+
+1. Criar/escolher um projeto no Google Cloud e ativar a **Google Drive API**.
+2. `IAM & Admin → Service Accounts` → criar uma service account → gerar uma **chave JSON**.
+3. No Google Drive normal (não o do projeto — o pessoal/organizacional de quem administra),
+   criar (ou escolher) uma pasta e **compartilhá-la** com o e-mail da service account (campo
+   `client_email` do JSON, formato `algo@projeto.iam.gserviceaccount.com`), papel **Editor** —
+   sem isso a service account não enxerga nada (ela não tem Drive próprio com cota).
+4. Pegar o ID da pasta na URL: `https://drive.google.com/drive/folders/<ID>`.
+
+Variáveis: `GOOGLE_SERVICE_ACCOUNT_JSON` (caminho pro arquivo) **ou**
+`GOOGLE_SERVICE_ACCOUNT_JSON_B64` (o JSON inteiro em base64 numa linha só — útil pra plataformas
+que só aceitam env var, tipo Render), e `GOOGLE_DRIVE_FOLDER_ID` (o ID do passo 4).
+Com as chaves no lugar, o único passo é `DATA_STORE=gdrive python -m scripts.datastore_sync push`.
 
 ## 27. Pesquisa ampla de novas variáveis/dados/abordagens (2026-07-24)
 
