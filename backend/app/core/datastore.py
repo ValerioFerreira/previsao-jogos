@@ -187,11 +187,17 @@ class GoogleDriveStore:
                 ". Veja `python -m scripts.google_oauth_setup --help`."
             )
         self._token: Optional[str] = None
+        self._token_expires_at: float = 0.0
         self._folder_cache: dict[str, str] = {}
 
     # --- OAuth (token de acesso renovado a partir do refresh token) ----------
     def _access_token(self) -> str:
-        if self._token:
+        import time
+        # BUG CORRIGIDO 2026-07-30: o access token do Google dura só ~1h e o cache aqui
+        # nunca expirava sozinho -- um push grande (9 GB / 1256 arquivos) morreu no meio
+        # com 401 Unauthorized depois de ~600 arquivos. Agora renova com 2 min de folga
+        # antes do vencimento real em vez de esperar a API rejeitar.
+        if self._token and time.monotonic() < self._token_expires_at - 120:
             return self._token
         import httpx
         resp = httpx.post(self._TOKEN_URL, data={
@@ -199,10 +205,12 @@ class GoogleDriveStore:
             "refresh_token": self.refresh_token, "grant_type": "refresh_token",
         }, timeout=30)
         resp.raise_for_status()
-        token = resp.json().get("access_token")
+        data = resp.json()
+        token = data.get("access_token")
         if not token:
-            raise RuntimeError(f"Google OAuth: refresh não retornou access_token: {resp.json()}")
+            raise RuntimeError(f"Google OAuth: refresh não retornou access_token: {data}")
         self._token = token
+        self._token_expires_at = time.monotonic() + int(data.get("expires_in", 3600))
         return token
 
     def _headers(self) -> dict:
