@@ -66,13 +66,21 @@ export function MatchHeader({
             className="cursor-pointer flex flex-col items-center bg-card/95 backdrop-blur-xl border border-emerald-500/40 hover:border-emerald-500/60 rounded-xl px-3 py-1.5 shadow-xl shadow-black/50 active:scale-[0.95] transition-all"
           >
             <Edit3 className="w-3 h-3 text-emerald-400 mb-0.5" />
-            <div className="flex items-center gap-1.5">
-              {teamLogoUrl(teamIds[home]) && (
-                <img src={teamLogoUrl(teamIds[home])!} alt="" className="w-5.5 h-5.5 object-contain" onError={onImgError} />
+            <div className="flex items-center gap-2">
+              {teamLogoUrl(teamIds[home]) ? (
+                <div className="w-7 h-7 flex items-center justify-center bg-muted/30 rounded overflow-hidden shrink-0 border border-border/20">
+                  <img src={teamLogoUrl(teamIds[home])!} alt="" className="max-w-full max-h-full object-contain" onError={onImgError} />
+                </div>
+              ) : (
+                <div className="w-7 h-7 bg-muted/30 rounded shrink-0" />
               )}
-              <span className="text-[10px] font-bold text-muted-foreground">x</span>
-              {teamLogoUrl(teamIds[away]) && (
-                <img src={teamLogoUrl(teamIds[away])!} alt="" className="w-5.5 h-5.5 object-contain" onError={onImgError} />
+              <span className="text-[10px] font-extrabold text-muted-foreground uppercase">x</span>
+              {teamLogoUrl(teamIds[away]) ? (
+                <div className="w-7 h-7 flex items-center justify-center bg-muted/30 rounded overflow-hidden shrink-0 border border-border/20">
+                  <img src={teamLogoUrl(teamIds[away])!} alt="" className="max-w-full max-h-full object-contain" onError={onImgError} />
+                </div>
+              ) : (
+                <div className="w-7 h-7 bg-muted/30 rounded shrink-0" />
               )}
             </div>
           </div>
