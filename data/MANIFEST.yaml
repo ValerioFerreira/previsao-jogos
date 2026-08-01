@@ -62,8 +62,10 @@ datasets:
     owner: modelagem
     refresh: "build_clubs_dataset.py --stage all"
     notes: >
-      ATENÇÃO: a cópia local (4 torneios/21k jogos) diverge da produção (72 torneios/273k).
-      A versão do Drive deve ser sempre a que gerou o artefato de produção vigente.
+      Confirmado 2026-07-30: cópia local (272.918 linhas/72 torneios, mtime 2026-07-22) bate
+      com o artefato de produção vigente (mesmos mtimes em model_artifacts_clubes/*.joblib,
+      commit dc690e3). A divergência de 4 torneios/21k linhas era de uma versão anterior —
+      nota antiga, não reflete mais o estado atual.
 
   - id: squad_context_features
     path: backend/data/built/squad_context_features.parquet

@@ -1,0 +1,13 @@
+{
+  "market": "gols_1t",
+  "scope": "clube",
+  "check": "calibracao_isotonica",
+  "n_folds": 5,
+  "ll_medio_cru": 0.62974,
+  "ll_medio_calibrado": 0.63128,
+  "ll_medio_baseline": 0.63194,
+  "folds_calibrado_bate_cru": "0/5",
+  "folds_calibrado_bate_baseline": "4/5",
+  "conclusao": "calibracao resolve -- reprovacao no gate cru era so falta de calibrador isotonico",
+  "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\gols_1t_clube_calibracao.csv"
+}

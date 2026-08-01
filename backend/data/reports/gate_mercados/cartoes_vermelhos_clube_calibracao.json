@@ -1,0 +1,13 @@
+{
+  "market": "cartoes_vermelhos",
+  "scope": "clube",
+  "check": "calibracao_isotonica",
+  "n_folds": 5,
+  "ll_medio_cru": 0.49818,
+  "ll_medio_calibrado": 0.49998,
+  "ll_medio_baseline": 0.49334,
+  "folds_calibrado_bate_cru": "2/5",
+  "folds_calibrado_bate_baseline": "2/5",
+  "conclusao": "calibracao ajuda mas nao resolve sozinha -- o candidato cru realmente perde em ajuste, nao so em calibracao",
+  "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_vermelhos_clube_calibracao.csv"
+}

@@ -1,0 +1,19 @@
+{
+  "market": "gols_2t",
+  "scope": "clube",
+  "status": "REPROVADO",
+  "n": 191392,
+  "n_folds": 5,
+  "folds_que_melhoram": "5/5",
+  "delta_ll_medio": -0.00433,
+  "tail_ece_candidato": 0.0096,
+  "tail_ece_baseline": 0.0054,
+  "coverage80_medio": 0.9466,
+  "criterio": {
+    "folds_ok": true,
+    "delta_ok": true,
+    "tail_ece_ok": false,
+    "coverage_ok": false
+  },
+  "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\gols_2t_clube.csv"
+}

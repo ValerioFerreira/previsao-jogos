@@ -1,0 +1,13 @@
+{
+  "market": "cartoes_amarelos",
+  "scope": "clube",
+  "check": "calibracao_isotonica",
+  "n_folds": 5,
+  "ll_medio_cru": 0.68275,
+  "ll_medio_calibrado": 0.67771,
+  "ll_medio_baseline": 0.66495,
+  "folds_calibrado_bate_cru": "4/5",
+  "folds_calibrado_bate_baseline": "0/5",
+  "conclusao": "calibracao ajuda mas nao resolve sozinha -- o candidato cru realmente perde em ajuste, nao so em calibracao",
+  "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_amarelos_clube_calibracao.csv"
+}

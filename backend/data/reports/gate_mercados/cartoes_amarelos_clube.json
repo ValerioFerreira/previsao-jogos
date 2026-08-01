@@ -1,0 +1,19 @@
+{
+  "market": "cartoes_amarelos",
+  "scope": "clube",
+  "status": "REPROVADO",
+  "n": 147211,
+  "n_folds": 5,
+  "folds_que_melhoram": "0/5",
+  "delta_ll_medio": 0.01816,
+  "tail_ece_candidato": 0.0427,
+  "tail_ece_baseline": 0.024,
+  "coverage80_medio": 0.8581,
+  "criterio": {
+    "folds_ok": false,
+    "delta_ok": false,
+    "tail_ece_ok": false,
+    "coverage_ok": false
+  },
+  "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_amarelos_clube.csv"
+}

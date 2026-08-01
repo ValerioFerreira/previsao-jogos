@@ -1,0 +1,154 @@
+[
+  {
+    "market": "cartoes_amarelos",
+    "scope": "clube",
+    "status": "REPROVADO",
+    "n": 147211,
+    "n_folds": 5,
+    "folds_que_melhoram": "0/5",
+    "delta_ll_medio": 0.01816,
+    "tail_ece_candidato": 0.0427,
+    "tail_ece_baseline": 0.024,
+    "coverage80_medio": 0.8581,
+    "criterio": {
+      "folds_ok": false,
+      "delta_ok": false,
+      "tail_ece_ok": false,
+      "coverage_ok": false
+    },
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_amarelos_clube.csv"
+  },
+  {
+    "market": "cartoes_vermelhos",
+    "scope": "clube",
+    "status": "REPROVADO",
+    "n": 147211,
+    "n_folds": 5,
+    "folds_que_melhoram": "1/5",
+    "delta_ll_medio": 0.00579,
+    "tail_ece_candidato": 0.01,
+    "tail_ece_baseline": 0.0086,
+    "coverage80_medio": 0.9716,
+    "criterio": {
+      "folds_ok": false,
+      "delta_ok": false,
+      "tail_ece_ok": false,
+      "coverage_ok": false
+    },
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_vermelhos_clube.csv"
+  },
+  {
+    "market": "impedimentos",
+    "scope": "clube",
+    "status": "REPROVADO",
+    "n": 138058,
+    "n_folds": 5,
+    "folds_que_melhoram": "4/5",
+    "delta_ll_medio": -0.00142,
+    "tail_ece_candidato": 0.0505,
+    "tail_ece_baseline": 0.0668,
+    "coverage80_medio": 0.9412,
+    "criterio": {
+      "folds_ok": true,
+      "delta_ok": true,
+      "tail_ece_ok": false,
+      "coverage_ok": false
+    },
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\impedimentos_clube.csv"
+  },
+  {
+    "market": "faltas",
+    "scope": "clube",
+    "status": "APROVADO",
+    "n": 146103,
+    "n_folds": 5,
+    "folds_que_melhoram": "5/5",
+    "delta_ll_medio": -0.11248,
+    "tail_ece_candidato": 0.0218,
+    "tail_ece_baseline": 0.0298,
+    "coverage80_medio": 0.8017,
+    "criterio": {
+      "folds_ok": true,
+      "delta_ok": true,
+      "tail_ece_ok": true,
+      "coverage_ok": true
+    },
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\faltas_clube.csv"
+  },
+  {
+    "market": "gols_1t",
+    "scope": "clube",
+    "status": "REPROVADO",
+    "n": 191392,
+    "n_folds": 5,
+    "folds_que_melhoram": "5/5",
+    "delta_ll_medio": -0.00455,
+    "tail_ece_candidato": 0.0064,
+    "tail_ece_baseline": 0.012,
+    "coverage80_medio": 0.9472,
+    "criterio": {
+      "folds_ok": true,
+      "delta_ok": true,
+      "tail_ece_ok": true,
+      "coverage_ok": false
+    },
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\gols_1t_clube.csv"
+  },
+  {
+    "market": "gols_2t",
+    "scope": "clube",
+    "status": "REPROVADO",
+    "n": 191392,
+    "n_folds": 5,
+    "folds_que_melhoram": "5/5",
+    "delta_ll_medio": -0.00433,
+    "tail_ece_candidato": 0.0096,
+    "tail_ece_baseline": 0.0054,
+    "coverage80_medio": 0.9466,
+    "criterio": {
+      "folds_ok": true,
+      "delta_ok": true,
+      "tail_ece_ok": false,
+      "coverage_ok": false
+    },
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\gols_2t_clube.csv"
+  },
+  {
+    "market": "cartoes_1t",
+    "scope": "clube",
+    "status": "REPROVADO",
+    "n": 147378,
+    "n_folds": 5,
+    "folds_que_melhoram": "1/5",
+    "delta_ll_medio": 0.01149,
+    "tail_ece_candidato": 0.0232,
+    "tail_ece_baseline": 0.0179,
+    "coverage80_medio": 0.9169,
+    "criterio": {
+      "folds_ok": false,
+      "delta_ok": false,
+      "tail_ece_ok": false,
+      "coverage_ok": false
+    },
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_1t_clube.csv"
+  },
+  {
+    "market": "cartoes_2t",
+    "scope": "clube",
+    "status": "REPROVADO",
+    "n": 147378,
+    "n_folds": 5,
+    "folds_que_melhoram": "0/5",
+    "delta_ll_medio": 0.01608,
+    "tail_ece_candidato": 0.0239,
+    "tail_ece_baseline": 0.0111,
+    "coverage80_medio": 0.8545,
+    "criterio": {
+      "folds_ok": false,
+      "delta_ok": false,
+      "tail_ece_ok": false,
+      "coverage_ok": false
+    },
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_2t_clube.csv"
+  }
+]

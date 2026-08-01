@@ -1,0 +1,19 @@
+{
+  "market": "faltas",
+  "scope": "clube",
+  "status": "APROVADO",
+  "n": 146103,
+  "n_folds": 5,
+  "folds_que_melhoram": "5/5",
+  "delta_ll_medio": -0.11248,
+  "tail_ece_candidato": 0.0218,
+  "tail_ece_baseline": 0.0298,
+  "coverage80_medio": 0.8017,
+  "criterio": {
+    "folds_ok": true,
+    "delta_ok": true,
+    "tail_ece_ok": true,
+    "coverage_ok": true
+  },
+  "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\faltas_clube.csv"
+}

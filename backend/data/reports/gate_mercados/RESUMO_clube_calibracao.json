@@ -1,0 +1,15 @@
+[
+  {
+    "market": "cartoes_2t",
+    "scope": "clube",
+    "check": "calibracao_isotonica",
+    "n_folds": 5,
+    "ll_medio_cru": 0.64862,
+    "ll_medio_calibrado": 0.64902,
+    "ll_medio_baseline": 0.63886,
+    "folds_calibrado_bate_cru": "4/5",
+    "folds_calibrado_bate_baseline": "0/5",
+    "conclusao": "calibracao ajuda mas nao resolve sozinha -- o candidato cru realmente perde em ajuste, nao so em calibracao",
+    "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_2t_clube_calibracao.csv"
+  }
+]

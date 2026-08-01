@@ -10,7 +10,7 @@ import InfoTooltip from "@/components/platform/InfoTooltip";
 import { MarketCard } from "@/components/platform/MarketCard";
 import BookmakerOddsBadge from "@/components/platform/BookmakerOddsBadge";
 import {
-  DuplaChanceCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard,
+  DuplaChanceCard, EmpateAnulaCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard,
   VitoriaSemSofrerCard, TimeAMarcarPrimeiroCard, MataMataAgregadoCard,
 } from "@/components/platform/DerivedMarkets";
 import ScorersCard from "@/components/platform/ScorersCard";
@@ -436,6 +436,7 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers, 
         {/* Dupla Chance e Time a Marcar Primeiro | Handicaps */}
         <div className="flex flex-col gap-4 lg:gap-6">
           {prediction.mercados_derivados && <DuplaChanceCard d={prediction.mercados_derivados} home={home} away={away} />}
+          {prediction.mercados_derivados && <EmpateAnulaCard d={prediction.mercados_derivados} home={home} away={away} />}
           {prediction.time_marca_primeiro && <TimeAMarcarPrimeiroCard d={prediction.time_marca_primeiro} home={home} away={away} />}
         </div>
         {prediction.mercados_derivados && <HandicapsCard d={prediction.mercados_derivados} home={home} away={away} teamIds={teamIds} />}
@@ -538,6 +539,17 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers, 
               <MarketCard title="Impedimentos" subtitle={teamPt(home)} prediction={prediction.impedimentos[home]} />
               <MarketCard title="Impedimentos" subtitle="Totais (Partida)" prediction={prediction.impedimentos.total} />
               <MarketCard title="Impedimentos" subtitle={teamPt(away)} prediction={prediction.impedimentos[away]} />
+            </div>
+          </CollapsibleMarket>
+        )}
+
+        {/* Faltas (mercado novo, passou o gate §6-C cru em 2026-07-31) */}
+        {prediction.faltas && prediction.faltas.total && (
+          <CollapsibleMarket title="Faltas" tip="Total de faltas cometidas na partida.">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <MarketCard title="Faltas" subtitle={teamPt(home)} prediction={prediction.faltas[home]} />
+              <MarketCard title="Faltas" subtitle="Totais (Partida)" prediction={prediction.faltas.total} />
+              <MarketCard title="Faltas" subtitle={teamPt(away)} prediction={prediction.faltas[away]} />
             </div>
           </CollapsibleMarket>
         )}

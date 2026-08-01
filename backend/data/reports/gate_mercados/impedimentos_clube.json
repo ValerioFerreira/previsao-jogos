@@ -1,0 +1,19 @@
+{
+  "market": "impedimentos",
+  "scope": "clube",
+  "status": "REPROVADO",
+  "n": 138058,
+  "n_folds": 5,
+  "folds_que_melhoram": "4/5",
+  "delta_ll_medio": -0.00142,
+  "tail_ece_candidato": 0.0505,
+  "tail_ece_baseline": 0.0668,
+  "coverage80_medio": 0.9412,
+  "criterio": {
+    "folds_ok": true,
+    "delta_ok": true,
+    "tail_ece_ok": false,
+    "coverage_ok": false
+  },
+  "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\impedimentos_clube.csv"
+}

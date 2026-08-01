@@ -1,0 +1,13 @@
+{
+  "market": "impedimentos",
+  "scope": "clube",
+  "check": "calibracao_isotonica",
+  "n_folds": 5,
+  "ll_medio_cru": 0.62612,
+  "ll_medio_calibrado": 0.62133,
+  "ll_medio_baseline": 0.6256,
+  "folds_calibrado_bate_cru": "4/5",
+  "folds_calibrado_bate_baseline": "4/5",
+  "conclusao": "calibracao resolve -- reprovacao no gate cru era so falta de calibrador isotonico",
+  "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\impedimentos_clube_calibracao.csv"
+}

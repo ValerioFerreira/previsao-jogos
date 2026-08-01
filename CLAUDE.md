@@ -7,7 +7,7 @@ Plataforma de **previsão probabilística de partidas** — **produção: seleç
 (mercados de clube lançados em 2026-07-18, mesmo menu de mercados de seleção, ver §14 do
 doc-mestre; coleta de clube em 83 competições, ver §19.1; artefato de produção retreinado
 2026-07-22 cobre **72 torneios/5589 times/272918 jogos**, DC-NB de clube com GAP ratings, ver
-§19.8 — smoke test confirmado, **ainda não commitado** aguardando decisão do dono).
+§19.8 — smoke test confirmado, **commitado em `dc690e3`**, é o artefato vigente).
 Monorepo: **`/backend`** (FastAPI + modelos sklearn, deploy Render), **`/frontend`**
 (Next.js, deploy Vercel — **apostainfo.com.br**), banco **Neon** (Postgres serverless).
 

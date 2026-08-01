@@ -80,6 +80,8 @@ CARDS_HALF_LINES = [1.5, 2.5, 3.5, 4.5]           # cartões por tempo (total)
 REDCARD_TEAM_LINES = [0.5]                        # cartão vermelho por equipe (raro — sim/não)
 REDCARD_LINES = [0.5, 1.5]                        # cartão vermelho total
 YELLOWCARD_LINES = CARDS_LINES                    # cartão amarelo — mesma grade do total (é a maioria)
+FOULS_LINES = [20.5, 22.5, 24.5, 26.5, 28.5]      # faltas (total) -- media~25, passou gate §6-C 2026-07-31
+FOULS_TEAM_LINES = [9.5, 11.5, 13.5, 15.5]        # faltas por equipe
 GOALS_LINES = [0.5, 1.5, 2.5, 3.5, 4.5]           # gols (equipe/total, partida)
 AGG_GOALS_LINES = [2.5, 3.5, 4.5, 5.5, 6.5]       # gols agregados (mata-mata ida-volta, 2 pernas)
 # Competições continentais de clube que rodam mata-mata em duas pernas (mando invertido
@@ -136,6 +138,14 @@ class Predictor:
         _yellow_path = f"{art_dir}/cartoes_amarelos_nb.joblib"
         if os.path.exists(_yellow_path):
             self.cartoes_amarelos = CornersNB.load(_yellow_path)
+        # Faltas (mercado novo) — único candidato de contagem que passou o gate §6-C
+        # cru (2026-07-31, ver DOCUMENTACAO_CENTRAL.md §29): 5/5 folds, delta_ll
+        # -0.112, tail_ece e coverage80 dentro do alvo sem precisar calibrador.
+        # Mesmo padrão opcional/retrocompatível.
+        self.faltas = None
+        _fouls_path = f"{art_dir}/fouls_nb.joblib"
+        if os.path.exists(_fouls_path):
+            self.faltas = CornersNB.load(_fouls_path)
         # Time a marcar primeiro (mercado novo) — classificador multinomial
         # (HistGradientBoosting) sobre base_feats, salvo como dict {pipe, feats}.
         # Mesmo padrão opcional/retrocompatível.
@@ -777,6 +787,16 @@ class Predictor:
                 home_team: self._corners_market(yc["home"][0], YELLOWCARD_LINES),
                 away_team: self._corners_market(yc["away"][0], YELLOWCARD_LINES),
                 "total": self._corners_market(yc["total"][0], YELLOWCARD_LINES),
+            }
+
+        # Faltas (mercado novo, passou o gate §6-C sem precisar calibrador — ver
+        # comentário no __init__). Só é anexado se o artefato existe (hoje só clube).
+        if self.faltas is not None:
+            fl = self.faltas.predict_distributions(X[self.faltas.feats])
+            resultado["faltas"] = {
+                home_team: self._corners_market(fl["home"][0], FOULS_TEAM_LINES),
+                away_team: self._corners_market(fl["away"][0], FOULS_TEAM_LINES),
+                "total": self._corners_market(fl["total"][0], FOULS_LINES),
             }
 
         # Qualificação/agregado (mata-mata ida-volta) — só nas competições continentais

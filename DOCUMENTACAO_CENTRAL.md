@@ -1647,7 +1647,43 @@ teste de consistência multi-temporada** como o §23 (v1) fabricou ("10 de 11 an
   `backtest_match_games.py` → `backtest_generate_predictions.py` → os 3 scripts
   `adhoc_hipotese_{a,b,c}_*.py` — mesma cadeia desta rodada, só com a base completa (72
   torneios), que deve ampliar bastante o N de todas as três hipóteses (mais ligas cobertas por
-  `data-test/`, incluindo ligas continentais se houver fonte equivalente).
+  `data-test/`, incluindo ligas continentais se houver fonte equivalente). **FEITO — ver §24.6.**
+
+### 24.6 Reexecução com N grande (2026-07-31) — confirma §20/§24, não muda o veredito
+
+Pendência do §24.5 cumprida: backfill completo (72 torneios), 16 temporadas de odds reais
+(`fetch_historical_odds.py`, §28) e a cadeia inteira (`backtest_train_frozen_model` →
+`backtest_odds_ingest` → `backtest_match_games` → `backtest_generate_predictions` →
+`adhoc_hipotese_{a,b,c}_*.py`) rerodada do zero. N saltou de 722 para **~64.409 apostas 1x2 /
+30.628 O/U 2.5** (33.797 partidas casadas com odds reais).
+
+**Hipótese A (alfa de cotação) — CONFIRMADA, agora com N grande e IC estreito.**
+Alfa = **+9,60%** IC95%[+9,45%; +9,76%] no 1x2 (N=64.409) e **+4,18%** IC95%[+4,12%; +4,23%] no
+O/U 2.5 (N=30.624) — melhor casa vs pior casa disponível no mesmo pick. IC não cruza zero em
+nenhuma liga isolada (26 ligas testadas). Continua sendo **vantagem de comparação de casas, não
+do modelo** — mesmo na melhor casa o ROI pooled segue negativo (−0,32% no 1x2).
+
+**Hipótese B (modelo vs 3 perfis de apostador) — SEM EDGE, confirmado com folga estatística
+muito maior.** Pooled: `modelo_1x2` −4,65% [−5,74%;−3,57%], `favoritista` −4,08%
+[−5,15%;−3,05%], `faixa_odd_1.70_2.20` −4,83% [−6,54%;−3,12%], `modelo_ou` −4,58%
+[−5,52%;−3,62%], `emocional_sempre_over` −5,04% [−6,15%;−3,97%]. Todas as 5 estratégias
+**excluem zero** (perdem dinheiro de forma estatisticamente sólida, N grande o suficiente pra
+detectar isso) mas são **indistinguíveis entre si** — o pick do modelo não bate nem perde de
+forma robusta pra nenhuma estratégia ingênua. Por liga×estratégia (130 combinações, correção
+Bonferroni **e** BH-FDR): só 2 ligas (Ligue 2, Super League 1) sobrevivem Bonferroni em qualquer
+estratégia — e sobrevivem em **todas** as estratégias testadas ali, sinal de que é característica
+da liga (vig/cobertura de odds pior), não de nenhuma estratégia específica.
+
+**Hipótese C (desagregação por ano, 2019-2026, N≥100 por ano) — achado novo, não estava visível
+com N=722.** ROI por ano tem tendência: 2019 −3,11% [−6,97%;+0,81%] (inclui zero) até 2021/2025
+~−6 a −7% (excluem zero). Não é conclusivo por si só (pode ser vig médio subindo, mix de liga
+mudando ano a ano, ou ruído de 8 pontos) — **registrado como pergunta em aberto, não investigado
+ainda**: candidato a próxima hipótese (D?) seria decompor essa tendência por vig médio da odds
+vs mix de competição por ano, antes de suspeitar de degradação do modelo.
+
+**Veredito**: nada muda a conclusão do §20/§25 — sem edge robusto, o benchmark é o vig (~−5,7%),
+não zero. O que muda é a confiança na ausência de edge (IC ~10x mais estreito) e a hipótese C
+por ano, nova e não investigada. Relatórios completos: `backend/data/reports/hipotese_{a,b,c}_*.csv`.
 
 ## 25. Diagnóstico modelo × mercado — o benchmark correto, o vig e o poder estatístico (2026-07-28)
 
@@ -1993,3 +2029,68 @@ seria usada em produção).
   `owner`/`manager`/`partner` a cada leitura **e** a cada transação. Efeito prático: parceiro nunca
   gasta crédito de verdade, e o débito da análise fica registrado em `CreditTransaction` mas o saldo
   volta a 100 na mesma operação. *Confirmar com o dono se é intencional.*
+
+## 29. Investigação multiagente dos mercados de clube reprovados no gate §6-C (2026-07-31)
+
+Fase 1 do PLANO_EXPANSAO_MERCADOS (`backend/scripts/gate_count_market.py`) auditou 8 mercados de
+contagem de clube contra o gate §6-C (CV temporal, 5 folds, comparação contra 3 baselines NB, com
+critério de `folds_ok`/`delta_ok`/`tail_ece_ok`/`coverage80_ok`). **Aprovado:** faltas (5/5 folds).
+**Reprovados:** cartões amarelos, cartões vermelhos, cartões 1T, cartões 2T, gols 1T, gols 2T,
+impedimentos. Reprovar é resultado válido — o objetivo desta investigação **não foi melhorar os
+modelos**, foi explicar a causa raiz de cada reprovação com evidência experimental, seguindo o
+plano em `c-users-operadorsge-downloads-footballd-noble-seal.md` (PLANO 8). Estrutura: 2 agentes de
+cluster (Fase 0) + 7 agentes de mercado, cada um com 4 papéis internos (Crítico, Proponente de
+Dados, Proponente de Arquitetura, Auditor de Métricas), orçamento de 5 hipóteses/30 experimentos por
+mercado, controle negativo obrigatório em todo ganho. Relatórios completos em
+`backend/data/reports/investigacao_multiagente/*.md`.
+
+### 29.1 Causa comum ao Cluster A (cartões amarelos/vermelhos/1T/2T)
+
+O candidato original **não usa nenhuma feature histórica do próprio alvo** — as 170 features de
+produção não têm coluna de cartão — nem identidade de competição/liga (heterogeneidade real: média
+2,69-6,30 cartões por liga, R²≈9% só com a média da liga; o baseline B2/média-por-competição vencia
+o candidato em 19/20 folds nos 4 mercados). **Confirmado experimentalmente nos 4 mercados**: somar
+rolling do próprio alvo (`sb_yellow_l5`, `_cards_l5`) + target-encoding de competição sempre melhora
+delta_ll/tail_ece de forma real (controle negativo — embaralhar essas features reverte quase
+exatamente pro número original reprovado). Calibração isotônica isolada, testada antes desta
+investigação, não resolve (confirma que era falta de feature, não miscalibração).
+
+### 29.2 Causa comum ao Cluster B (gols 1T/2T, impedimentos)
+
+`coverage80` é **estruturalmente inalcançável** para distribuições discretas de baixa contagem —
+confirmado por simulação de auto-consistência (gerar dados sintéticos a partir dos parâmetros REAIS
+já ajustados do próprio candidato e medir o coverage80 empírico de um modelo "perfeitamente
+especificado") em todos os 3 mercados: gols_1t (simulação 0,90-0,945 vs real 0,9472), impedimentos
+(simulação 0,89-0,91 vs real 0,9412), gols_2t (0,940-0,947 em 5 variantes testadas). O parâmetro de
+dispersão `r` da NB sempre aparece no teto do MLE (quase-Poisson) — isso **refuta** a hipótese
+inicial de "modelo superestima dispersão". O mercado `faltas` (aprovado, mu≈25) serve de âncora
+externa: só em mu alto o coverage80 nominal fica confiável.
+
+### 29.3 Veredito por mercado
+
+| mercado | melhor achado | classificação | recomendação |
+|---|---|---|---|
+| cartões amarelos | H4b: rating GAP incremental (ataque/defesa) + competição — 5/5 folds, delta_ll −0,0216, tail_ece 0,016 (melhor dos 7); só coverage80 falha (0,88), e aqui é **problema real de dispersão** (piora conforme o modelo melhora), não só artefato | Provável/Confirmada (arquitetura importa) | investigar novamente — recalibrar largura do PMF em cima do H4b, ou dispersão da NB dependente de feature |
+| cartões vermelhos | mu_total≈0,23 — caso mais extremo; coverage80 comprovadamente inalcançável (simulação 0,9758, pior que o real 0,9716); competição fecha 76% do delta_ll; Bernoulli (sim/não) bate contagem 5/5 mas sozinho não fecha o gate; nenhuma variante aprova | Provável (parcial) | investigar novamente (Bernoulli + competição juntos, nunca testados combinados) **e** depende de mudar o gate |
+| cartões 1T | H2 (rolling+liga) passa 3/4 critérios (folds 5/5, delta_ll −0,00454, tail_ece bate baseline); H5 confirma coverage80 estrutural (simulado 0,9176 ≈ real 0,9169) | Confirmada (feature) + Confirmada (limite de métrica) | limitação do gate §6-C — adotar H2 como novo candidato + revisar coverage80 |
+| cartões 2T | H1 (rolling+liga) corrige 2/4 critérios (folds 0/5→4/5, delta_ll +0,01608→−0,00259); H2 (placar do 1T, hipótese de estado de jogo) **refutado** (0/5, pior) — não é o driver, era só falta de feature mesmo; tail_ece não é estrutural (teórico≈0,00151) | Provável (H1) / Refutada (H2) | investigar novamente — `--calibration-check` isotônico sobre o candidato já corrigido por H1 |
+| gols 1T | coverage80 inalcançável confirmado por grid completo de `r` + simulação de heterogeneidade de `mu`; reparametrização de NB, feature de redução de variância e calibração isotônica multi-quantil todas refutadas (mesmo o "gerador verdadeiro" reprova) | Confirmada | limitação do gate §6-C — proposta concreta: tabela de limiar por `mu_total` (abaixo de ~2,5 não usar coverage80, 2,5-7 informativo não eliminatório, acima de ~7-10 manter teto atual). Sob essa emenda, **aprovaria hoje** |
+| gols 2T | placar do 1T por lado melhora delta_ll e reduz tail_ece ~9%, mas ainda 1,6× pior que baseline; heterogeneidade de `mu` por estado de jogo não explica o gap (efeito ~10× menor que o necessário); coverage80 reconfirmado estrutural em 5 variantes | Provável (parcial) / Refutada (heterogeneidade de mu como causa única) | depende de mudança arquitetural — dispersão `r` da CornersNB é MLE global único, nunca condicionada; corrigir tail_ece provavelmente exige dispersão condicional |
+| impedimentos | simulação com r reais de `offsides_nb.joblib` (r_H=8,11, r_A=7,71, não saturado) confirma coverage80 estrutural; PPDA (proxy tático) já é a 3ª feature mais importante do modelo — não é falta de dado tático; reprova em coverage80 **e** tail_ece por margem mínima (0,0505 vs teto 0,05) | Confirmada | limitação do gate §6-C — mesma proposta de gols_1t; sob a opção de descartar coverage80 pra mu baixo/moderado, **aprovaria hoje** |
+
+### 29.4 Recomendação central, convergente entre os 7 mercados
+
+Todos os agentes, independente do cluster, convergiram na mesma proposta: **o critério `coverage80`
+do gate §6-C precisa de um limiar dependente de `mu_total`** (ou ser substituído por `tail_ece` em
+mercados de baixa contagem), usando a mesma metodologia de simulação de auto-consistência aplicada
+nesta investigação. Sob essa emenda, gols_1t e impedimentos aprovariam hoje sem mudança de modelo;
+cartões 1T aprovaria trocando o candidato pelo H2 corrigido. **Decisão pendente do dono** — nenhuma
+mudança foi aplicada ao gate nem a `model_artifacts_clubes/` por esta investigação (regra do PLANO
+8: nenhum artefato oficial alterado sem aprovação explícita).
+
+Achado secundário útil: a hipótese de "problema duplo" (falta de feature + estado de jogo
+intra-partida) levantada para cartões 1T/2T no início da investigação foi **refutada** para cartões
+2T (placar do 1T como feature não ajudou) — o driver real ali era só falta de feature, igual aos
+outros 3 mercados de cartão. Já para gols 2T, o placar do 1T **ajuda** de verdade (mas não o
+suficiente sozinho), então os dois mercados de "2º tempo" acabaram com diagnósticos diferentes
+apesar da hipótese inicial comum.

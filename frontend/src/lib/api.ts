@@ -83,6 +83,9 @@ export type PredictionResponse = {
   cartoes_vermelhos?: Record<string, CountPrediction>;
   // Cartões amarelos isolados (mandante/visitante/total) — mercado NB exposto cru.
   cartoes_amarelos?: Record<string, CountPrediction>;
+  // Faltas (mandante/visitante/total) — unico mercado de contagem que passou o
+  // gate §6-C cru (2026-07-31, so clube por enquanto).
+  faltas?: Record<string, CountPrediction>;
   // Mata-mata ida-e-volta (só competições continentais de clube com 2 pernas) —
   // mandante da análise = mandante da ida, visitante = mandante da volta.
   mata_mata_agregado?: {
