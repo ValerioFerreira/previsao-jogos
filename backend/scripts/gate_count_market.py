@@ -24,9 +24,27 @@ Criterio de aprovacao (docs/PLANO_EXPANSAO_MERCADOS.md §3):
   1. pmf_logloss melhor que o melhor baseline em >=4/5 folds
   2. delta pmf_logloss medio < -0.001
   3. tail_ece da linha central <= 0.05 e nao pior que o baseline
-  4. coverage80 dentro de [0.75, 0.85]
+  4. coverage80 perto do TETO ALCANCAVEL por auto-consistencia (nao mais um
+     range fixo [0.75, 0.85] -- ver EMENDA 2026-07-31 abaixo)
   5. >=5000 jogos com alvo nao-nulo
   6. sem inversao de sinal por segmento (competicao, faixa de |elo_diff|)
+
+EMENDA 2026-07-31 (DOCUMENTACAO_CENTRAL.md §29.5, decisao do dono apos a
+investigacao multiagente do PLANO 8): o criterio 4 original (coverage80 fixo
+em [0.75, 0.85]) provou-se estruturalmente inalcancavel para distribuicoes
+discretas de baixa contagem (mu_total baixo) -- confirmado por simulacao de
+auto-consistencia em 7 mercados (cartoes 1T/2T/amarelos/vermelhos, gols
+1T/2T, impedimentos): mesmo um modelo PERFEITAMENTE especificado (dados
+gerados pela propria PMF ajustada) nao entra em [0.75, 0.85] quando mu_total
+e baixo, porque o suporte discreto pula em blocos grandes de probabilidade.
+`achievable_coverage80()` reproduz essa simulacao dentro do proprio gate:
+gera dados sinteticos a partir da PMF do candidato e mede o coverage80 de um
+modelo "que sabe a verdade" contra sua propria verdade. O criterio 4 agora e
+"coverage80 observado fica a ate COVERAGE_TOLERANCE do teto alcancavel",
+nao mais um range absoluto -- isso deixa o gate justo tanto pra mercados de
+alta contagem (faltas, mu~25: teto alcancavel ~0.80, equivalente ao range
+antigo) quanto de baixa contagem (impedimentos, mu~3.7: teto ~0.90, onde o
+range antigo reprovava qualquer modelo por construcao).
 
 Reprovar e resultado valido -- sempre registrar em DOCUMENTACAO_CENTRAL.md,
 nunca esconder.
@@ -94,7 +112,10 @@ MIN_N = 5000
 DELTA_THRESHOLD = -0.001
 FOLDS_REQUIRED_FRAC = 0.8  # >=4/5
 TAIL_ECE_MAX = 0.05
-COVERAGE80_RANGE = (0.75, 0.85)
+COVERAGE80_RANGE = (0.75, 0.85)  # mantido so p/ referencia historica, nao usado desde a emenda
+COVERAGE_TOLERANCE = 0.05  # distancia maxima aceitavel ao teto alcancavel (emenda 2026-07-31)
+COVERAGE_SIM_SEED = 20260731
+COVERAGE_SIM_REPS = 5
 
 
 # ─── baselines (NB por metodo dos momentos, PMF por linha via mu variavel) ────
@@ -166,6 +187,26 @@ def baseline_b2(train: pd.DataFrame, test: pd.DataFrame, th: str, ta: str,
     comp_mean = tr.groupby("tournament")["_y"].mean().to_dict()
     mu_te = test["tournament"].map(comp_mean).fillna(global_mu).values.astype(float)
     return nb_pmf_grid(mu_te, r, 2 * max_k)  # grade do total, ver nota em baseline_b0
+
+
+def achievable_coverage80(pmf: np.ndarray, seed: int = COVERAGE_SIM_SEED,
+                           n_rep: int = COVERAGE_SIM_REPS) -> float:
+    """Teto de coverage80 alcancavel por um modelo PERFEITAMENTE especificado:
+    gera dados sinteticos a partir da PROPRIA pmf do candidato (auto-
+    consistencia -- o candidato "sabe a verdade" porque a verdade e ele
+    mesmo) e mede o coverage80 resultante. Pra distribuicoes discretas de
+    baixa contagem isso fica bem acima de 0.85 so pelo suporte discreto, nao
+    por erro de ajuste -- ver EMENDA 2026-07-31 no topo do arquivo.
+    Vetorizado via CDF (evita loop por linha com scipy)."""
+    rng = np.random.default_rng(seed)
+    cdf = pmf.cumsum(axis=1)
+    k = pmf.shape[1]
+    covs = []
+    for _ in range(n_rep):
+        u = rng.random(pmf.shape[0])
+        y_sim = np.clip((cdf < u[:, None]).sum(axis=1), 0, k - 1)
+        covs.append(protocol.coverage80(y_sim, pmf))
+    return float(np.mean(covs))
 
 
 # ─── candidato: MESMA arquitetura de producao, refeita sob CV temporal ───────
@@ -293,6 +334,7 @@ def run_gate(market: str, scope: str) -> dict:
         tece_cand = protocol.tail_ece(y_te, pmf_cand, [line_central])[f"over_{line_central}"]
         tece_base = protocol.tail_ece(y_te, pmf_melhor, [line_central])[f"over_{line_central}"]
         cov = protocol.coverage80(y_te, pmf_cand)
+        cov_teto = achievable_coverage80(pmf_cand)  # emenda 2026-07-31, ver topo do arquivo
 
         rows.append({
             "fold": fold, "n_test": len(test),
@@ -300,7 +342,7 @@ def run_gate(market: str, scope: str) -> dict:
             "melhor_baseline": melhor_baseline, "delta_ll": ll_cand - ll_melhor,
             "melhora": ll_cand < ll_melhor,
             "tail_ece_candidato": tece_cand, "tail_ece_baseline": tece_base,
-            "coverage80": cov,
+            "coverage80": cov, "coverage80_teto_alcancavel": cov_teto,
             **{f"ll_{k}": v for k, v in ll_base.items()},
         })
 
@@ -311,13 +353,15 @@ def run_gate(market: str, scope: str) -> dict:
     tece_media = float(res["tail_ece_candidato"].mean())
     tece_base_media = float(res["tail_ece_baseline"].mean())
     cov_media = float(res["coverage80"].mean())
+    cov_teto_medio = float(res["coverage80_teto_alcancavel"].mean())
+    cov_dist_teto = abs(cov_media - cov_teto_medio)
 
     aprova = (
         n_melhora / n_folds >= FOLDS_REQUIRED_FRAC
         and delta_medio < DELTA_THRESHOLD
         and tece_media <= TAIL_ECE_MAX
         and tece_media <= tece_base_media + 1e-9
-        and COVERAGE80_RANGE[0] <= cov_media <= COVERAGE80_RANGE[1]
+        and cov_dist_teto <= COVERAGE_TOLERANCE
     )
 
     out_csv = OUT_DIR / f"{market}_{scope}.csv"
@@ -329,12 +373,15 @@ def run_gate(market: str, scope: str) -> dict:
         "delta_ll_medio": round(delta_medio, 5),
         "tail_ece_candidato": round(tece_media, 4), "tail_ece_baseline": round(tece_base_media, 4),
         "coverage80_medio": round(cov_media, 4),
+        "coverage80_teto_alcancavel": round(cov_teto_medio, 4),
+        "coverage80_distancia_teto": round(cov_dist_teto, 4),
         "criterio": {
             "folds_ok": n_melhora / n_folds >= FOLDS_REQUIRED_FRAC,
             "delta_ok": delta_medio < DELTA_THRESHOLD,
             "tail_ece_ok": tece_media <= TAIL_ECE_MAX and tece_media <= tece_base_media + 1e-9,
-            "coverage_ok": COVERAGE80_RANGE[0] <= cov_media <= COVERAGE80_RANGE[1],
+            "coverage_ok": cov_dist_teto <= COVERAGE_TOLERANCE,
         },
+        "gate_versao": "emenda_2026-07-31_coverage80_por_mu",
         "csv": str(out_csv),
     }
     out_json = OUT_DIR / f"{market}_{scope}.json"

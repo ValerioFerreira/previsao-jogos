@@ -76,32 +76,20 @@ class RateLimiter:
             time.sleep(wait)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--max", type=int, default=70000)
-    ap.add_argument("--margin", type=int, default=500)
-    ap.add_argument("--from", dest="ffrom", type=int, default=2026)
-    ap.add_argument("--to", dest="fto", type=int, default=2010)
-    ap.add_argument("--workers", type=int, default=10)
-    ap.add_argument("--rps", type=float, default=6.5)  # 390/min, com folga do teto de 450/min
-    ap.add_argument("--include-expansion", action="store_true",
-                    help="acrescenta LEAGUES_EXPANSION_20260730 ao alvo")
-    ap.add_argument("--only-expansion", action="store_true",
-                    help="coleta SOMENTE a lista de expansao")
-    ap.add_argument("--local-only", action="store_true",
-                    help="grava so no espelho SQLite, sem escrever no Neon (ver MANIFEST: "
-                         "club_match_detail_cache esta em neon_to_migrate)")
-    a = ap.parse_args()
+def run_parallel_prefetch(targets, a, *, label: str = "Clubs prefetch PARALELO"):
+    """Núcleo do backfill paralelo, extraído de `main()` (2026-08-01) para ser
+    reutilizável por outros orquestradores (ex.: `prefetch_clubs_exhaustive.py`, que
+    passa `LEAGUES_ALL_ORDERED` em vez de `LEAGUES`/`LEAGUES_EXPANSION_20260730`) sem
+    duplicar a lógica de throttle/put/flush/retry -- só o `targets` e o parser de CLI
+    (`a`, um Namespace com os mesmos atributos que `main()` já usava: max, margin,
+    ffrom, fto, workers, rps, local_only) mudam entre chamadores.
 
+    `targets`: lista de (league_id, nome) já na ordem desejada -- esta função não
+    reordena nem filtra, só consome.
+    """
     if a.local_only:
         set_local_only(True)
         print("[MODO LOCAL-ONLY] blobs vao so para data/club_raw_cache.sqlite", flush=True)
-
-    targets = list(LEAGUES)
-    if a.only_expansion:
-        targets = list(LEAGUES_EXPANSION_20260730)
-    elif a.include_expansion:
-        targets = targets + list(LEAGUES_EXPANSION_20260730)
 
     ensure_table()
     have = cached_ids()
@@ -121,7 +109,7 @@ def main():
             state["stop"] = "LIMITE_DIARIO"; return False
         return True
 
-    print(f"Clubs prefetch PARALELO | ja em cache: {len(have)} fixtures | "
+    print(f"{label} | ja em cache: {len(have)} fixtures | "
           f"{len(targets)} ligas | workers={a.workers} rps={a.rps} | "
           f"cota restante {quota_tracker.remaining()}", flush=True)
 
@@ -239,6 +227,33 @@ def main():
     print(f">> Clubs (paralelo): {state['novos']} novos | {state['falhas']} falhas | "
           f"{state['calls']} chamadas | cota ~{state['rem']} | parou por: {state['stop'] or 'FIM (tudo coberto)'}",
           flush=True)
+    return state
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--max", type=int, default=70000)
+    ap.add_argument("--margin", type=int, default=500)
+    ap.add_argument("--from", dest="ffrom", type=int, default=2026)
+    ap.add_argument("--to", dest="fto", type=int, default=2010)
+    ap.add_argument("--workers", type=int, default=10)
+    ap.add_argument("--rps", type=float, default=6.5)  # 390/min, com folga do teto de 450/min
+    ap.add_argument("--include-expansion", action="store_true",
+                    help="acrescenta LEAGUES_EXPANSION_20260730 ao alvo")
+    ap.add_argument("--only-expansion", action="store_true",
+                    help="coleta SOMENTE a lista de expansao")
+    ap.add_argument("--local-only", action="store_true",
+                    help="grava so no espelho SQLite, sem escrever no Neon (ver MANIFEST: "
+                         "club_match_detail_cache esta em neon_to_migrate)")
+    a = ap.parse_args()
+
+    targets = list(LEAGUES)
+    if a.only_expansion:
+        targets = list(LEAGUES_EXPANSION_20260730)
+    elif a.include_expansion:
+        targets = targets + list(LEAGUES_EXPANSION_20260730)
+
+    run_parallel_prefetch(targets, a)
 
 
 if __name__ == "__main__":

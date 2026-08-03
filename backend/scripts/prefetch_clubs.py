@@ -16,6 +16,7 @@ Uso: python scripts/prefetch_clubs.py [--max 60000] [--margin 200] [--from 2026]
 """
 import argparse
 import json
+import re
 import sys
 import threading
 import time
@@ -228,6 +229,126 @@ LEAGUES_EXPANSION_20260730 = [
     (1104, "Liga 3 (Georgia)"),                         # 1 temp 2026-2026, League
     (1232, "Copa De La Liga (Peru)"),                   # 1 temp 2026-2026, Cup
 ]
+
+# ---------------------------------------------------------------------------------
+# LEAGUES_ALL_ORDERED -- fusão de LEAGUES + LEAGUES_EXPANSION_20260730 numa lista só,
+# reordenada em prioridade estrita Brasil -> Europa -> Sul-Americano -> Resto (pedido
+# do dono 2026-08-01: coleta exaustiva "todos os jogos de todos os clubes conhecidos"
+# nessa ordem, pra fechar os buracos de clube que nunca foi baixado por inteiro).
+# Dentro de cada categoria, ordem estável = mantém a ordem relativa original de cada
+# lista (não reordena por fama/tier, só agrupa por região).
+#
+# Critério de classificação:
+# - `LEAGUES` (nomes sem sufixo de país na maioria) -> dict manual `id -> categoria`
+#   (LEAGUE_CATEGORY), mais confiável que regex/nome pra só ~83 entradas.
+# - `LEAGUES_EXPANSION_20260730` (nomes terminam em "(Pais)") -> parseia o país do
+#   sufixo e mapeia via PAIS_PARA_CATEGORIA; as poucas entradas continentais sem
+#   sufixo de país (Club World Cup, CAF Confederation Cup, Leagues Cup, Arab Club
+#   Champions Cup) têm override explícito por id em EXPANSION_CATEGORY_OVERRIDE.
+# - Competições continentais: UEFA (Champions/Europa/Conference League) -> "europa";
+#   CONMEBOL (Libertadores/Sul-Americana/copas sul-americanas) -> "sul_americano";
+#   AFC/CAF/CONCACAF continentais e Fifa Club World Cup -> "resto".
+# - Países fronteiriços seguem o mesmo critério editorial já usado nos comentários de
+#   tier acima: Turquia/Rússia/Cazaquistão/Geórgia tratados como "europa" (filiação
+#   UEFA); Israel, Egito, África do Sul, Catar, EAU tratados como "resto" (mesmo
+#   grupo "outras ligas notáveis" do tier 4 original).
+LEAGUE_CATEGORY: dict[int, str] = {
+    # Brasil
+    71: "brasil", 72: "brasil", 73: "brasil", 75: "brasil",
+    # Europa (ligas nacionais + copas domésticas + competições continentais UEFA)
+    39: "europa", 140: "europa", 135: "europa", 78: "europa", 61: "europa",
+    2: "europa", 3: "europa", 848: "europa",
+    88: "europa", 94: "europa", 144: "europa", 179: "europa", 203: "europa",
+    40: "europa", 79: "europa", 141: "europa", 62: "europa", 136: "europa",
+    235: "europa", 333: "europa", 207: "europa", 218: "europa", 119: "europa",
+    197: "europa", 106: "europa", 210: "europa", 103: "europa", 113: "europa",
+    345: "europa", 45: "europa", 181: "europa", 143: "europa", 81: "europa",
+    137: "europa", 66: "europa", 96: "europa", 95: "europa", 80: "europa",
+    271: "europa", 244: "europa", 172: "europa",
+    # Sul-Americano (ligas/copas CONMEBOL nacionais + competições continentais)
+    13: "sul_americano", 11: "sul_americano", 128: "sul_americano",
+    268: "sul_americano", 270: "sul_americano", 239: "sul_americano",
+    265: "sul_americano", 242: "sul_americano", 281: "sul_americano",
+    250: "sul_americano", 252: "sul_americano", 299: "sul_americano",
+    344: "sul_americano", 130: "sul_americano", 129: "sul_americano",
+    # Resto (América do Norte/Central, Ásia, África, Oceania, Oriente Médio)
+    262: "resto", 253: "resto", 307: "resto", 17: "resto", 12: "resto",
+    16: "resto", 98: "resto", 169: "resto", 292: "resto", 188: "resto",
+    233: "resto", 288: "resto", 383: "resto", 305: "resto", 301: "resto",
+    323: "resto", 296: "resto", 304: "resto", 570: "resto", 200: "resto",
+    162: "resto", 338: "resto", 274: "resto",
+}
+
+PAIS_PARA_CATEGORIA: dict[str, str] = {
+    "Brazil": "brasil",
+    "England": "europa", "Austria": "europa", "Romania": "europa",
+    "Germany": "europa", "Turkey": "europa", "Spain": "europa",
+    "Italy": "europa", "Serbia": "europa", "Cyprus": "europa",
+    "Netherlands": "europa", "Sweden": "europa", "Slovakia": "europa",
+    "Portugal": "europa", "Poland": "europa", "Belarus": "europa",
+    "Russia": "europa", "France": "europa", "Slovenia": "europa",
+    "Croatia": "europa", "Ireland": "europa", "Belgium": "europa",
+    "Scotland": "europa", "Kazakhstan": "europa", "Greece": "europa",
+    "Luxembourg": "europa", "Georgia": "europa", "Macedonia": "europa",
+    "San-Marino": "europa",
+    "Argentina": "sul_americano", "Peru": "sul_americano",
+    "Canada": "resto", "Saudi-Arabia": "resto", "Egypt": "resto",
+    "USA": "resto", "South-Korea": "resto", "United-Arab-Emirates": "resto",
+    "Ethiopia": "resto", "Oman": "resto", "Aruba": "resto",
+    "Malaysia": "resto", "Tanzania": "resto", "Myanmar": "resto",
+    "Cameroon": "resto",
+}
+
+# Entradas de LEAGUES_EXPANSION_20260730 SEM sufixo "(Pais)" (continentais/mundiais,
+# sem país único) -- override explícito por id em vez de regex.
+EXPANSION_CATEGORY_OVERRIDE: dict[int, str] = {
+    20: "resto",    # CAF Confederation Cup (continental africano)
+    15: "resto",    # FIFA Club World Cup (mundial)
+    772: "resto",   # Leagues Cup (EUA/México, torneio CONCACAF)
+    768: "resto",   # Arab Club Champions Cup (continental árabe)
+}
+
+_CATEGORY_ORDER = {"brasil": 0, "europa": 1, "sul_americano": 2, "resto": 3}
+
+
+def _classify_producao(league_id: int, nome: str) -> str:
+    cat = LEAGUE_CATEGORY.get(league_id)
+    if cat is None:
+        raise ValueError(f"LEAGUES id {league_id} ({nome!r}) sem classificação em LEAGUE_CATEGORY")
+    return cat
+
+
+def _classify_expansao(league_id: int, nome: str) -> str:
+    if league_id in EXPANSION_CATEGORY_OVERRIDE:
+        return EXPANSION_CATEGORY_OVERRIDE[league_id]
+    m = re.search(r"\(([^)]+)\)\s*$", nome)
+    if not m:
+        raise ValueError(f"expansão id {league_id} ({nome!r}) sem sufixo (Pais) nem override")
+    pais = m.group(1)
+    cat = PAIS_PARA_CATEGORIA.get(pais)
+    if cat is None:
+        raise ValueError(f"país {pais!r} (id {league_id}, {nome!r}) sem categoria em PAIS_PARA_CATEGORIA")
+    return cat
+
+
+def _build_leagues_all_ordered():
+    classified = [(lid, nome, _classify_producao(lid, nome)) for lid, nome in LEAGUES]
+    classified += [(lid, nome, _classify_expansao(lid, nome)) for lid, nome in LEAGUES_EXPANSION_20260730]
+    seen: set[int] = set()
+    deduped = []
+    for lid, nome, cat in classified:
+        if lid in seen:
+            continue
+        seen.add(lid)
+        deduped.append((lid, nome, cat))
+    deduped.sort(key=lambda t: _CATEGORY_ORDER[t[2]])  # sort() é estável em Python
+    id_to_cat = {lid: cat for lid, _nome, cat in deduped}
+    ordered = [(lid, nome) for lid, nome, _cat in deduped]
+    return ordered, id_to_cat
+
+
+LEAGUES_ALL_ORDERED, LEAGUE_ID_TO_CATEGORY = _build_leagues_all_ordered()
+# ---------------------------------------------------------------------------------
 
 FINISHED = {"FT", "AET", "PEN"}
 TABLE = "club_match_detail_cache"

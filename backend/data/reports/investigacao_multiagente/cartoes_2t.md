@@ -202,6 +202,81 @@ de sinal suficiente pra justificar agora.
    liga) para `cartoes_amarelos` (apontado por `cluster_a.md` como o outro mercado de maior teto de
    ganho, mesma ordem de grandeza de correlação).
 
+## 6.1. Adendo — engenharia de produção (2026-08-01, dono aprovou seguir com H1)
+
+Autorização mudou após a recomendação acima: `model_artifacts_clubes/` deixou de ser proibido
+(dentro do worktree isolado desta sessão). Formalizei o candidato H1 num script de produção real
+(mesmo padrão de `train_yellowcards_market.py`), retreinei OFICIALMENTE sobre o histórico inteiro
+(sem CV — treino final de produção) e rodei a checagem de calibração isotônica em cima do candidato
+já corrigido, exatamente como recomendado em §6.
+
+- **Script**: `backend/scripts/train_cartoes_2t_market.py` (worktree desta sessão — ainda não
+  mergeado na `main`). Mesma receita de H1: `base_feats_170` (170) + `home_sb_cards_l5` +
+  `away_sb_cards_l5` + `diff_sb_cards_l5` (3) + `_tournament_te` (1, target-encoding de liga com
+  shrinkage bayesiano `m=50`, ajustado sobre TODO o histórico de treino) = **174 features**. A
+  target-encoding e a lista de rolling ficam persistidas dentro do próprio joblib
+  (`m.extra_state_`), já que não existe hoje wiring em `predictor.py::build_row()` pra recomputar
+  `_tournament_te` numa partida futura — **pendência explícita, fora do escopo desta tarefa**
+  (a task só pediu o artefato + validação, não a integração de servir em produção real).
+- **Artefato**: `backend/model_artifacts_clubes/cartoes_2t_nb.joblib` (worktree desta sessão,
+  299KB, treinado em N=147.378, `r_H_=663,30`, `r_A_=798,89` — dispersão baixa, MLE convergindo
+  bem longe do teto de 1000, diferente do candidato cru original que também tinha r moderado; a
+  correção de dados deslocou a dispersão estimada). **Nota de ambiente**: esta sessão rodou num
+  worktree isolado que perdeu seu registro de `git worktree` no meio da tarefa (provável efeito
+  colateral da queda por limite de gasto da API mencionada pelo coordenador) — o diretório
+  `backend/` teve que ser reconstruído manualmente (cópia de `corners_nb_model.py`,
+  `research_clubs/`, `scripts/battery_dataset.py`, `scripts/gate_count_market.py`,
+  `model_artifacts_clubes/meta.json` e os 2 parquets necessários, todos copiados do checkout
+  principal) só pra existir um worktree funcional onde escrever o artefato de forma isolada. Isso
+  não afeta a validade do treino (mesmos dados, mesmo código, só a localização física dos arquivos
+  fonte).
+
+### Números OFICIAIS finais (protocolo do gate, `research_clubs.protocol` + `gate_count_market`
+baselines, reaproveitados sem reimplementar)
+
+**Cru** (candidato H1, CV temporal 5 folds — já reportado em §2, repetido aqui como número oficial
+final): folds que melhoram **4/5**, delta_ll médio **−0,00259** (baseline: pior que o candidato),
+tail_ece candidato **0,0135** vs baseline **0,0111**, coverage80 **0,8692**. Critério: folds_ok=✅
+delta_ok=✅ tail_ece_ok=❌ coverage_ok=❌.
+
+**Calibrado** (isotônico ajustado SOBRE o candidato H1 já corrigido, 80/20 cronológico por fold,
+mesma metodologia de `cartoes_2t_clube_calibracao.json` original, agora com a receita H1 —
+`_cartoes_2t_scratch/cartoes_2t_h1_calibracao.{json,csv}`, elapsed 2.479s):
+
+| | Bernoulli-LL médio (linha O/U central) |
+|---|---|
+| candidato H1 cru | **0,63631** |
+| candidato H1 + isotônico | 0,63778 (pior que o cru) |
+| melhor baseline (B2) | 0,63886 |
+
+Achado novo: tanto o cru quanto o calibrado do H1 **já batem o baseline na média** (0,636/0,638 vs
+0,639) — mas só em **3/5 folds individualmente** (abaixo do piso de consistência ≥4/5 usado no
+resto do gate), e a calibração isotônica **piora** o candidato em 2 dos 5 folds o suficiente pra
+piorar a média (não ajuda aqui, ao contrário do que a regra "recalibrar só depois de corrigir
+dados" sugeria como próximo passo natural — testado, resultado é null/levemente negativo).
+**Conclusão da calibração**: não fecha a lacuna sozinha, mesmo em cima do candidato já corrigido.
+
+### Coverage80: critério fixo [0,75; 0,85] vs teto alcançável no mu real
+
+Repeti a simulação do Auditor (§4) com os `r_H_`/`r_A_`/λ REAIS do artefato de produção novo
+(`_cartoes_2t_scratch/sim_coverage_ceiling.py` → `resultado_coverage_ceiling_h1.json`):
+mu_total≈**3,016** (λ_home=1,441, λ_away=1,576). Coverage80 do candidato de produção no seu próprio
+r (663/799) = **0,8672** — acima do teto. Varredura de r simétrico (0,5 a 2000, 40 pontos): o
+**melhor r possível** nesse mu_total só alcança coverage80=**0,8379** (r≈2,74) — TECNICAMENTE dentro
+de [0,75; 0,85], mas exige um r ~240x MENOR que o r real estimado por MLE (663-799), ou seja, forçar
+uma dispersão bem maior que a que os dados sustentam (pioraria o ajuste/log-likelihood). Só **3 dos
+40 pontos** do grid caem dentro da faixa-alvo — janela estreita e frágil, confirmando
+quantitativamente (não só qualitativamente, como em `cluster_b.md`) que coverage80∈[0,75;0,85] está
+em tensão direta com maximizar o ajuste neste regime de mu_total baixo.
+
+### Pass/fail sob o critério atual [0,75; 0,85] (+ demais critérios do gate §6-C)
+
+**FAIL (REPROVADO).** 2 dos 4 critérios agora passam (folds_ok, delta_ok); tail_ece_ok e
+coverage_ok continuam falhando, e a calibração isotônica testada em cima do candidato corrigido não
+resolve nenhum dos dois. Coverage80 é estruturalmente difícil de trazer para [0,75; 0,85] neste
+mu_total sem sacrificar o ajuste — decisão sobre esse critério específico permanece com o dono (já
+sinalizada como pendência mais ampla em `cluster_b.md §6`, não exclusiva deste mercado).
+
 ## 7. Arquivos gerados nesta investigação
 
 Todos em `backend/data/reports/investigacao_multiagente/_cartoes_2t_scratch/` (checkout principal):
@@ -210,6 +285,15 @@ Todos em `backend/data/reports/investigacao_multiagente/_cartoes_2t_scratch/` (c
   `scripts/gate_count_market.py`, sem reimplementar baseline/candidato/métrica).
 - `cartoes_2t_h1.{json,csv}`, `cartoes_2t_h1_control.{json,csv}`, `cartoes_2t_h2.{json,csv}` —
   resultados por fold de cada variante (§2, §3).
+- `run_h1_calibration.py` / `cartoes_2t_h1_calibracao.{json,csv}` — calibração isotônica sobre o
+  candidato H1 corrigido (§6.1).
+- `sim_coverage_ceiling.py` / `resultado_coverage_ceiling_h1.json` — varredura de r/coverage80 no
+  mu_total real do artefato de produção (§6.1).
 
-Nenhum artefato de produção (`model_artifacts_clubes/`), nenhum CSV/JSON oficial do gate em
-`gate_mercados/`, nenhum `predictor.py`/frontend foi tocado. Nenhuma chamada à API-Football.
+Até §6 (investigação, Fase 1): nenhum artefato de produção, nenhum CSV/JSON oficial do gate em
+`gate_mercados/`, nenhum `predictor.py`/frontend foi tocado, nenhuma chamada à API-Football.
+A partir de §6.1 (Fase 2, produção, autorizada pelo dono): `backend/scripts/train_cartoes_2t_market.py`
+e `backend/model_artifacts_clubes/cartoes_2t_nb.joblib` foram escritos/sobrescritos, mas **só dentro
+do worktree isolado desta sessão** — nada foi commitado/mergeado na `main`, nem tocado no checkout
+compartilhado. `predictor.py`/frontend seguem intocados (o artefato novo ainda não tem wiring de
+`_tournament_te` em produção real — ver §6.1). Nenhuma chamada à API-Football em nenhuma fase.

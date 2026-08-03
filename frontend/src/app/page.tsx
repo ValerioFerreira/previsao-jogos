@@ -24,6 +24,7 @@ import ScreenshotGuard from '@/components/platform/ScreenshotGuard';
 import type { ScorersResponse } from '@/lib/api';
 import { AnalysisResultsView, SectionDivider } from '@/components/platform/AnalysisResultsView';
 import OpportunitiesSection from '@/components/platform/OpportunitiesSection';
+import { AnalysisLoadingOverlay } from '@/components/platform/AnalysisLoadingOverlay';
 
 // Data em dd/mm/aaaa a partir de "aaaa-mm-dd[...]".
 function formatDateBR(s: string): string {
@@ -820,6 +821,8 @@ export default function Previsoes() {
               : <>{credits} créditos · <Link href="/carteira" className="underline font-medium text-primary">Ir para a Carteira ➜</Link></>}
           </p>
         )}
+
+        <AnalysisLoadingOverlay loading={loading} />
       </div>
 
       <AnimatePresence>

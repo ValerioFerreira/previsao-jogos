@@ -9,11 +9,14 @@
   "tail_ece_candidato": 0.01,
   "tail_ece_baseline": 0.0086,
   "coverage80_medio": 0.9716,
+  "coverage80_teto_alcancavel": 0.9767,
+  "coverage80_distancia_teto": 0.0052,
   "criterio": {
     "folds_ok": false,
     "delta_ok": false,
     "tail_ece_ok": false,
-    "coverage_ok": false
+    "coverage_ok": true
   },
+  "gate_versao": "emenda_2026-07-31_coverage80_por_mu",
   "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\cartoes_vermelhos_clube.csv"
 }

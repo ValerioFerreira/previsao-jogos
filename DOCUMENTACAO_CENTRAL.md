@@ -2094,3 +2094,99 @@ intra-partida) levantada para cartões 1T/2T no início da investigação foi **
 outros 3 mercados de cartão. Já para gols 2T, o placar do 1T **ajuda** de verdade (mas não o
 suficiente sozinho), então os dois mercados de "2º tempo" acabaram com diagnósticos diferentes
 apesar da hipótese inicial comum.
+
+### 29.5 Decisão do dono e emenda ao gate (2026-08-01)
+
+Dono escolheu a **Opção A**: coverage80 passa a comparar o candidato contra o teto alcançável POR
+`mu_total`, não contra `[0,75; 0,85]` fixo — implementado em `scripts/gate_count_market.py` via
+`achievable_coverage80()` (simula dados a partir da própria PMF do candidato, mede o coverage80 de
+um modelo "que sabe a verdade" contra sua própria verdade; critério passa a ser distância ≤
+`COVERAGE_TOLERANCE=0,05` desse teto, não mais o range absoluto). Ver docstring "EMENDA
+2026-07-31" no topo do arquivo.
+
+**Reveredito sob o gate emendado** (`gate_versao: "emenda_2026-07-31_coverage80_por_mu"`):
+
+| mercado | status | o que mudou |
+|---|---|---|
+| gols 1T | **APROVADO** | coverage80 já passava contra o teto (distância 0,0016) |
+| gols 2T | reprovado | coverage80 passa agora, mas **tail_ece continua falhando de verdade** (0,0096 > baseline 0,0054) — confirma que é problema real de calibração, não só de métrica |
+| impedimentos | reprovado | coverage80 passa (distância 0,0469), mas **tail_ece falha por margem mínima** (0,0505 vs teto absoluto 0,05) mesmo batendo o baseline com folga — achado novo, mesmo padrão do coverage80 (limiar absoluto que não escala com dificuldade do mercado), não investigado/decidido ainda |
+| cartões vermelhos | reprovado | coverage80 passa mas não importa — folds/delta_ll/tail_ece continuam falhando de verdade (mu≈0,23, sem sinal) |
+
+**Cartões 1T/2T/amarelos — formalizados como scripts de produção reais** (não mais scratch de
+investigação), retreinados oficialmente:
+- **cartões 1T** (`scripts/train_cartoes_1t_market.py`, artefato `cartoes_1t_nb.joblib`, 170+13
+  feats — rolling do próprio alvo + target-encoding de liga): **PASSA** o gate emendado (folds 5/5,
+  delta_ll −0,00454, tail_ece 0,0143 < baseline, coverage80 distância 0,0126 — 4x dentro da
+  tolerância).
+- **cartões 2T** (`scripts/train_cartoes_2t_market.py`, artefato `cartoes_2t_nb.joblib`, 174 feats):
+  **continua REPROVADO** mesmo emendado — tail_ece (0,0135 vs baseline 0,0111) e coverage80 (0,8692,
+  distância maior que a tolerância) seguem falhando; varredura de dispersão mostra que só 3 de 40
+  pontos da grade caem em [0,75;0,85], exigindo r ~240x menor que o real (pioraria o ajuste de
+  propósito) — limitação real, não só de métrica, para este mercado específico.
+- **cartões amarelos** (`scripts/train_cartoes_amarelos_market.py`, artefato
+  `cartoes_amarelos_nb.joblib`, 177 feats — rating GAP incremental de amarelo + target-encoding de
+  torneio): reprovado no critério fixo (coverage80=0,8797, distância −0,0297 do range antigo);
+  estimativa rápida contra o teto alcançável (mu≈4,38) dá distância ≈0,040 — dentro da tolerância
+  0,05, **provavelmente passa a emenda**, mas com margem mais apertada que os outros dois e **sem
+  confirmação oficial via simulação heterogênea por fold** (a estimativa usou mu fixo, não o
+  protocolo completo) — não declarado aprovado até essa verificação rodar. Correção de dispersão
+  (escalar `r`) testada e **não ajudou** (achado: o excesso de coverage80 é artefato de
+  discretização concentrado nos jogos de mu BAIXO dentro do próprio mercado — quartil 0 fica
+  5-8pp acima do teto, quartis mais altos já ficam dentro — não é uma dispersão global ajustável por
+  um escalar único).
+
+**Pendência real que falta para qualquer um dos 3 ir ao ar:** `predictor.py::build_row()` só sabe
+computar as 170 features de produção padrão (+ GAP shots/corners, já existente). As features novas
+de cartões 1T/2T/amarelos (rolling do próprio alvo, target-encoding de liga/torneio, GAP-amarelo)
+**não têm wiring nenhum em produção** — o artefato `.joblib` carrega e roda sem crashar (colunas
+extras viram `NaN` → imputadas pela mediana), mas não recebe o ganho real até que (a)
+`build_clubs_production_artifacts.py` seja estendido para computar e persistir esse estado por time
+no `meta.json` (mesmo padrão já usado por `gap_ratings_state`) e (b) `build_row()` seja estendido
+para aplicá-lo numa partida futura. Isso é uma mudança na pipeline de retreino COMPARTILHADA — mais
+arriscada que só trocar um `.joblib` — não foi feita nesta sessão por decisão deliberada (evitar
+rushar uma mudança na pipeline que todos os outros mercados de produção também usam). Os 3 scripts
+de treino, artefatos e resultados oficiais do gate ficam prontos para essa próxima etapa.
+
+### 29.6 Top-up de dados ao vivo na Análise (2026-08-01)
+
+Achado arquitetural que motivou o design: `Predictor.build_row()` lê só de snapshot estático
+(`self.meta["snapshot"]`, `self.h2h_results`/`self.results`), carregado 1x no boot do servidor —
+baixar jogo novo pro cache **não muda a previsão daquele request**, só o próximo retreino manual.
+A única parte computada por request é o **confronto direto** (`head_to_head()`).
+
+Implementado (`app/services/club_live_topup.py`, novo):
+- **Top-up síncrono de H2H** — só dispara quando `h2h_played == 0` (heurística mais barata pra "gap
+  de dado provável"); 1 chamada `/fixtures/headtohead`, timeout 3s, nunca derruba a análise
+  (`try/except` amplo). `Predictor.head_to_head_with_extra()` (novo, `predictor.py`) mescla o
+  resultado ao vivo SEM mutar `self.results`/`self.h2h_results` (compartilhados entre requests via
+  `lru_cache`). Latência observada: ~0,9s quando dispara (raro), ~0 quando não.
+- **Backfill assíncrono** (`BackgroundTasks`, fire-and-forget, zero latência pro usuário) — depois
+  da resposta, top-up leve (2 temporadas, teto de 20 chamadas de detalhe) dos dois times, escrito em
+  **Neon `club_match_detail_cache`** (decisão do dono: disco do Render é efêmero, SQLite local não
+  sobrevive a deploy — reintroduz crescimento pequeno nessa tabela, controlado por guard de cota
+  `quota_tracker.remaining() < 20000` e guard de "checado nas últimas 6h" por time).
+- Ligado ao fluxo real da UI (`POST /analysis` → `create_analysis` → `_generate_snapshot` →
+  `predict_match`), não só ao `/predict` cru usado por testes.
+- Frontend: `AnalysisLoadingOverlay.tsx` (novo) — barra de progresso + mensagens em sequência
+  ("Carregando partida..." → "Iniciando modelos..." → "Efetuando cálculos..." → "Refinando
+  resultados..." → "Concluído!"), ~950ms/passo, pula pro fim se a resposta real já chegou.
+
+### 29.7 Coleta exaustiva de clubes por prioridade geográfica (2026-08-01)
+
+Motivação: alguns confrontos mostravam dado "desatualizado/limitado" — nem todo clube já conhecido
+pelo sistema tinha o histórico completo baixado. `scripts/prefetch_clubs.py::LEAGUES_ALL_ORDERED`
+funde as 150 competições conhecidas (83 produção + 67 expansão) em ordem estrita
+Brasil→Europa→Sul-Americano→Resto (`LEAGUE_ID_TO_CATEGORY`, classificação manual por id/país).
+`scripts/prefetch_clubs_exhaustive.py` (novo) roda o backfill paralelo nessa ordem (reaproveita
+`prefetch_clubs_parallel.py::run_parallel_prefetch`, `--local-only` default, `--margin 15000`
+protege `CollectOdds`). `scripts/discover_team_leagues.py` (novo) fecha o gap de "competição nunca
+listada" — 1 chamada `/leagues?team=ID` por cada um dos 5589 times conhecidos
+(`model_artifacts_clubes/meta.json::team_ids`), resumível (`data/state/team_leagues_discovered.json`),
+relatório de ligas nunca cobertas em `data/reports/discover_team_leagues_gaps.json`. **Achado real
+já no smoke test**: ligas estaduais brasileiras (ex. id 76, 667) nunca foram listadas em nenhuma
+lista de competição conhecida — confirma a causa raiz relatada. Estimativa: descoberta de gaps cabe
+numa única execução (~15min, ~7,5% da cota diária); fechar os gaps residuais das 67 ligas de
+expansão deve levar de 2 a 5 execuções diárias de ~2-2,5h cada. **Nenhuma coleta grande rodada
+ainda** — só smoke tests (~510 chamadas no total desta seção) — falta decisão do dono sobre
+agendar/rodar as coletas completas.

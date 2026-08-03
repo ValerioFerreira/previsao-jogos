@@ -68,8 +68,11 @@ def _model_fingerprint() -> tuple[str, str]:
     return data_version, h
 
 
-def _generate_snapshot(req: schemas.AnalysisRequest) -> dict:
-    """Chama o mesmo pipeline do endpoint /predict (previsão + odds)."""
+def _generate_snapshot(req: schemas.AnalysisRequest, background_tasks=None) -> dict:
+    """Chama o mesmo pipeline do endpoint /predict (previsão + odds). `background_tasks`
+    (injetado pelo router via FastAPI) habilita o top-up de dados de clube (h2h ao vivo
+    síncrono + backfill leve assíncrono, ver predictor_service.py::predict_match) --
+    esta é a função que a UI de verdade exercita (POST /analysis), não o /predict cru."""
     from app.schemas import PredictRequest
     from app.services.predictor_service import _predictor_for, predict_match
 
@@ -85,7 +88,7 @@ def _generate_snapshot(req: schemas.AnalysisRequest) -> dict:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Competição inválida.")
     payload = PredictRequest(home_team=home, away_team=away, neutral=req.neutral,
                              tournament=req.tournament, scope=scope)
-    return predict_match(payload, scope=scope), home, away
+    return predict_match(payload, scope=scope, background_tasks=background_tasks), home, away
 
 
 _FINISHED_OR_LIVE = {"FT", "AET", "PEN", "1H", "2H", "HT", "ET", "BT", "P", "LIVE"}
@@ -110,7 +113,7 @@ def _reject_if_fixture_started(fixture_id: int) -> None:
         )
 
 
-def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> schemas.AnalysisResponse:
+def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest, background_tasks=None) -> schemas.AnalysisResponse:
     if req.type == "future_match" and not req.fixture_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             detail="fixture_id é obrigatório para análise de partida futura.")
@@ -148,7 +151,7 @@ def create_analysis(db: Session, user: User, req: schemas.AnalysisRequest) -> sc
                                 detail="Créditos insuficientes. Compre créditos para gerar a análise.")
 
     analytics_service.track(db, "analysis_started", user_id=user.id, type=req.type, tournament=req.tournament)
-    snapshot, home, away = _generate_snapshot(req)
+    snapshot, home, away = _generate_snapshot(req, background_tasks)
     data_version, model_hash = _model_fingerprint()
 
     analysis = Analysis(

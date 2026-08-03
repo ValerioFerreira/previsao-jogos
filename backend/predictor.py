@@ -270,6 +270,32 @@ class Predictor:
     def head_to_head(self, home_team, away_team):
         # usa a base profunda (martj42+api) p/ o card de confronto direto, se disponível
         r = self.h2h_results if self.h2h_results is not None else self.results
+        return self._h2h_from_frame(r, home_team, away_team)
+
+    def head_to_head_with_extra(self, home_team, away_team, extra_rows: list[dict]):
+        """Como head_to_head(), mas com `extra_rows` (jogos buscados na hora, ex.: top-up
+        síncrono via API-Football) somados à base local antes de calcular. NUNCA muta
+        self.results/self.h2h_results (compartilhados entre requests via singleton
+        lru_cache) -- monta um DataFrame novo só para esta chamada.
+
+        `extra_rows`: lista de dicts com no mínimo home_team/away_team/home_score/
+        away_score/date (mais tournament se disponível).
+        """
+        base = self.h2h_results if self.h2h_results is not None else self.results
+        if not extra_rows:
+            return self._h2h_from_frame(base, home_team, away_team)
+        extra_df = pd.DataFrame(extra_rows)
+        if "date" in extra_df.columns:
+            extra_df["date"] = pd.to_datetime(extra_df["date"])
+        combined = pd.concat([base, extra_df], ignore_index=True, sort=False)
+        # duplicata = mesma data (heurística aceitável: mesmo confronto não se repete
+        # no mesmo dia na nossa base) -- mantém a primeira ocorrência (base local antes
+        # do extra, já que concat preserva a ordem).
+        if "date" in combined.columns:
+            combined = combined.drop_duplicates(subset=["home_team", "away_team", "date"], keep="first")
+        return self._h2h_from_frame(combined, home_team, away_team)
+
+    def _h2h_from_frame(self, r, home_team, away_team):
         m = r[((r.home_team == home_team) & (r.away_team == away_team)) |
               ((r.home_team == away_team) & (r.away_team == home_team))]
         if len(m) == 0:

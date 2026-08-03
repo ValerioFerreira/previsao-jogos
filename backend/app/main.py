@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
-from fastapi import FastAPI, HTTPException, Query, Depends, Request
+from fastapi import FastAPI, HTTPException, Query, Depends, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -295,7 +295,7 @@ def h2h(home: str = Query(...), away: str = Query(...), scope: str = Query("sele
 
 
 @app.post("/predict")
-def predict(payload: PredictRequest) -> dict:
+def predict(payload: PredictRequest, background_tasks: BackgroundTasks) -> dict:
     predictor = _predictor_for(payload.scope)
     # canoniza nomes (jogos futuros podem vir como "Czechia", "Türkiye", "Minnesota United FC", etc.)
     payload.home_team = predictor.norm_team(payload.home_team)
@@ -307,7 +307,7 @@ def predict(payload: PredictRequest) -> dict:
         raise HTTPException(status_code=404, detail="Time nao encontrado.")
     if payload.tournament not in predictor.meta["tournament_weights"]:
         raise HTTPException(status_code=400, detail="Competicao invalida.")
-    return predict_match(payload, scope=payload.scope)
+    return predict_match(payload, scope=payload.scope, background_tasks=background_tasks)
 
 
 

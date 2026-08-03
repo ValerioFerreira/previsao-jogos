@@ -248,3 +248,38 @@ matematicamente inalcançável independente de qualquer melhoria futura de model
   `h4_controle_negativo.csv`, `h4_result.json`, `h5_grid_r.csv`, `h5_result.json`.
 - Nenhum artefato de produção foi tocado; nenhuma chamada de API foi feita; nenhum blob do Neon
   foi lido em runtime.
+
+## Addendum — formalização em script de produção (mesma sessão, autorizado pelo dono)
+
+Dono aprovou seguir com `cartoes_1t` depois de ver este relatório. O candidato H2 foi formalizado
+em `backend/scripts/train_cartoes_1t_market.py` (mesmo padrão de `train_yellowcards_market.py`:
+`CONFIG` dict por escopo, `--scope`, salva `.joblib`) e retreinado de verdade (não reaproveitando
+o scratch) — artefato em `model_artifacts_clubes/cartoes_1t_nb.joblib` **dentro do worktree desta
+sessão** (worktree isolado não materializa `model_artifacts_clubes/` do checkout principal; escrita
+aí foi autorizada só de forma escopada ao worktree, sem sobrescrever o artefato compartilhado que
+outros agentes-irmãos usam em paralelo).
+
+Números OFICIAIS do gate (`backend/scripts/run_official_gate_cartoes_1t.py` — mesma lógica de
+`research_clubs.protocol`/`scripts.gate_count_market`, sem reimplementar métrica; `gate_count_market.py`
+em si não tem modo de aceitar candidato com feature set estendido sem editar o arquivo compartilhado,
+por isso um script separado, documentado como números finais, não mais scratch de investigação):
+
+| critério | candidato oficial anterior | **candidato H2 (produção)** | limiar do gate |
+|---|---|---|---|
+| folds que melhoram | 1/5 | **5/5** ✅ | ≥4/5 |
+| delta_ll médio | +0,01149 | **−0,00454** ✅ | < −0,001 |
+| tail_ece candidato | 0,0232 | **0,0143** ✅ | ≤0,05 e ≤ baseline |
+| coverage80 médio | 0,9169 | 0,9302 ❌ | ∈[0,75; 0,85] |
+| **status sob critério fixo atual** | REPROVADO | **REPROVADO** (só por coverage80) | |
+
+Resultado idêntico ao H2 da investigação (confirma reprodutibilidade do retreino formal). Sob o
+critério fixo `[0,75;0,85]` do gate §6-C, o candidato continua tecnicamente REPROVADO — mas está a
+apenas `+0,0126` do teto estruturalmente alcançável calculado em H5 (0,9176, modelo perfeitamente
+especificado no mu_total real ~1,63). Critério de coverage80 para mercados de mu_total baixo segue
+em decisão do dono (threshold por mu vs. descartar para mu baixo vs. manter fixo) — arquivo
+`cartoes_1t_clube_H2_oficial.json` documenta os dois números lado a lado para essa decisão.
+
+Arquivos: `backend/scripts/train_cartoes_1t_market.py`,
+`backend/scripts/run_official_gate_cartoes_1t.py`,
+`backend/data/reports/gate_mercados/cartoes_1t_clube_H2_oficial.{json,csv}`,
+`model_artifacts_clubes/cartoes_1t_nb.joblib` (dentro do worktree desta sessão).

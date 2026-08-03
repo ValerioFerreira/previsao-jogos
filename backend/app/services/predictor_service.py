@@ -610,8 +610,53 @@ def clean_values(values: dict[str, Any] | None) -> dict[str, Any]:
     return {key: value for key, value in values.items() if value is not None}
 
 
-def predict_match(payload: Any, scope: str = "selecao") -> dict[str, Any]:
+def _topup_club_h2h(predictor: Predictor, payload: Any, background_tasks) -> None:
+    """Top-up de dados de clube (gap de H2H "desatualizado/limitado" sem deixar a
+    análise lenta -- ver ESTADO_ATUAL_E_PROXIMOS_PASSOS.md). Só escopo "clube" --
+    seleção já satura o histórico local. Chamada por predict_match() ANTES de
+    predictor.predict(), então roda tanto pelo endpoint /predict quanto por
+    POST /analysis (o fluxo real usado pela UI -- ambos chamam predict_match()).
+
+    Muta payload.h2h_overrides in-place quando encontra dado ao vivo (a validação
+    Pydantic do PredictRequest não é reaplicada em atribuição -- model_config não
+    tem validate_assignment=True). Nunca levanta exceção: qualquer falha aqui é
+    best-effort, não pode derrubar a análise do usuário.
+    """
+    try:
+        team_ids = predictor.meta.get("team_ids", {}) or {}
+        home_id = team_ids.get(payload.home_team)
+        away_id = team_ids.get(payload.away_team)
+
+        # h2h_played == 0 é a heurística mais barata p/ "gap de dado provável" (jogo
+        # nunca visto localmente) -- só nesse caso vale o custo síncrono da chamada
+        # extra (timeout curto) dentro do request.
+        local_h2h = predictor.head_to_head(payload.home_team, payload.away_team)
+        if (local_h2h.get("h2h_played") or 0) == 0 and home_id and away_id:
+            from app.services.club_live_topup import fetch_live_h2h
+            live_rows = fetch_live_h2h(home_id, away_id, payload.home_team, payload.away_team)
+            if live_rows:
+                fresh_h2h = predictor.head_to_head_with_extra(payload.home_team, payload.away_team, live_rows)
+                if (fresh_h2h.get("h2h_played") or 0) > 0:
+                    payload.h2h_overrides = fresh_h2h
+
+        # backfill leve assíncrono, disparado depois da resposta -- não bloqueia o
+        # request. Só quando o chamador nos deu um BackgroundTasks de verdade (o
+        # endpoint /predict e o POST /analysis injetam via FastAPI; chamadas
+        # internas/scripts que não passam background_tasks simplesmente pulam isso).
+        if background_tasks is not None:
+            from app.services.club_live_topup import topup_team_history_background
+            if home_id:
+                background_tasks.add_task(topup_team_history_background, home_id, payload.home_team)
+            if away_id:
+                background_tasks.add_task(topup_team_history_background, away_id, payload.away_team)
+    except Exception as e:
+        print(f"[AVISO] top-up de h2h ao vivo ({payload.home_team} x {payload.away_team}): {e}")
+
+
+def predict_match(payload: Any, scope: str = "selecao", background_tasks=None) -> dict[str, Any]:
     predictor = _predictor_for(scope)
+    if scope == "clube":
+        _topup_club_h2h(predictor, payload, background_tasks)
     raw = predictor.predict(
         payload.home_team,
         payload.away_team,

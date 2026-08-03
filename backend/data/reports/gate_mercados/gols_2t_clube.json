@@ -9,11 +9,14 @@
   "tail_ece_candidato": 0.0096,
   "tail_ece_baseline": 0.0054,
   "coverage80_medio": 0.9466,
+  "coverage80_teto_alcancavel": 0.9389,
+  "coverage80_distancia_teto": 0.0077,
   "criterio": {
     "folds_ok": true,
     "delta_ok": true,
     "tail_ece_ok": false,
-    "coverage_ok": false
+    "coverage_ok": true
   },
+  "gate_versao": "emenda_2026-07-31_coverage80_por_mu",
   "csv": "C:\\Users\\operadorsge\\Desktop\\Projetos\\previsao-jogos\\backend\\data\\reports\\gate_mercados\\gols_2t_clube.csv"
 }

@@ -1,7 +1,7 @@
 """Rotas de Análise: gerar (consome/reserva crédito), listar histórico e ver snapshot."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,9 +13,9 @@ router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 
 @router.post("", response_model=schemas.AnalysisResponse, status_code=201)
-def create_analysis(data: schemas.AnalysisRequest, user: User = Depends(get_current_user),
-                    db: Session = Depends(get_db)):
-    return service.create_analysis(db, user, data)
+def create_analysis(data: schemas.AnalysisRequest, background_tasks: BackgroundTasks,
+                    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return service.create_analysis(db, user, data, background_tasks)
 
 
 @router.get("", response_model=schemas.AnalysisPage)
