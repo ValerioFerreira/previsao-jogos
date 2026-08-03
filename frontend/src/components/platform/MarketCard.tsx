@@ -25,7 +25,7 @@ const CARD_KIND_TITLE: Record<CardKind, string> = {
   vermelho: 'Cartões vermelhos',
 };
 
-function fairOddRange(prob: number): string {
+export function fairOddRange(prob: number): string {
   if (!prob || prob <= 0) return '—';
   const odd = 1 / prob;
   if (odd > 50) return '50+';
@@ -34,7 +34,7 @@ function fairOddRange(prob: number): string {
   return lo.toFixed(2) === hi.toFixed(2) ? hi.toFixed(2) : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
 }
 
-function overProb(dist: number[], line: number): number {
+export function overProb(dist: number[], line: number): number {
   const start = Math.floor(line) + 1;
   let s = 0;
   for (let k = start; k < dist.length; k++) s += dist[k];

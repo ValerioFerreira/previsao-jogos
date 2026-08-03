@@ -11,7 +11,7 @@ import { MarketCard } from "@/components/platform/MarketCard";
 import BookmakerOddsBadge from "@/components/platform/BookmakerOddsBadge";
 import {
   DuplaChanceCard, EmpateAnulaCard, HandicapsCard, ParImparCard, FaixaGolsCard, CleanSheetCard,
-  VitoriaSemSofrerCard, TimeAMarcarPrimeiroCard, MataMataAgregadoCard,
+  VitoriaSemSofrerCard, TimeAMarcarPrimeiroCard, MataMataAgregadoCard, GolsAgregadosCard,
 } from "@/components/platform/DerivedMarkets";
 import ScorersCard from "@/components/platform/ScorersCard";
 import BetLab from "@/components/platform/BetLab";
@@ -558,8 +558,8 @@ export function AnalysisResultsView({ prediction, home, away, teamIds, scorers, 
         {prediction.mata_mata_agregado && (
           <CollapsibleMarket title="Mata-Mata (Ida e Volta)" tip="Probabilidade de classificação no agregado das duas pernas, assumindo mando invertido na volta e pernas independentes (sem regra do gol fora).">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <MataMataAgregadoCard d={prediction.mata_mata_agregado} />
-              <MarketCard title="Gols Agregados" subtitle="Total (2 pernas)" prediction={prediction.mata_mata_agregado.gols_agregados} />
+              <MataMataAgregadoCard d={prediction.mata_mata_agregado} teamIds={teamIds} />
+              <GolsAgregadosCard d={prediction.mata_mata_agregado.gols_agregados} />
             </div>
           </CollapsibleMarket>
         )}

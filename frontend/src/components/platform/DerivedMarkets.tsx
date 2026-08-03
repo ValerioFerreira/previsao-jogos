@@ -1,8 +1,11 @@
 "use client";
-import React from "react";
-import { DerivedMarkets, DerivedOutcome, PredictionResponse, teamLogoUrl, onImgError } from "@/lib/api";
+import React, { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown } from "lucide-react";
+import { DerivedMarkets, DerivedOutcome, PredictionResponse, CountPrediction, teamLogoUrl, onImgError } from "@/lib/api";
 import InfoTooltip from "@/components/platform/InfoTooltip";
 import { teamPt } from "@/lib/teamNames";
+import { fairOddRange, overProb } from "@/components/platform/MarketCard";
 
 type DProps = { d: DerivedMarkets; home: string; away: string };
 type Outcome = { label: string; o?: DerivedOutcome; color?: string };
@@ -156,37 +159,205 @@ export function VitoriaSemSofrerCard({ d, home, away }: DProps) {
 // Qualificação/agregado em mata-mata ida-e-volta (só competições continentais de
 // clube que jogam em 2 pernas — ver KNOCKOUT_TOURNAMENTS no backend). Mandante da
 // análise = mandante da ida; visitante = mandante da volta (mando invertido).
-export function MataMataAgregadoCard({ d }: { d: NonNullable<PredictionResponse["mata_mata_agregado"]> }) {
+// probA + probB soma sempre 100% (empate no agregado é dividido 50/50 entre os dois
+// lados, ver predictor.py::predict_aggregate) — a barra de comparação usa isso direto.
+export function MataMataAgregadoCard({ d, teamIds }: { d: NonNullable<PredictionResponse["mata_mata_agregado"]>; teamIds?: Record<string, number> }) {
   const { leg1_mandante: a, leg2_mandante: b } = d;
+  const probA = d.qualifica[a]?.prob ?? 0;
+  const probB = d.qualifica[b]?.prob ?? 0;
+  const aIsFav = probA >= probB;
+  const topScore = d.placar_agregado_top[0];
+
+  const sides = [
+    { team: a, prob: probA, odd: d.qualifica[a]?.odd_justa, fav: aIsFav,
+      ring: "border-emerald-500/50 bg-emerald-500/5 shadow-[0_0_22px_-6px_rgba(16,185,129,0.45)]",
+      text: "text-emerald-400" },
+    { team: b, prob: probB, odd: d.qualifica[b]?.odd_justa, fav: !aIsFav,
+      ring: "border-cyan-500/50 bg-cyan-500/5 shadow-[0_0_22px_-6px_rgba(34,211,238,0.45)]",
+      text: "text-cyan-400" },
+  ];
+
+  const favoriteName = teamPt(aIsFav ? a : b);
+  const favoriteProb = Math.max(probA, probB);
+  const resumo = `${favoriteName} chega como favorito para avançar, com ${favoriteProb.toFixed(1)}% de probabilidade `
+    + `de classificação. O modelo projeta expectativa de ${d.gols_agregados.estimativa.toFixed(1)} gols ao longo `
+    + `das duas partidas`
+    + (d.empate_agregado_prob >= 5 ? ` e cerca de ${d.empate_agregado_prob.toFixed(1)}% de chance de decisão na prorrogação.` : ".");
+
   return (
     <div className="bg-card border border-border/50 rounded-xl p-5 flex flex-col h-full">
-      <h4 className="text-sm font-semibold mb-3 flex items-center justify-center gap-1.5">
-        Qualificação (Ida e Volta)
+      <h4 className="text-sm font-semibold mb-1 flex items-center justify-center gap-1.5">
+        Chance de Classificação
         <InfoTooltip text={d._nota} />
       </h4>
-      <div className="flex-1 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-center mb-4">
-        {[a, b].map((team, i) => (
-          <div key={team}>
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-              {teamPt(team)} {i === 0 ? "(manda a ida)" : "(manda a volta)"}
+      <p className="text-[11px] text-muted-foreground text-center mb-4">
+        1º jogo: {teamPt(a)} (Casa) · 2º jogo: {teamPt(b)} (Casa)
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        {sides.map((s) => (
+          <div key={s.team} className={`rounded-xl p-3.5 text-center border transition-all ${s.fav ? s.ring : "border-border/40"}`}>
+            <div className="flex flex-col items-center gap-1.5 mb-2">
+              {teamIds && teamLogoUrl(teamIds[s.team]) && (
+                <img src={teamLogoUrl(teamIds[s.team])!} alt="" className="w-8 h-8 object-contain" loading="lazy" onError={onImgError} />
+              )}
+              <span className="text-xs font-semibold leading-tight truncate max-w-full">{teamPt(s.team)}</span>
+            </div>
+            <p className={`text-4xl font-mono font-bold tabular-nums ${s.text}`}>
+              {s.prob.toFixed(1)}<span className="text-lg">%</span>
             </p>
-            <p className={`text-2xl font-mono font-bold ${i === 0 ? "text-emerald-400" : "text-blue-400"}`}>
-              {d.qualifica[team]?.prob.toFixed(1)}%
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-1">odd justa: {d.qualifica[team]?.odd_justa.toFixed(2)}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">Chance de classificação</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">Odd justa: {s.odd?.toFixed(2)}</p>
           </div>
         ))}
       </div>
-      <div className="border-t border-border/20 pt-3">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2 text-center">Placar agregado mais provável</p>
-        <div className="flex items-center justify-center gap-4">
+
+      {/* barra de comparação entre as duas chances de classificação */}
+      <div className="flex h-2 rounded-full overflow-hidden mt-3">
+        <div style={{ width: `${probA}%` }} className="bg-emerald-500" title={`${teamPt(a)} ${probA.toFixed(1)}%`} />
+        <div style={{ width: `${probB}%` }} className="bg-cyan-500" title={`${teamPt(b)} ${probB.toFixed(1)}%`} />
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-border/20">
+        <p className="text-[11px] text-muted-foreground mb-2">Resultados agregados mais prováveis</p>
+        <div className="space-y-1.5">
           {d.placar_agregado_top.map((p, i) => (
-            <span key={i} className="font-mono text-xs text-muted-foreground">
-              {p[a]}-{p[b]} <span className="text-[10px]">({p.prob.toFixed(1)}%)</span>
-            </span>
+            <div key={i} className="flex items-center gap-3 text-xs">
+              <span className={`font-mono font-semibold w-10 shrink-0 ${i === 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                {p[a]}–{p[b]}
+              </span>
+              <div className="flex-1 h-1 rounded-full bg-muted/40 overflow-hidden">
+                <div className="h-full bg-emerald-500/60" style={{ width: `${topScore ? (p.prob / topScore.prob) * 100 : 0}%` }} />
+              </div>
+              <span className="font-mono text-muted-foreground shrink-0">{p.prob.toFixed(1)}%</span>
+            </div>
           ))}
         </div>
-        <p className="text-[10px] text-muted-foreground text-center mt-2">Empate no agregado: {d.empate_agregado_prob.toFixed(1)}% (prorrogação/pênaltis)</p>
+      </div>
+
+      <div className="mt-3 rounded-lg bg-muted/30 border border-border/30 px-3 py-2.5 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] text-muted-foreground">Chance de decisão na prorrogação</p>
+          <p className="text-[10px] text-muted-foreground/70">Empate no agregado → prorrogação/pênaltis</p>
+        </div>
+        <p className="text-xl font-mono font-bold text-foreground shrink-0">{d.empate_agregado_prob.toFixed(1)}%</p>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-border/20">
+        <p className="text-[11px] font-semibold text-foreground mb-1">Resumo do confronto</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">{resumo}</p>
+      </div>
+    </div>
+  );
+}
+
+// Total de gols nas duas pernas do mata-mata — soma direta das duas PMFs
+// (CountPrediction padrão, já vem pronta do backend em gols_agregados).
+export function GolsAgregadosCard({ d }: { d: CountPrediction }) {
+  const [viewMode, setViewMode] = useState<"prob" | "odd">("prob");
+  const [isExpanded, setIsExpanded] = useState(false);
+  const dist = d.distribuicao ?? [];
+  const mean = d.estimativa ?? 0;
+
+  const { lines, mainLine } = useMemo(() => {
+    const center = Math.round(mean - 0.5) + 0.5;
+    const all: number[] = [];
+    for (let i = -4; i <= 4; i++) {
+      const L = center + i;
+      if (L >= 0.5) all.push(Number(L.toFixed(1)));
+    }
+    return { lines: all, mainLine: all.includes(center) ? center : all[0] };
+  }, [mean]);
+
+  if (dist.length === 0) return null;
+
+  const Cell = ({ line, side }: { line: number; side: "over" | "under" }) => {
+    const p = side === "over" ? overProb(dist, line) : 1 - overProb(dist, line);
+    return viewMode === "prob" ? <span>{(p * 100).toFixed(1)}%</span> : <span>{fairOddRange(p)}</span>;
+  };
+  const mainOverP = overProb(dist, mainLine);
+
+  return (
+    <div className="bg-card border border-border/60 rounded-2xl overflow-hidden shadow-md shadow-black/10 transition-all hover:border-border/80">
+      <div className="p-4 border-b border-border/40 space-y-3">
+        <h3 className="text-xs font-bold flex items-center justify-center gap-1.5 text-center text-foreground">
+          Total de Gols (Confronto)
+          <InfoTooltip text="Mercado considerando a soma dos gols dos dois jogos (ida + volta)." />
+        </h3>
+        <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+          <div className="flex items-center gap-1.5 bg-muted/30 px-2.5 py-1 rounded-lg border border-border/40">
+            <span className="text-muted-foreground text-[11px]">Gols esperados</span>
+            <span className="font-mono font-bold text-emerald-400">{mean.toFixed(1)}</span>
+          </div>
+          <div className="bg-muted/40 p-0.5 rounded-lg flex text-[11px] font-semibold border border-border/40">
+            <button
+              onClick={() => setViewMode("prob")}
+              className={`px-2.5 py-0.5 rounded-md transition-all ${viewMode === "prob" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >Prob.</button>
+            <button
+              onClick={() => setViewMode("odd")}
+              className={`px-2.5 py-0.5 rounded-md transition-all ${viewMode === "odd" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >Odd</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        <div className="bg-muted/20 p-3 rounded-xl border border-border/50 space-y-2">
+          <div className="flex justify-between items-center text-xs">
+            <div className="flex-1 text-center">
+              <span className="block text-[11px] text-muted-foreground mb-0.5">Mais de {mainLine} gols</span>
+              <span className="font-mono font-bold text-base text-emerald-400"><Cell line={mainLine} side="over" /></span>
+            </div>
+            <div className="w-px h-8 bg-border/40" />
+            <div className="flex-1 text-center">
+              <span className="block text-[11px] text-muted-foreground mb-0.5">Menos de {mainLine} gols</span>
+              <span className="font-mono font-bold text-base text-cyan-400"><Cell line={mainLine} side="under" /></span>
+            </div>
+          </div>
+          <div className="w-full bg-cyan-950/40 h-1.5 rounded-full overflow-hidden flex border border-white/5">
+            <div className="bg-emerald-500 transition-all duration-300" style={{ width: `${mainOverP * 100}%` }} />
+            <div className="bg-cyan-500 transition-all duration-300" style={{ width: `${(1 - mainOverP) * 100}%` }} />
+          </div>
+        </div>
+
+        <button
+          onClick={() => setIsExpanded((e) => !e)}
+          className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {isExpanded ? "Ocultar linhas alternativas" : "Ver linhas alternativas"}
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+        </button>
+
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="pt-2 border-t border-border/40 space-y-1">
+                <div className="grid grid-cols-3 text-[10px] font-mono font-bold text-muted-foreground text-center pb-1">
+                  <span className="text-emerald-400">Mais</span>
+                  <span>Linha</span>
+                  <span className="text-cyan-400">Menos</span>
+                </div>
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                  {lines.map((L) => (
+                    <div key={L} className={`grid grid-cols-3 text-xs py-1.5 rounded-lg border transition-colors ${L === mainLine ? "bg-emerald-500/10 border-emerald-500/30" : "border-transparent hover:bg-muted/30"}`}>
+                      <div className="text-center font-mono font-semibold text-emerald-400"><Cell line={L} side="over" /></div>
+                      <div className="text-center font-mono font-bold text-foreground">{L}</div>
+                      <div className="text-center font-mono font-semibold text-cyan-400"><Cell line={L} side="under" /></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <p className="text-[10px] text-muted-foreground text-center">Mercado considerando a soma dos gols dos dois jogos.</p>
       </div>
     </div>
   );
