@@ -2139,14 +2139,31 @@ investigação), retreinados oficialmente:
 **Pendência real que falta para qualquer um dos 3 ir ao ar:** `predictor.py::build_row()` só sabe
 computar as 170 features de produção padrão (+ GAP shots/corners, já existente). As features novas
 de cartões 1T/2T/amarelos (rolling do próprio alvo, target-encoding de liga/torneio, GAP-amarelo)
-**não têm wiring nenhum em produção** — o artefato `.joblib` carrega e roda sem crashar (colunas
-extras viram `NaN` → imputadas pela mediana), mas não recebe o ganho real até que (a)
+**não têm wiring nenhum em produção** — não recebem o ganho real até que (a)
 `build_clubs_production_artifacts.py` seja estendido para computar e persistir esse estado por time
 no `meta.json` (mesmo padrão já usado por `gap_ratings_state`) e (b) `build_row()` seja estendido
 para aplicá-lo numa partida futura. Isso é uma mudança na pipeline de retreino COMPARTILHADA — mais
 arriscada que só trocar um `.joblib` — não foi feita nesta sessão por decisão deliberada (evitar
 rushar uma mudança na pipeline que todos os outros mercados de produção também usam). Os 3 scripts
 de treino, artefatos e resultados oficiais do gate ficam prontos para essa próxima etapa.
+
+**INCIDENTE (2026-08-03, corrigido) — a premissa acima sobre "carrega e roda sem crashar" estava
+ERRADA.** `commit 4cf3ea7` promoveu os artefatos `cartoes_1t_nb.joblib` e `cartoes_amarelos_nb.joblib`
+retreinados (com `league_te`/`home_sb_cards_l*`/`tournament_yellow_enc` no `self.feats` do
+`CornersNB`) para `model_artifacts_clubes/`, substituindo os artefatos anteriores que rodavam em
+produção. `predict_distributions()` faz `X[self.feats]` — colunas ausentes do DataFrame não viram
+`NaN` (isso só aconteceria se a coluna existisse e tivesse valor faltante); com a coluna **inexistente**
+o pandas levanta `KeyError`. Resultado: todo `POST /analysis` com `scope="clube"` quebrava em
+produção (500, log do Render: `KeyError: "['home_sb_cards_l3', ..., 'league_te'] not in index"`).
+Corrigido em `commit 4ef28e7`: revertidos `cartoes_1t_nb.joblib` (para a versão de `717cf99`),
+`cartoes_amarelos_nb.joblib` e `meta.json` (para a versão de `dc690e3`, imediatamente anterior a
+esta sessão) — voltam a usar só as 158 features padrão, sem as novas. `cartoes_2t_nb.joblib` nunca
+foi trocado (ficou reprovado o tempo todo), não precisou de reversão. Testado localmente
+(`get_club_predictor().predict(...)` para 7 pares de times, incluindo o par do log de erro) antes
+do push — sem exceção. **Lição:** ao promover um artefato retreinado com features novas, checar
+SEMPRE se `build_row()` gera essas colunas antes de substituir o `.joblib` em produção — gate
+passar não implica servível; e testar localmente com `get_club_predictor()` real (não só o script
+de gate) antes de dar push de qualquer artefato de clube.
 
 ### 29.6 Top-up de dados ao vivo na Análise (2026-08-01)
 
